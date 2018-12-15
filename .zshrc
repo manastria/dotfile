@@ -268,3 +268,6 @@ rationalize-path path
 # path+=${HOME}/bin
 
 
+
+# added by travis gem
+[ -f /home/jpdemory/.travis/travis.sh ] && source /home/jpdemory/.travis/travis.sh
