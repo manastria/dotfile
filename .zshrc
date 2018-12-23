@@ -1,7 +1,11 @@
-autoload -U colors zsh-mime-setup select-word-style
+autoload -U colors zsh-mime-setup select-word-style compinit
 colors          # colors
 zsh-mime-setup  # run everything as if it's an executable
 select-word-style bash # ctrl+w on words
+compinit # Advanced completion
+
+# See: http://zsh.sourceforge.net/Intro/intro_6.html
+setopt autopushd pushdminus pushdsilent pushdtohome pushdignoredups
 
 
 # Caractère du prompt pour un utilisateur non root %#
