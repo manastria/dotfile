@@ -22,6 +22,15 @@ shopt -s histappend
 HISTSIZE=1000
 HISTFILESIZE=2000
 
+# activation date_heure dans la commande history
+export HISTTIMEFORMAT="%Y/%m/%d_%T : "
+
+# les pages de man en couleur, necessite le paquet most
+if [ -x /usr/bin/most]
+then
+    export PAGER=most
+fi
+
 # check the window size after each command and, if necessary,
 # update the values of LINES and COLUMNS.
 shopt -s checkwinsize
@@ -65,8 +74,30 @@ if [ -n "$force_color_prompt" ]; then
     fi
 fi
 
+__prompt_command() {
+    local EXIT="$?"             # This needs to be first
+    PS1=""
+
+    local RCol='\[\e[0m\]'
+
+    local Red='\[\e[0;31m\]'
+    local Gre='\[\e[0;32m\]'
+    local BYel='\[\e[1;33m\]'
+    local BBlu='\[\e[1;34m\]'
+    local Pur='\[\e[0;35m\]'
+
+    if [ $EXIT != 0 ]; then
+        PS1+="${Red}\u${RCol}"      # Add red if exit code non 0
+    else
+        PS1+="${Gre}\u${RCol}"
+    fi
+
+    PS1+="${RCol}@${BBlu}\h ${Pur}\W${BYel}\\$ ${RCol}"
+}
+
 if [ "$color_prompt" = yes ]; then
-    PS1='${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '
+    # PS1='${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '
+    PROMPT_COMMAND=__prompt_command # Func to gen PS1 after CMDs
 else
     PS1='${debian_chroot:+($debian_chroot)}\u@\h:\w\$ '
 fi
