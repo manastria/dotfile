@@ -34,7 +34,7 @@ HISTFILESIZE=2000
 export HISTTIMEFORMAT="%Y/%m/%d_%T : "
 
 # les pages de man en couleur, necessite le paquet most
-if [ -x /usr/bin/most]
+if [ -x /usr/bin/most ]
 then
     export PAGER=most
 fi
