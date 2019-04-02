@@ -26,7 +26,7 @@ alias lr='ls -lR'
 # affciche sous forme d'arborescence, nécessite le paquet tree
 alias tree='tree -Csu'
 # affiche les dernière d'un fichier log (par exemple) en live
-alias voirlog='tail -f'
+#alias voirlog='tail -f'
 # commande df avec l'option -human
 alias df='df -kTh'
 # commande du avec l'option -human
@@ -36,12 +36,12 @@ alias duc='du -kh --max-depth=1'
 # commande free avec l'option affichage en Mo
 alias free='free -m'
 # nécessite le paquet "htop", un top amélioré et en couleur
-alias top='htop'
+#alias top='htop'
 # faire une recherche dans l'historique de commande
-alias shistory='history | grep'
+#alias shistory='history | grep'
 # raccourci history
-alias h='history'
+#alias h='history'
 
 # Ajout log en couleurs
-ctail() { tail -f $1 | ccze -A; }
+ctail() { tail -n 80 -f $1 | ccze -A; }
 cless() { ccze -A < $1 | less -R; }
