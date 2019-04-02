@@ -1,143 +1,143 @@
 [alias]
-	ap = add -p
-	b = "!git for-each-ref --sort='-authordate' --format='%(authordate)%09%(objectname:short)%09%(refname)' refs/heads | sed -e 's-refs/heads/--'"	
-	diffw = diff --word-diff
-	dl = "!git ll -1"
-	dlc = diff --cached HEAD^
-	dr = "!f() { git diff "$1"^.."$1"; }; f"
-	ds = diff --stat
-	la = !git config -l | grep alias | cut -c 7-
-	lasttag = describe --tags --abbrev=0
-	lt = describe --tags --abbrev=0
-	orphank = !gitk --all --date-order $(git reflog | cut -c1-7)&
-	up = pull --rebase --autostash
-	verifuser = config --get-regexp 'user.*'
+    ap = add -p
+    b = "!git for-each-ref --sort='-authordate' --format='%(authordate)%09%(objectname:short)%09%(refname)' refs/heads | sed -e 's-refs/heads/--'"	
+    diffw = diff --word-diff
+    dl = "!git ll -1"
+    dlc = diff --cached HEAD^
+    dr = "!f() { git diff "$1"^.."$1"; }; f"
+    ds = diff --stat
+    la = !git config -l | grep alias | cut -c 7-
+    lasttag = describe --tags --abbrev=0
+    lt = describe --tags --abbrev=0
+    orphank = !gitk --all --date-order $(git reflog | cut -c1-7)&
+    up = pull --rebase --autostash
+    verifuser = config --get-regexp 'user.*'
 
     ##########
     # Merge
     ##########
-	
-	ours = "!f() { git checkout --ours $@ && git add $@; }; f"
-	theirs = "!f() { git checkout --theirs $@ && git add $@; }; f"
-# Alias classique
-	a = add
-	br = branch
-	ci = commit
-	cl = clone
-	co = checkout
-	cp = cherry-pick
-	d = diff
-	dc = diff --cached
-	diff = diff --word-diff
-	r = reset
-	st = status
+    
+    ours = "!f() { git checkout --ours $@ && git add $@; }; f"
+    theirs = "!f() { git checkout --theirs $@ && git add $@; }; f"
+    # Alias classique
+    a = add
+    br = branch
+    ci = commit
+    cl = clone
+    co = checkout
+    cp = cherry-pick
+    d = diff
+    dc = diff --cached
+    diff = diff --word-diff
+    r = reset
+    st = status
 
-# Commits distants
-	# Liste des commits à pousser
-	out = log --pretty=oneline --abbrev-commit --graph @{u}..
-	# Liste des commits à récupérer
-	in = !git fetch && git log --pretty=oneline --abbrev-commit --graph ..@{u}
+    # Commits distants
+    # Liste des commits à pousser
+    out = log --pretty=oneline --abbrev-commit --graph @{u}..
+    # Liste des commits à récupérer
+    in = !git fetch && git log --pretty=oneline --abbrev-commit --graph ..@{u}
 
-# Chercher
-	# Chercher un fichier dans le dépôt
-	f = "!git ls-files | grep -i"
+    # Chercher
+    # Chercher un fichier dans le dépôt
+    f = "!git ls-files | grep -i"
 
-	# Search/grep your entire codebase for a string:
-	grep = grep -Ii
-	gr = grep -Ii
+    # Search/grep your entire codebase for a string:
+    grep = grep -Ii
+    gr = grep -Ii
 
-	# Grep à partir de la racide
-	gra = "!f() { A=$(pwd) && TOPLEVEL=$(git rev-parse --show-toplevel) && cd $TOPLEVEL && git grep --full-name -In $1 | xargs -I{} echo $TOPLEVEL/{} && cd $A; }; f"
+    # Grep à partir de la racide
+    gra = "!f() { A=$(pwd) && TOPLEVEL=$(git rev-parse --show-toplevel) && cd $TOPLEVEL && git grep --full-name -In $1 | xargs -I{} echo $TOPLEVEL/{} && cd $A; }; f"
 
-	# Rechercher une chaine de caractères dans tous le dépôt
-	find = "!f() { git rev-list --all | xargs git grep $1; }; f";
-	
-	# Find branches containing commit
+    # Rechercher une chaine de caractères dans tous le dépôt
+    find = "!f() { git rev-list --all | xargs git grep $1; }; f";
+    
+    # Find branches containing commit
     fb = "!f() { git branch -a --contains $1; }; f"
-	
-	# Find tags containing commit
+    
+    # Find tags containing commit
     ft = "!f() { git describe --always --contains $1; }; f"
-	
-	# Find commits by source code
+    
+    # Find commits by source code
     fc = "!f() { git log --pretty=format:'%C(yellow)%h  %Cblue%ad  %Creset%s%Cgreen  [%cn] %Cred%d' --decorate --date=short -S$1; }; f"
-	
-	# Find commits by commit message
+    
+    # Find commits by commit message
     fm = "!f() { git log --pretty=format:'%C(yellow)%h  %Cblue%ad  %Creset%s%Cgreen  [%cn] %Cred%d' --decorate --date=short --grep=$1; }; f"
-	
-# Rename [branch] to done-[branch]
-	done = "!f() { git branch | grep "$1" | cut -c 3- | grep -v done | xargs -I{} git branch -m {} done-{}; }; f"
+    
+    # Rename [branch] to done-[branch]
+    done = "!f() { git branch | grep "$1" | cut -c 3- | grep -v done | xargs -I{} git branch -m {} done-{}; }; f"
 
 
-# Assume
-	# Assume a file as unchanged
-	assume = update-index --assume-unchanged
-	# Unassume a file
-	unassume = update-index --no-assume-unchanged
-	# Show assumed files
-	assumed = "!git ls-files -v | grep ^h | cut -c 3-"
-	# Unassume all the assumed files
-	unassumeall = "!git assumed | xargs git update-index --no-assume-unchanged"
-	# Assume all
-	assumeall = "!git st -s | awk {'print $2'} | xargs git assume"
+    # Assume
+    # Assume a file as unchanged
+    assume = update-index --assume-unchanged
+    # Unassume a file
+    unassume = update-index --no-assume-unchanged
+    # Show assumed files
+    assumed = "!git ls-files -v | grep ^h | cut -c 3-"
+    # Unassume all the assumed files
+    unassumeall = "!git assumed | xargs git update-index --no-assume-unchanged"
+    # Assume all
+    assumeall = "!git st -s | awk {'print $2'} | xargs git assume"
 
-# Reset commands
-	r1 = reset HEAD^
-	r2 = reset HEAD^^
-	rh = reset --hard
-	rh1 = reset HEAD^ --hard
-	rh2 = reset HEAD^^ --hard
+    # Reset commands
+    r1 = reset HEAD^
+    r2 = reset HEAD^^
+    rh = reset --hard
+    rh1 = reset HEAD^ --hard
+    rh2 = reset HEAD^^ --hard
 
-# Stash
-	sa = stash apply
-	sl = stash list
-	ss = stash save
+    # Stash
+    sa = stash apply
+    sl = stash list
+    ss = stash save
 
-# Historique d'un fichier
-	filelog = log -u
-	fl = log -u
+    # Historique d'un fichier
+    filelog = log -u
+    fl = log -u
 
-# Stage
-	staged = diff --cached
+    # Stage
+    staged = diff --cached
 
-# commit
-	c = commit --verbose
-	ca = commit -a --verbose
-	cam = commit -a -m
-	cm = commit -m
-	fix = commit --amend
-	m = commit --amend --verbose
-	start = !git init && git commit --allow-empty -m \"Initial commit\"
-	tip = log -n 1 --abbrev-commit --decorate
+    # commit
+    c = commit --verbose
+    ca = commit -a --verbose
+    cam = commit -a -m
+    cm = commit -m
+    fix = commit --amend
+    m = commit --amend --verbose
+    start = !git init && git commit --allow-empty -m \"Initial commit\"
+    tip = log -n 1 --abbrev-commit --decorate
 
-# statistiques
-	auth = shortlog -sne --all
-	mmap = "! git log --format='%aN <%aE> %aN <%aE>' --all | sort -u"
-	
-# branches
-	ba = branch --all
-	brco = branch --contains
-	lb = show-branch --date-order
-	# Créer une branche orpheline
-	brorph = checkout --orphan
-	# Créer une branche
-	cob = checkout -b
-	
-# Logs
-	ld = log --pretty=format:"%C(yellow)%h\\ %ad%Cred%d\\ %Creset%s%Cblue\\ [%cn]" --decorate --date=relative
-	lde = log --pretty=format:"%C(yellow)%h\\ %ad%Cred%d\\ %Creset%s%Cblue\\ [%cn]" --decorate --date=relative --since '3 weeks ago' --all --date-order
-	lds = log --pretty=format:"%C(yellow)%h\\ %ad%Cred%d\\ %Creset%s%Cblue\\ [%cn]" --decorate --date=short
-	le = log --oneline --decorate
-	ll = log --pretty=format:"%C(yellow)%h%Cred%d\\ %Creset%s%Cblue\\ [%cn]" --decorate --numstat
-	lm = log --merges --oneline
-	lmm = log --merges --all --pretty=medium
-	lnc = log --pretty=format:"%h\\ %s\\ [%cn]"
-	logtree = "log --graph --oneline --decorate"
-	ls = log --pretty=format:"%C(yellow)%h%Cred%d\\ %Creset%s%Cblue\\ [%cn]" --decorate
-	
-# Status
-	s = status -s
-	sts = status -sb
-	
+    # statistiques
+    auth = shortlog -sne --all
+    mmap = "! git log --format='%aN <%aE> %aN <%aE>' --all | sort -u"
+    
+    # branches
+    ba = branch --all
+    brco = branch --contains
+    lb = show-branch --date-order
+    # Créer une branche orpheline
+    brorph = checkout --orphan
+    # Créer une branche
+    cob = checkout -b
+    
+    # Logs
+    ld = log --pretty=format:"%C(yellow)%h\\ %ad%Cred%d\\ %Creset%s%Cblue\\ [%cn]" --decorate --date=relative
+    lde = log --pretty=format:"%C(yellow)%h\\ %ad%Cred%d\\ %Creset%s%Cblue\\ [%cn]" --decorate --date=relative --since '3 weeks ago' --all --date-order
+    lds = log --pretty=format:"%C(yellow)%h\\ %ad%Cred%d\\ %Creset%s%Cblue\\ [%cn]" --decorate --date=short
+    le = log --oneline --decorate
+    ll = log --pretty=format:"%C(yellow)%h%Cred%d\\ %Creset%s%Cblue\\ [%cn]" --decorate --numstat
+    lm = log --merges --oneline
+    lmm = log --merges --all --pretty=medium
+    lnc = log --pretty=format:"%h\\ %s\\ [%cn]"
+    logtree = "log --graph --oneline --decorate"
+    ls = log --pretty=format:"%C(yellow)%h%Cred%d\\ %Creset%s%Cblue\\ [%cn]" --decorate
+    
+    # Status
+    s = status -s
+    sts = status -sb
+    
     ##########
     # Undo
     ##########
@@ -155,19 +155,19 @@
     # Example
     # git unstage file1 file2 ...
     unstage = reset HEAD -- #file;
-	
-	
-	
-	
-# stash force apply & stash force pop
-   sfa = !git stash show -p | git apply
-   sfp = !git stash show -p | git apply && git stash drop 
-	
-	
-	
+    
+    
+    
+    
+    # stash force apply & stash force pop
+    sfa = !git stash show -p | git apply
+    sfp = !git stash show -p | git apply && git stash drop 
+    
+    
+    
 
-	
-	
+    
+    
     # List all aliases, only the names
     alias = !git config --list | grep 'alias\\.' | sed 's/alias\\.\\([^=]*\\)=\\(.*\\)/\\1/' | sort;
 
@@ -362,7 +362,7 @@
     force-delete-merged-branches = !git branch --merged master | grep -v 'master' | xargs -n 1 git branch -D;
 
 
-	sts = status -sb
+    sts = status -sb
 
     ##########
     # Undo
@@ -415,33 +415,31 @@
     # Find commits by commit message
     fm = "!f() { git log --pretty=format:'%C(yellow)%h  %Cblue%ad  %Creset%s%Cgreen  [%cn] %Cred%d' --decorate --date=short --grep=$1; }; f"
 
-	
+    
     ##########
     # Alias
     ##########
-	# Quote / unquote a sh command, converting it to / from a git alias string
-	quote-string = "!read -r l; printf \\\"!; printf %s \"$l\" | sed 's/\\([\\\"]\\)/\\\\\\1/g'; printf \" #\\\"\\n\" #"
-	quote-string-undo = "!read -r l; printf %s \"$l\" | sed 's/\\\\\\([\\\"]\\)/\\1/g'; printf \"\\n\" #"
-	hist = log --graph --use-mailmap --decorate --format=format:'%C(red)%h%C(reset) | %C(green)%ad%C(reset) | %C(magenta)%d%C(reset) %C(reset)%s %C(blue)[%aN]%C(reset)' --date=format:'%Y-%m-%d %H:%M:%S'
-	ls-ignored = ls-files --exclude-standard --ignored --others
-	root = rev-parse --show-toplevel
-	
-	
-	
+    # Quote / unquote a sh command, converting it to / from a git alias string
+    quote-string = "!read -r l; printf \\\"!; printf %s \"$l\" | sed 's/\\([\\\"]\\)/\\\\\\1/g'; printf \" #\\\"\\n\" #"
+    quote-string-undo = "!read -r l; printf %s \"$l\" | sed 's/\\\\\\([\\\"]\\)/\\1/g'; printf \"\\n\" #"
+    hist = log --graph --use-mailmap --decorate --format=format:'%C(red)%h%C(reset) | %C(green)%ad%C(reset) | %C(magenta)%d%C(reset) %C(reset)%s %C(blue)[%aN]%C(reset)' --date=format:'%Y-%m-%d %H:%M:%S'
+    ls-ignored = ls-files --exclude-standard --ignored --others
+    root = rev-parse --show-toplevel
+    
+    
+    
     #===========================================
     # I really dont recommend powerful commands with  one letter only
     #===========================================
     #  a = add .;
 [push]
-	default = current
+    default = current
 [core]
-	pager = \"/usr/bin/less\" -FRXKS
-	editor = \"/usr/bin/vim\"
+    pager = \"/usr/bin/less\" -FRXKS
+    editor = \"/usr/bin/vim\"
 [credential]
-	helper = cache --timeout=3600
+    helper = cache --timeout=3600
 
 [user]
 #	email = user@domain.com
 #	name = NOM Prenom
-[http]
-	proxy = http://172.16.0.1:3128
