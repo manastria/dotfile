@@ -258,6 +258,8 @@ rationalize-path () {
 mkdir -p ${HOME}/bin
 path=(
   ${HOME}/bin
+  /usr/local/bin
+  /usr/local/sbin
   /usr/games
   /usr/local/games
   "$path[@]"
