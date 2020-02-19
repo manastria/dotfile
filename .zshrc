@@ -169,7 +169,7 @@ alias 7='cd -7'
 alias 8='cd -8'
 alias 9='cd -9'
 
-alias md='mkdir -p'
+alias md='mkdir -pv'
 alias rd=rmdir
 
 function d () {
@@ -530,7 +530,7 @@ print -Pn "\e]0; %n@%M: %~\a"   # terminal title
 alias ping='ping -c 5'
 alias clr='clear; echo Currently logged in on $TTY, as $USER in directory $PWD.'
 alias path='print -l $path'
-alias mkdir='mkdir -pv'
+
 
 
 
