@@ -76,7 +76,10 @@ bindkey '^A'      beginning-of-line       # Home
 bindkey '^D'      delete-char             # Del
 bindkey '^E'      end-of-line             # End
 
-
+# Edit the current command line in $EDITOR
+autoload -U edit-command-line
+zle -N edit-command-line
+bindkey '\C-x\C-e' edit-command-line
 
 ##
 # Completion
@@ -146,14 +149,117 @@ compdef _gnu_generic gdb
 
 
 ##
-# Pushd
+# Directories
 ##
+# http://zsh.sourceforge.net/Intro/intro_6.html
+DIRSTACKSIZE=15
 setopt auto_pushd               # make cd push old dir in dir stack
 setopt pushd_ignore_dups        # no duplicates in dir stack
 setopt pushd_silent             # no dir stack after pushd or popd
 setopt pushd_to_home            # `pushd` = `pushd $HOME`
+setopt pushdminus               
+alias -- -='cd -'
+alias 1='cd -'
+alias 2='cd -2'
+alias 3='cd -3'
+alias 4='cd -4'
+alias 5='cd -5'
+alias 6='cd -6'
+alias 7='cd -7'
+alias 8='cd -8'
+alias 9='cd -9'
+
+alias md='mkdir -p'
+alias rd=rmdir
+
+function d () {
+  if [[ -n $1 ]]; then
+    dirs "$@"
+  else
+    dirs -v | head -10
+  fi
+}
+compdef _dirs d
 
 
+##
+# systemd
+##
+user_commands=(
+  cat
+  get-default
+  help
+  is-active
+  is-enabled
+  is-failed
+  is-system-running
+  list-dependencies
+  list-jobs
+  list-sockets
+  list-timers
+  list-unit-files
+  list-units
+  show
+  show-environment
+  status)
+
+sudo_commands=(
+  add-requires
+  add-wants
+  cancel
+  daemon-reexec
+  daemon-reload
+  default
+  disable
+  edit
+  emergency
+  enable
+  halt
+  hibernate
+  hybrid-sleep
+  import-environment
+  isolate
+  kexec
+  kill
+  link
+  list-machines
+  load
+  mask
+  poweroff
+  preset
+  preset-all
+  reboot
+  reenable
+  reload
+  reload-or-restart
+  reset-failed
+  rescue
+  restart
+  revert
+  set-default
+  set-environment
+  set-property
+  start
+  stop
+  suspend
+  switch-root
+  try-reload-or-restart
+  try-restart
+  unmask
+  unset-environment)
+
+for c in $user_commands; do; alias sc-$c="systemctl $c"; done
+for c in $sudo_commands; do; alias sc-$c="sudo systemctl $c"; done
+for c in $user_commands; do; alias scu-$c="systemctl --user $c"; done
+for c in $sudo_commands; do; alias scu-$c="systemctl --user $c"; done
+
+alias sc-enable-now="sc-enable --now"
+alias sc-disable-now="sc-disable --now"
+alias sc-mask-now="sc-mask --now"
+
+alias scu-enable-now="scu-enable --now"
+alias scu-disable-now="scu-disable --now"
+alias scu-mask-now="scu-mask --now"
 
 
 ##
@@ -199,6 +305,17 @@ print -Pn "\e]0; %n@%M: %~\a"   # terminal title
 #  vim_mode=$vim_ins_mode
 #}
 #zle -N zle-line-finish
+
+
+############################
+# Fonctions
+############################
+
+# Créé un répertoire et va dans se nouveau répertoire
+function take() {
+  mkdir -p $@ && cd ${@:$#}
+} 
+
 
 
 export LS_OPTIONS='--color=auto'
