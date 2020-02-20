@@ -249,7 +249,7 @@ sudo_commands=(
   unset-environment)
 
 for c in $user_commands; do; alias sc-$c="systemctl $c"; done
-for c in $sudo_commands; do; alias sc-$c="sudo systemctl $c"; done
+for c in $sudo_commands; do; alias sc-$c="systemctl $c"; done
 for c in $user_commands; do; alias scu-$c="systemctl --user $c"; done
 for c in $sudo_commands; do; alias scu-$c="systemctl --user $c"; done
 
@@ -284,7 +284,7 @@ fi
 
 # Use sudo by default if it's installed
 if [[ -e $commands[sudo] ]]; then
-    use_sudo=1
+    use_sudo=0
 fi
 
 # Aliases ###################################################################
