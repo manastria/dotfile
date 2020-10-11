@@ -440,6 +440,6 @@
 [credential]
     helper = cache --timeout=3600
 
-[user]
-#	email = user@domain.com
-#	name = NOM Prenom
+[include]
+    path = ~/.gitconfig.local
+
