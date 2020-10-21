@@ -35,8 +35,16 @@ precmd() { print "" }
 
 
 # Nouveau prompt
+# Gère le retour de la commande dans la barre d'état du panneau
+t1=''
+if (( $+commands[tmux] )); then
+	if [ "${TMUX}" ]; then
+		t1='$(tmux set -wq @status $?)'
+	fi
+fi
+
 set promptchars=";;"
-prompt="${phost}:%{$fg[blue]%}%~%{$reset_color%}
+prompt="${phost}:%{$fg[blue]%}%~%{$reset_color%}${t1}
 ${pchar} "
 
 ## clobber

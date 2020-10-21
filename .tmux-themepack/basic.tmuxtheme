@@ -23,3 +23,8 @@ set -gw window-status-current-format " #I:#W#F "
 set -gw window-status-current-style "fg=black,bg=red"
 set -gw window-status-format " #I:#W#F "
 set -gw window-status-separator ""
+
+# Met un titre dans la bordure du panneau
+set -g pane-border-status bottom
+setw -g pane-border-format '#{?pane_active,#[bg=green]#[fg=black],#[bg=black]#[fg=white]}[#P]#[bg=black]#[fg=default] Status: #{?#{==:#{@status},0},#[fg=green]✔,#[fg=red]✘}#[fg=default] - #{pane_current_command} : #{b:pane_current_path} '
+
