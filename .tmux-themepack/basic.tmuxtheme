@@ -4,7 +4,7 @@ set -g  message-command-style "fg=default,bg=default"
 set -g  message-style "fg=default,bg=default"
 set -g  status-interval 1
 set -g  status-justify centre
-set -g  status-left "#S #[fg=white]» #[fg=yellow]#I #[fg=cyan]#P"
+set -g  status-left "#S #[fg=white]» #[fg=yellow]#I #[fg=cyan]#P #[fg=white]» #(cut -d \" \" -f 1-4 /proc/loadavg) "
 set -g  status-left-length 40
 set -g  status-left-style "fg=green,bg=black"
 set -g  status-right "#H #[fg=white]« #[fg=yellow]%H:%M:%S #[fg=green]%d-%b-%y"
@@ -25,6 +25,22 @@ set -gw window-status-format " #I:#W#F "
 set -gw window-status-separator ""
 
 # Met un titre dans la bordure du panneau
-set -g pane-border-status bottom
-setw -g pane-border-format '#{?pane_active,#[bg=green]#[fg=black],#[bg=black]#[fg=white]}[#P]#[bg=black]#[fg=default] Status: #{?#{==:#{@status},0},#[fg=green]✔,#[fg=red]✘}#[fg=default] - #{pane_current_command} : #{b:pane_current_path} '
+set -g  pane-border-status bottom
+set -gw pane-border-format '#{?pane_active,#[bg=green]#[fg=black],#[bg=black]#[fg=white]}[#P]#[bg=black]#[fg=default] Status: #{?#{==:#{@status},0},#[fg=green]✔,#[fg=red]✘}#[fg=default] - #{pane_current_command} : #{b:pane_current_path} '
+
+# Met à jour le titre du programme de terminal
+set -g  set-titles  on
+set -g  set-titles-string  "#S:#I:#W - \"#T\""
+
+# Mets à jour le nom de la fenêtre
+
+
+# Set window notifications
+set -gw monitor-activity on
+set -gw monitor-bell     on
+set -gw monitor-silence  0
+
+set -g  visual-activity  off
+set -g  visual-bell      off
+set -g  visual-silence   off
 
