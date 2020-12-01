@@ -14,6 +14,7 @@ history
 zsh-autosuggestions
 zsh-completions
 zsh-syntax-highlighting
+z
 )
 
 
