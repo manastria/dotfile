@@ -273,3 +273,10 @@ if [ -d $HOME/.shellrc/rc.d ]; then
     source $file
   done
 fi
+
+# Load all files from .zsh/base.d directory
+if [ -d $HOME/.zsh/base.d ]; then
+  for file in $HOME/.zsh/base.d/**/*.zsh; do
+    source $file
+  done
+fi
