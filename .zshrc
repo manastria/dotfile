@@ -30,3 +30,29 @@ if [[ $ZSH_THEME =~ '.*powerlevel10k.*' ]]; then
       ;;
   esac
 fi
+
+
+#
+# Call directories scripts
+#
+mkdir -p $HOME/.shellrc/zshrc.d $HOME/.shellrc/rc.d
+# Load all files from .shell/zshrc.d directory
+if [ -d $HOME/.shellrc/zshrc.d ]; then
+  for file in $HOME/.shellrc/zshrc.d/**/*.zsh; do
+    source $file
+  done
+fi
+
+# Load all files from .shell/rc.d directory
+if [ -d $HOME/.shellrc/rc.d ]; then
+  for file in $HOME/.shellrc/rc.d/*.sh; do
+    source $file
+  done
+fi
+
+# Load all files from .zsh/base.d directory
+if [ -d $HOME/.zsh/base.d ]; then
+  for file in $HOME/.zsh/base.d/**/*.zsh; do
+    source $file
+  done
+fi
