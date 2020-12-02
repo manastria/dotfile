@@ -2,6 +2,8 @@
 
 ZSH_PROFILE="omzp10"
 
+#export TERM=xterm-256color
+
 case $ZSH_PROFILE in
   omz)
     # Path to your oh-my-zsh installation.
@@ -23,7 +25,8 @@ esac
 if [[ $ZSH_THEME =~ '.*powerlevel10k.*' ]]; then
   case $ZSH_PROFILE in
     omzp10)
-      [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
+      PFILE=${HOME}/.zsh/powerlevel10k/p10k.zsh.powerline
+      [[ ! -f ${PFILE} ]] || source ${PFILE}
       ;;
   esac
 fi
