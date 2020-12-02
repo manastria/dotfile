@@ -1,0 +1,12 @@
+; DO NOT EDIT (unless you know what you are doing)
+;
+; This subdirectory is a git "subrepo", and this file is maintained by the
+; git-subrepo command. See https://github.com/git-commands/git-subrepo#readme
+;
+[subrepo]
+	remote = https://github.com/seebi/dircolors-solarized
+	branch = master
+	commit = 65d4d595ceca96166139862131a006fa3079e00a
+	parent = 9c1c40e894130c2a4ece1fa30e95456f1750058b
+	method = merge
+	cmdver = 0.4.3
