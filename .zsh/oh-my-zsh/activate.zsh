@@ -27,6 +27,7 @@ systemd
 z
 zsh-autosuggestions
 zsh-completions
+zsh-dircolors-solarized
 zsh-syntax-highlighting
 )
 
