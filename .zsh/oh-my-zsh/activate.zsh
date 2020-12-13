@@ -10,15 +10,20 @@ fi
 
 
 plugins=(
-git
-#git-extras
-history
-# python
 # ansible
+# python
+#git-extras
+colored-man-pages
+colorize
+command-not-found
+debian
+git
+history
+systemd
+z
 zsh-autosuggestions
 zsh-completions
 zsh-syntax-highlighting
-z
 )
 
 
