@@ -28,7 +28,7 @@ if [ ! $(command -v exa) ]; then
 	alias l.='ls -d .*'
 	alias lr='ls -R | grep ":$" | sed -e '\''s/:$//'\'' -e '\''s/[^-][^\/]*\//--/g'\'' -e '\''s/^/   /'\'' -e '\''s/-/|/'\'''
 else
-	alias ll='exa -l --git'
+	alias ll='exa -ghHli'
 	alias la='exa -la --git'
 	alias llm='exa -l --git | $PAGER'
 	alias llv='ls -l | vimmanpager'
