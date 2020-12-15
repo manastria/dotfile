@@ -17,8 +17,12 @@ colored-man-pages
 colorize
 command-not-found
 debian
+direnv
+genpass
 git
 history
+rsync
+systemadmin
 systemd
 z
 zsh-autosuggestions
