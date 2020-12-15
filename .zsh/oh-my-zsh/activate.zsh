@@ -22,6 +22,7 @@ genpass
 git
 history
 rsync
+sudo
 systemadmin
 systemd
 z
