@@ -2,7 +2,7 @@ set -g  display-panes-active-colour blue
 set -g  display-panes-colour green
 set -g  message-command-style "fg=default,bg=default"
 set -g  message-style "fg=default,bg=default"
-set -g  status-interval 1
+# set -g  status-interval 1
 set -g  status-justify centre
 set -g  status-left "#S #[fg=white]» #[fg=yellow]#I #[fg=cyan]#P #[fg=white]» #(cut -d \" \" -f 1-4 /proc/loadavg) "
 set -g  status-left-length 40
