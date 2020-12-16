@@ -54,3 +54,5 @@ if [ -d $HOME/.shellrc/rc.d ]; then
   done
 fi
 
+
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
