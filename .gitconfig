@@ -1,3 +1,18 @@
+[push]
+    default = current
+[core]
+    pager = \"/usr/bin/less\" -FRXKS
+    editor = \"/usr/bin/vim\"
+    autocrlf = input # Force replacing CRLF line endings with LF
+    ignorecase = false
+[credential]
+    helper = cache --timeout=3600
+[merge]
+  ff = no # Never fast forward merge (I would have just moved the branch pointer manually)
+[include]
+    path = ~/.gitconfig.local
+
+
 [alias]
     ap = add -p
     b = "!git for-each-ref --sort='-authordate' --format='%(authordate)%09%(objectname:short)%09%(refname)' refs/heads | sed -e 's-refs/heads/--'"	
@@ -105,7 +120,6 @@
     cam = commit -a -m
     cm = commit -m
     fix = commit --amend
-    m = commit --amend --verbose
     start = !git init && git commit --allow-empty -m \"Initial commit\"
     tip = log -n 1 --abbrev-commit --decorate
 
@@ -426,20 +440,135 @@
     ls-ignored = ls-files --exclude-standard --ignored --others
     root = rev-parse --show-toplevel
     
-    
+  #  === Common Commands ===
+  s        = status                  # Raccourci pour status
+  b        = branch                  # Raccourci pour branch
+  
+  m        = mergetool               # Raccourci pour mergetool
+  f        = fetch --all --prune     # Fetch and prune all remotes
+  po       = push origin             # Raccourci pour push origin
+  pu       = push upstream           # Raccourci pour push upstream
+  cp       = cherry-pick             # Raccourci pour cherry-pick
+  cpcont   = cherry-pick --continue  # Raccourci pour cherry-pick --continue
+  rh       = reset --hard            # Raccourci pour reset hard
+  rb       = rebase                  # Raccourci pour rebase
+  rcont    = rebase --continue       # Raccourci pour rebase --continue
+  ra       = rebase --abort          # Raccourci pour rebase --abort
+  rem      = remote                  # Raccourci pour remote
+  pr       = remote prune            # Raccourci pour remote prune
+  prune    = remote prune            # Raccourci pour remote prune
+  rd       = range-diff              # Raccourci pour range-diff
+  pushf    = push --force-with-lease # Forcer push, mais seulement si rien a été mis à jour sur le distant qui n'a pas été récupéré (fetch)
+
+  #  === Assorted ===
+  stu      = !git stash show -p | git apply -R                                 # Stash un-apply
+  alias    = "!grep -E '(  =|^$)' ~/.gitconfig | sed -E -e 's/=.+#//' | less"  # List formatted aliases and descriptions
+  al2      = "!git config -l" | grep alias | cut -c 7-                         # List aliases with expanded commands
+  mff      = merge --ff-only                                                   # Raccourci pour merge ff only
+  mnf      = merge --no-ff                                                     # Raccourci pour merge no ff
+  rmh      = remote set-head origin -d                                         # Remove origin/HEAD
+  ignore   = !git rm -r --cached . && git add .                                # Fix untracked files, commit all changes first
+  orig     = !find -name "*.orig" -delete                                      # Delete all files ending in ".orig"
+  hide     = update-index --skip-worktree                                      # Keep a certain file from appearing in diffs
+  unhide   = update-index --no-skip-worktree                                   # Allow a hidden file to again appear in diffs
+
+
+  #  === File Management ===
+  un       = reset HEAD            # More logical name for reset HEAD
+  disc     = checkout --           # Reverts a path to the last committed state
+  co       = checkout              # Raccourci pour checkout
+  cob      = checkout -b           # Create a new branch and then switch to the newly created branch
+
+  #  === Commit Commands ===
+  cm       = commit -n             # Raccourci pour commit
+  cmv      = commit --amend --verbose
+  com      = commit -nm             # Commit with in-line message
+  cam      = commit -nam            # Stage all tracked and untracked files and then commit with in-line message
+  amend    = commit -n --amend        # Add staged files to the previous commit.  Changes the SHA-1 of the previous commit
+  fix       = commit -n --amend --no-edit    # Amend the previous commit with all current changes keeping the previous commit message
+  tmp      = commit -nm 'WIP - incremental commit' # Quick command for saving work progress which will be modified later
+
+  #  === Working with Previous Commit Commands ===
+  r1       = reset HEAD^               # Move HEAD pointer back one commit and keep all changes in the working directory
+  r2       = reset HEAD^^              # Move HEAD pointer back two commits and keep all changes in the working directory
+  f1       = reset HEAD@{1}            # Move HEAD pointer forward one commit 
+  d1       = difftool HEAD^ HEAD       # Diff a file with itself from the previous commit
+  d2       = difftool HEAD^^ HEAD      # Diff a file with itself from two commits ago
+  doc      = ! /c/batch/diffOneCommit.bat # Get the diff of a single commit ("diff one commit")
+  dh       = remote set-head origin -d
+  dname    = diff --name-only          # Show the names of all files changed between two commits.  Usage:  "git dname SHA1 SHA2"
+
+  #  === Branch management ===
+  dbr             = push origin --delete                             # Delete branch remote 
+  parseBranchName = !git branch | grep '*' | sed 's/* //'            # Get the current branch name 
+  publish         = !git parseBranchName | xargs git po -u           # Create a copy of the current branch on origin 
+  pushup          = !git branch | grep '*' | sed 's/* /head:zp\\//' | xargs git push up -u       # Create current branch on remote 'up' with prefix 'zp/'
+  delup           = !git branch | grep '*' | sed 's/* /zp\\//'      | xargs git push up --delete # Delete the remote branch matching 'zp/<current-branch>'
+  del             = branch -D                                        # Delete local branch
+  master          = !git move master up/master
+  main            = !git move main up/main
+  dev             = !git move dev up/dev
+  move            = branch -f 
+
+
+  #  === Logging ===
+  last    = log -1 --decorate                                                       # Show the last commit on the current branch
+  # Possible colors:  normal, black, red, green, yellow, blue, magenta, cyan, white
+  # Possible modifiers:  bold (neon), dim, ul, blink, reverse
+  # Common placeholders:  %C()-change color, %h-short commit hash, %d-ref names, %cn-committer name, %ar-relative date
+  pretty  = log --pretty=format:"%C(auto)%h%d\\ %s\\ %C(cyan)[%aN]"
+  lsb     = !git pretty --graph   # List commits on this branch, formatted
+  lsd     = log --pretty=format:"%C(auto)%h%d\\ %s\\ %C(cyan)[%aN]\\ %C(magenta)[%ad]" --graph --all -20 # List commits including date
+  lsa     = !git lsb --all                                            # List all commits
+  ls      = !git lsa -20                                              # List last 20 commits
+  lsfa    = !git lsa --numstat                                        # List all commits and their changed files
+  lsf     = !git lsfa -10                                             # List last 10 commits and their changed files
+  local-branch-dates  = !git for-each-ref --sort=committerdate refs/heads/ --format='%(HEAD) %(color:yellow)%(refname:short)%(color:reset) - %(color:red)%(objectname:short)%(color:reset) - %(authorname) (%(color:green)%(committerdate:relative)%(color:reset))' # Get the activity date for each local branch
+  remote-branch-dates = !git branch -r --sort=-committerdate --format='%(HEAD)%(color:yellow)%(refname:short)|%(color:bold green)%(committerdate:relative)|%(color:blue)|%(color:magenta)%(authorname)%(color:reset)' --color=always | column -ts'|'
+  lm      = log --pretty=%B -1 # Print out the entirety of the previous log message, pipe to pbcopy for copying to clipboard.
+  search  = !git pretty --all -S # Search for text within a commit
+
+
+  #  === Windows helpers ===
+  xp      = !explorer .         # Opens Windows Explorer to the current directory
+  op      = !start              # Starts the default editor for the specified file
+  cmd     = !sh -c 'start'      # Starts Windows Command Prompt to the current directory
+
+  #  === URL generation ===
+  rrl     = !sh -c 'echo $(git config remote.${1:-origin}.url | sed -E s/[a-z]+@\\(.+?\\):\\(.+\\)\\.git$/\\\\\\1\\\\\\/\\\\\\2/)' - # Get the URL of a repository (origin by default)
+  crl     = !sh -c 'echo $(git rrl)"/commit/"$(echo $(git rev-parse $([ "$0" = "sh" ] && echo HEAD || echo $0)))' # Get the GitHub URL of the revision (HEAD by default)
+  brl     = !sh -c 'BRANCH=${1:-$(git symbolic-ref --short HEAD)} && echo $(git rrl $(git config branch.$BRANCH.remote))"/tree/"$(git config branch.$BRANCH.merge | sed -E s/refs.heads.//)' - # Get the GitHub URL of a branch (HEAD by default)
+
+  #  == Web launching ===
+  hb      = !sh -c 'git web--browse $(git rrl ${1})' -        # Launches a web browser for a remote repository (origin by default)
+  chb     = !sh -c 'git web--browse $(git crl ${1})' -        # Launches a web browser for a specific commit (HEAD by default)
+  bhb     = !sh -c 'git web--browse $(git brl ${1})' -        # Launches a web browser for a specific branch (HEAD by default)
+
+  # == Proxy ===
+  setproxy = !git config --global http.proxy http://10.10.5.18:8080 && git config --global https.proxy https://10.10.5.18:8080 && npm config set proxy http://10.10.5.18:8080 && npm config set https-proxy http://10.10.5.18:8080
+  rmvproxy = !git config --global --unset http.proxy && git config --global --unset https.proxy && npm config rm proxy && npm config rm https-proxy
+
+
+
+  st         = 'status'
+  br         = 'branch'
+  ci         = 'commit'
+  cl         = 'clone'
+  d          = 'diff'
+  r          = 'reset'
+
+  auth       = 'shortlog -sne --all'
+  dc         = 'diff --cached'
+  diff       = 'diff --word-diff'
+  ls-ignored = 'ls-files --exclude-standard --ignored --others'
+  root       = 'rev-parse --show-toplevel'   # Show the absolute path of the top-level directory of the working tree.
+  start      = '!git init && git commit --allow-empty -m "Initial commit"'
+  unstage    = 'reset HEAD --'
+
     
     #===========================================
     # I really dont recommend powerful commands with  one letter only
     #===========================================
     #  a = add .;
-[push]
-    default = current
-[core]
-    pager = \"/usr/bin/less\" -FRXKS
-    editor = \"/usr/bin/vim\"
-[credential]
-    helper = cache --timeout=3600
 
-[include]
-    path = ~/.gitconfig.local
 
