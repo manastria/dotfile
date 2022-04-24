@@ -108,6 +108,9 @@ if ! shopt -oq posix; then
   fi
 fi
 
+# Ajout du répertoire pour le répertoire bin perso
+export PATH=$PATH:${HOME}/bin
+
 # Ajout du répertoire pour 'sl'
 export PATH=$PATH:/usr/games
 
