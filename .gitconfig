@@ -1,16 +1,30 @@
 [push]
     default = current
+
 [core]
     pager = \"/usr/bin/less\" -FRXKS
     editor = \"/usr/bin/vim\"
-    autocrlf = input # Force replacing CRLF line endings with LF
+    autocrlf = false # Force replacing CRLF line endings with LF
     ignorecase = false
+
 [credential]
     helper = cache --timeout=3600
+
 [merge]
   ff = no # Never fast forward merge (I would have just moved the branch pointer manually)
+
 [include]
     path = ~/.gitconfig.local
+
+[pull]
+  ff = only # Disable `git pull` from secretly creating merge commits
+
+# A great syntax highlighter for diffs: https://github.com/dandavison/delta
+[pager]
+  diff = delta
+  log = delta
+  reflog = delta
+  show = delta
 
 
 [alias]
@@ -564,11 +578,3 @@
   root       = 'rev-parse --show-toplevel'   # Show the absolute path of the top-level directory of the working tree.
   start      = '!git init && git commit --allow-empty -m "Initial commit"'
   unstage    = 'reset HEAD --'
-
-    
-    #===========================================
-    # I really dont recommend powerful commands with  one letter only
-    #===========================================
-    #  a = add .;
-
-
