@@ -2,10 +2,28 @@
     default = current
 
 [core]
-    pager = \"/usr/bin/less\" -FRXKS
+    pager = delta
     editor = \"/usr/bin/vim\"
     autocrlf = false # Force replacing CRLF line endings with LF
     ignorecase = false
+
+[interactive]
+    diffFilter = delta --color-only --features=interactive
+
+[delta]
+    features = decorations
+
+[delta "interactive"]
+    keep-plus-minus-markers = false
+
+[delta "decorations"]
+    commit-decoration-style = blue ol
+    commit-style = raw
+    file-style = omit
+    hunk-header-decoration-style = blue box
+    hunk-header-file-style = red
+    hunk-header-line-number-style = "#067a00"
+    hunk-header-style = file line-number syntax
 
 [credential]
     helper = cache --timeout=3600
@@ -18,13 +36,6 @@
 
 [pull]
   ff = only # Disable `git pull` from secretly creating merge commits
-
-# A great syntax highlighter for diffs: https://github.com/dandavison/delta
-[pager]
-  diff = delta
-  log = delta
-  reflog = delta
-  show = delta
 
 
 [alias]
