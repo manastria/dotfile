@@ -570,8 +570,8 @@
   bhb     = !sh -c 'git web--browse $(git brl ${1})' -        # Launches a web browser for a specific branch (HEAD by default)
 
   # == Proxy ===
-  setproxy = !git config --global http.proxy http://10.10.5.18:8080 && git config --global https.proxy https://10.10.5.18:8080 && npm config set proxy http://10.10.5.18:8080 && npm config set https-proxy http://10.10.5.18:8080
-  rmvproxy = !git config --global --unset http.proxy && git config --global --unset https.proxy && npm config rm proxy && npm config rm https-proxy
+  setproxy = !git config --global http.proxy http://172.16.0.1:3128 && git config --global https.proxy https://172.16.0.1:3128
+  rmvproxy = !git config --global --unset http.proxy && git config --global --unset https.proxy
 
 
 
