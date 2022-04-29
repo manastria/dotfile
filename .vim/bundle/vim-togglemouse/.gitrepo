@@ -1,0 +1,12 @@
+; DO NOT EDIT (unless you know what you are doing)
+;
+; This subdirectory is a git "subrepo", and this file is maintained by the
+; git-subrepo command. See https://github.com/git-commands/git-subrepo#readme
+;
+[subrepo]
+	remote = https://github.com/nvie/vim-togglemouse
+	branch = master
+	commit = 50ad10ad9811c33f543c93d976a592d67c3589d4
+	parent = ceaf444872a3bb78ab060e524e274167d6bb82e8
+	method = merge
+	cmdver = 0.4.3
