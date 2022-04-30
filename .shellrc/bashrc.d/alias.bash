@@ -54,3 +54,5 @@ alias zzz1='TERM=xterm-256color ZSH_PROFILE=omzp10s tmux'
 alias zzz2='TERM=xterm-256color ZSH_PROFILE=base zsh -i'
 
 alias fzfon='[ -f ~/.fzf.bash ] && source ~/.fzf.bash'
+alias fasdon='eval "$(fasd --init auto)"'
+
