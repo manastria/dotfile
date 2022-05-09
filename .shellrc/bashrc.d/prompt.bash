@@ -41,6 +41,7 @@ __prompt_command() {
     fi
 
     PS1+="${RCol}@${BBlu}\h ${Pur}\W${BYel}\\$ ${RCol}"
+	PS1+="\[\e]1337;CurrentDir="'$(pwd)\a\]'
 }
 
 if [ "$color_prompt" = yes ]; then
