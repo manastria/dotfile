@@ -145,7 +145,7 @@
     cam = commit -a -m
     cm = commit -m
     fix = commit --amend
-    start = !git init && git commit --allow-empty -m \"Initial commit\"
+    start = "! git init && git commit --allow-empty -m \"Initial commit\""
     tip = log -n 1 --abbrev-commit --decorate
 
     # statistiques
@@ -587,5 +587,4 @@
   diff       = 'diff --word-diff'
   ls-ignored = 'ls-files --exclude-standard --ignored --others'
   root       = 'rev-parse --show-toplevel'   # Show the absolute path of the top-level directory of the working tree.
-  start      = '!git init && git commit --allow-empty -m "Initial commit"'
   unstage    = 'reset HEAD --'
