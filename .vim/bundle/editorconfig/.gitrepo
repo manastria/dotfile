@@ -1,0 +1,12 @@
+; DO NOT EDIT (unless you know what you are doing)
+;
+; This subdirectory is a git "subrepo", and this file is maintained by the
+; git-subrepo command. See https://github.com/git-commands/git-subrepo#readme
+;
+[subrepo]
+	remote = https://github.com/editorconfig/editorconfig-vim.git
+	branch = master
+	commit = a8e3e66deefb6122f476c27cee505aaae93f7109
+	parent = e6e5ace5292ea98bb67ecf98bd5d2bf0934fcb55
+	method = merge
+	cmdver = 0.4.3
