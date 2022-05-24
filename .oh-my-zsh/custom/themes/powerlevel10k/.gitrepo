@@ -1,0 +1,12 @@
+; DO NOT EDIT (unless you know what you are doing)
+;
+; This subdirectory is a git "subrepo", and this file is maintained by the
+; git-subrepo command. See https://github.com/git-commands/git-subrepo#readme
+;
+[subrepo]
+	remote = https://github.com/romkatv/powerlevel10k.git
+	branch = master
+	commit = 74ff02a819c5b83b8022c973ce100e41104a41cf
+	parent = 3bebb81dbdac6ba8bec66d94e43dba1779d1bd67
+	method = merge
+	cmdver = 0.4.3
