@@ -1,182 +1,154 @@
 [push]
-    default = current
-
+	default = current
 [core]
-    pager = delta
-    editor = \"/usr/bin/vim\"
+	pager = \"/usr/bin/less\" -FRXKS
+	editor = \"/usr/bin/vim\"
     autocrlf = false # Force replacing CRLF line endings with LF
     ignorecase = false
-
-[interactive]
-    diffFilter = delta --color-only --features=interactive
-
-[delta]
-    features = decorations
-
-[delta "interactive"]
-    keep-plus-minus-markers = false
-
-[delta "decorations"]
-    commit-decoration-style = blue ol
-    commit-style = raw
-    file-style = omit
-    hunk-header-decoration-style = blue box
-    hunk-header-file-style = red
-    hunk-header-line-number-style = "#067a00"
-    hunk-header-style = file line-number syntax
-
-[credential]
-    helper = cache --timeout=3600
 
 [merge]
   ff = no # Never fast forward merge (I would have just moved the branch pointer manually)
 
-[include]
-    path = ~/.gitconfig.local
+[credential]
+	helper = cache --timeout=3600
 
 [pull]
   ff = only # Disable `git pull` from secretly creating merge commits
 
 
 [alias]
-    ap = add -p
-    b = "!git for-each-ref --sort='-authordate' --format='%(authordate)%09%(objectname:short)%09%(refname)' refs/heads | sed -e 's-refs/heads/--'"	
-    diffw = diff --word-diff
-    dl = "!git ll -1"
-    dlc = diff --cached HEAD^
-    dr = "!f() { git diff "$1"^.."$1"; }; f"
-    ds = diff --stat
-    la = !git config -l | grep alias | cut -c 7-
-    lasttag = describe --tags --abbrev=0
-    lt = describe --tags --abbrev=0
-    orphank = !gitk --all --date-order $(git reflog | cut -c1-7)&
-    up = pull --rebase --autostash
-    verifuser = config --get-regexp 'user.*'
+	ap = add -p
+	b = "!git for-each-ref --sort='-authordate' --format='%(authordate)%09%(objectname:short)%09%(refname)' refs/heads | sed -e 's-refs/heads/--'"	
+	diffw = diff --word-diff
+	dl = "!git ll -1"
+	dlc = diff --cached HEAD^
+	dr = "!f() { git diff "$1"^.."$1"; }; f"
+	ds = diff --stat
+	la = "!git config -l | grep alias | cut -c 7-"
+	lt = describe --tags --abbrev=0
+	orphank = !gitk --all --date-order $(git reflog | cut -c1-7)&
+	up = pull --rebase --autostash
+	verifuser = config --get-regexp 'user.*'
 
-    ##########
-    # Merge
-    ##########
-    
-    ours = "!f() { git checkout --ours $@ && git add $@; }; f"
-    theirs = "!f() { git checkout --theirs $@ && git add $@; }; f"
-    # Alias classique
-    a = add
-    br = branch
-    ci = commit
-    cl = clone
-    co = checkout
-    cp = cherry-pick
-    d = diff
-    dc = diff --cached
-    diff = diff --word-diff
-    r = reset
-    st = status
+# Alias classique
+	a = add
+	br = branch
+	ci = commit
+	cl = clone
+	co = checkout
+	cp = cherry-pick
+	d = diff
+	dc = diff --cached
+	diff = diff --word-diff
+	r = reset
+	st = status
 
-    # Commits distants
-    # Liste des commits à pousser
-    out = log --pretty=oneline --abbrev-commit --graph @{u}..
-    # Liste des commits à récupérer
-    in = !git fetch && git log --pretty=oneline --abbrev-commit --graph ..@{u}
+# Commits distants
+	# Liste des commits à pousser
+	out = log --pretty=oneline --abbrev-commit --graph @{u}..
+	# Liste des commits à récupérer
+	in = !git fetch && git log --pretty=oneline --abbrev-commit --graph ..@{u}
 
-    # Chercher
-    # Chercher un fichier dans le dépôt
-    f = "!git ls-files | grep -i"
+# Chercher
+	# Chercher un fichier dans le dépôt
+	f = "!git ls-files | grep -i"
 
-    # Search/grep your entire codebase for a string:
-    grep = grep -Ii
-    gr = grep -Ii
+	# Search/grep your entire codebase for a string:
+	grep = grep -Ii
+	gr = grep -Ii
 
-    # Grep à partir de la racide
-    gra = "!f() { A=$(pwd) && TOPLEVEL=$(git rev-parse --show-toplevel) && cd $TOPLEVEL && git grep --full-name -In $1 | xargs -I{} echo $TOPLEVEL/{} && cd $A; }; f"
+	# Grep à partir de la racide
+	gra = "!f() { A=$(pwd) && TOPLEVEL=$(git rev-parse --show-toplevel) && cd $TOPLEVEL && git grep --full-name -In $1 | xargs -I{} echo $TOPLEVEL/{} && cd $A; }; f"
 
-    # Rechercher une chaine de caractères dans tous le dépôt
-    find = "!f() { git rev-list --all | xargs git grep $1; }; f";
-    
-    # Find branches containing commit
+	# Rechercher une chaine de caractères dans tous le dépôt
+	find = "!f() { git rev-list --all | xargs git grep $1; }; f";
+	
+	# Find branches containing commit
     fb = "!f() { git branch -a --contains $1; }; f"
-    
-    # Find tags containing commit
+	
+	# Find tags containing commit
     ft = "!f() { git describe --always --contains $1; }; f"
-    
-    # Find commits by source code
+	
+	# Find commits by source code
     fc = "!f() { git log --pretty=format:'%C(yellow)%h  %Cblue%ad  %Creset%s%Cgreen  [%cn] %Cred%d' --decorate --date=short -S$1; }; f"
-    
-    # Find commits by commit message
+	
+	# Find commits by commit message
     fm = "!f() { git log --pretty=format:'%C(yellow)%h  %Cblue%ad  %Creset%s%Cgreen  [%cn] %Cred%d' --decorate --date=short --grep=$1; }; f"
-    
-    # Rename [branch] to done-[branch]
-    done = "!f() { git branch | grep "$1" | cut -c 3- | grep -v done | xargs -I{} git branch -m {} done-{}; }; f"
+	
+# Rename [branch] to done-[branch]
+	done = "!f() { git branch | grep "$1" | cut -c 3- | grep -v done | xargs -I{} git branch -m {} done-{}; }; f"
 
 
-    # Assume
-    # Assume a file as unchanged
-    assume = update-index --assume-unchanged
-    # Unassume a file
-    unassume = update-index --no-assume-unchanged
-    # Show assumed files
-    assumed = "!git ls-files -v | grep ^h | cut -c 3-"
-    # Unassume all the assumed files
-    unassumeall = "!git assumed | xargs git update-index --no-assume-unchanged"
-    # Assume all
-    assumeall = "!git st -s | awk {'print $2'} | xargs git assume"
+# Assume : remove mark file as unchanged
+	# Assume a file as unchanged
+	assume = update-index --assume-unchanged
+	# Unassume a file
+	unassume = update-index --no-assume-unchanged
+	# Show assumed files
+	assumed = "!git ls-files -v | grep ^h | cut -c 3-"
+	# Unassume all the assumed files
+	unassumeall = "!git assumed | xargs git update-index --no-assume-unchanged"
+	# Assume all
+	assumeall = "!git st -s | awk {'print $2'} | xargs git assume"
 
-    # Reset commands
-    r1 = reset HEAD^
-    r2 = reset HEAD^^
-    rh = reset --hard
-    rh1 = reset HEAD^ --hard
-    rh2 = reset HEAD^^ --hard
+# Reset commands
+	r1 = reset HEAD^
+	r2 = reset HEAD^^
+	rh = reset --hard
+	rh1 = reset HEAD^ --hard
+	rh2 = reset HEAD^^ --hard
 
-    # Stash
-    sa = stash apply
-    sl = stash list
-    ss = stash save
+# Stash
+	sa = stash apply
+	sl = stash list
+	ss = stash save
 
-    # Historique d'un fichier
-    filelog = log -u
-    fl = log -u
+# Historique d'un fichier
+	filelog = log -u
+	fl = log -u
 
-    # Stage
-    staged = diff --cached
+# Stage
+	staged = diff --cached
 
-    # commit
-    c = commit --verbose
-    ca = commit -a --verbose
-    cam = commit -a -m
-    cm = commit -m
-    fix = commit --amend
-    start = "! git init && git commit --allow-empty -m \"Initial commit\""
-    tip = log -n 1 --abbrev-commit --decorate
+# commit
+	c = commit --verbose
+	ca = commit -a --verbose
+	cam = commit -a -m
+	cm = commit -m
+	fix = commit --amend
+	m = commit --amend --verbose
+	start = ! git init && git commit --allow-empty -m \"Initial commit\"
+	tip = log -n 1 --abbrev-commit --decorate
+    save = !git add -A && git commit -m 'SAVEPOINT'
+    wip = commit -am "WIP"
 
-    # statistiques
-    auth = shortlog -sne --all
-    mmap = "! git log --format='%aN <%aE> %aN <%aE>' --all | sort -u"
-    
-    # branches
-    ba = branch --all
-    brco = branch --contains
-    lb = show-branch --date-order
-    # Créer une branche orpheline
-    brorph = checkout --orphan
-    # Créer une branche
-    cob = checkout -b
-    
-    # Logs
-    ld = log --pretty=format:"%C(yellow)%h\\ %ad%Cred%d\\ %Creset%s%Cblue\\ [%cn]" --decorate --date=relative
-    lde = log --pretty=format:"%C(yellow)%h\\ %ad%Cred%d\\ %Creset%s%Cblue\\ [%cn]" --decorate --date=relative --since '3 weeks ago' --all --date-order
-    lds = log --pretty=format:"%C(yellow)%h\\ %ad%Cred%d\\ %Creset%s%Cblue\\ [%cn]" --decorate --date=short
-    le = log --oneline --decorate
-    ll = log --pretty=format:"%C(yellow)%h%Cred%d\\ %Creset%s%Cblue\\ [%cn]" --decorate --numstat
-    lm = log --merges --oneline
-    lmm = log --merges --all --pretty=medium
-    lnc = log --pretty=format:"%h\\ %s\\ [%cn]"
-    logtree = "log --graph --oneline --decorate"
-    ls = log --pretty=format:"%C(yellow)%h%Cred%d\\ %Creset%s%Cblue\\ [%cn]" --decorate
-    
-    # Status
-    s = status -s
-    sts = status -sb
-    
+# statistiques
+	auth = shortlog -sne --all
+	mmap = "! git log --format='%aN <%aE> %aN <%aE>' --all | sort -u"
+	
+# branches
+	ba = branch --all
+	brco = branch --contains
+	lb = show-branch --date-order
+	# Créer une branche orpheline
+	brorph = checkout --orphan
+	# Créer une branche
+	cob = checkout -b
+	
+# Logs
+	ld = log --pretty=format:"%C(yellow)%h\\ %ad%Cred%d\\ %Creset%s%Cblue\\ [%cn]" --decorate --date=relative
+	lde = log --pretty=format:"%C(yellow)%h\\ %ad%Cred%d\\ %Creset%s%Cblue\\ [%cn]" --decorate --date=relative --since '3 weeks ago' --all --date-order
+	lds = log --pretty=format:"%C(yellow)%h\\ %ad%Cred%d\\ %Creset%s%Cblue\\ [%cn]" --decorate --date=short
+	le = log --oneline --decorate
+	ll = log --pretty=format:"%C(yellow)%h%Cred%d\\ %Creset%s%Cblue\\ [%cn]" --decorate --numstat
+	lm = log --merges --oneline
+	lmm = log --merges --all --pretty=medium
+	lnc = log --pretty=format:"%h\\ %s\\ [%cn]"
+	logtree = "log --graph --oneline --decorate"
+	ls = log --pretty=format:"%C(yellow)%h%Cred%d\\ %Creset%s%Cblue\\ [%cn]" --decorate
+	
+# Status
+	
     ##########
     # Undo
     ##########
@@ -194,33 +166,18 @@
     # Example
     # git unstage file1 file2 ...
     unstage = reset HEAD -- #file;
-    
-    
-    
-    
-    # stash force apply & stash force pop
+	
+	
+# stash force apply & stash force pop
     sfa = !git stash show -p | git apply
     sfp = !git stash show -p | git apply && git stash drop 
-    
-    
-    
-
-    
-    
-    # List all aliases, only the names
-    alias = !git config --list | grep 'alias\\.' | sed 's/alias\\.\\([^=]*\\)=\\(.*\\)/\\1/' | sort;
-
-    # List all aliases, names and commands
-    aliases = !git config --list | grep 'alias\\.' | sed 's/alias\\.\\([^=]*\\)=\\(.*\\)/\\1\\\t\\2/' | sort;
+	
 
     # Clone a repository including all submodules
     cloneall = clone --recursive
 
     # Where it is?
     url = remote -v;
-
-
-
 
     ##########
     # Logs and infos
@@ -278,6 +235,9 @@
     # View the current working tree status using the short format
     s = status -s;
 
+    # Montrer la branche et l’information de suivi
+    sts = status -sb
+
     # Diff
     d = diff --patch-with-stat;
 
@@ -294,9 +254,6 @@
     # Commits
     ##########
 
-    # lazy alias
-    c = commit;
-
     # Commit all changes
     ac = !git add . && git add -u && git commit -a;
 
@@ -307,14 +264,6 @@
 
     # Amend the currently staged files to the latest commit
     amend = commit --amend --reuse-message=HEAD
-
-    # mark file as unchanged to prevent commits
-    assume = git update-index --assume-unchanged;
-    assumeall = "!git st -s | awk {'print $2'} | xargs git assume"
-
-    # remove mark file as unchanged
-    unassume = git update-index --no-assume-unchanged;
-    unassumeall = "!git assumed | xargs git update-index --no-assume-unchanged"
 
     # Interactive rebase with the given number of latest commits
     reb = "!r() { git rebase -i HEAD~$1; }; r"
@@ -368,10 +317,6 @@
     # Branchs
     ##########
 
-    # lazy alias
-    b = branch;
-    co = checkout;
-
     # create branch local and remote
     create = "!f() { git checkout -B $1 && git push origin $1; }; f";
 
@@ -400,29 +345,10 @@
     # force remove branchs merged on master
     force-delete-merged-branches = !git branch --merged master | grep -v 'master' | xargs -n 1 git branch -D;
 
-
-    sts = status -sb
-
-    ##########
-    # Undo
-    ##########
-
-    # Undo a `git push`
-    undopush = push -f origin HEAD^:master;
-
-    # Undo merge
-    undomerge = reset --hard HEAD@{1};
-
-    # Undo changes not commited
-    undo = reset --hard;
-
-    # Undo last commit and remove from stage
-    # Example
-    # git unstage file1 file2 ...
-    unstage = reset HEAD -- #file;
-
-
-
+    # Tracking and publishing git branches (usage: `git publish`) 
+    current-branch = !git branch | grep '^*' | sed s/\\*\\ //
+    track = !git branch --set-upstream $(git current-branch) origin/$(git current-branch)
+    publish = !git push origin $(git current-branch) && echo $(git track)
 
     ##########
     # Merge
@@ -435,156 +361,17 @@
     theirs = "!f() { git checkout --theirs $@ && git add $@; }; f";
 
 
-
-
-    ##########
-    # Find
-    ##########
-    find = "!f() { git rev-list --all | xargs git grep $1; }; f";
-
-    # Find branches containing commit
-    fb = "!f() { git branch -a --contains $1; }; f"
-
-    # Find tags containing commit
-    ft = "!f() { git describe --always --contains $1; }; f"
-
-    # Find commits by source code
-    fc = "!f() { git log --pretty=format:'%C(yellow)%h  %Cblue%ad  %Creset%s%Cgreen  [%cn] %Cred%d' --decorate --date=short -S$1; }; f"
-
-    # Find commits by commit message
-    fm = "!f() { git log --pretty=format:'%C(yellow)%h  %Cblue%ad  %Creset%s%Cgreen  [%cn] %Cred%d' --decorate --date=short --grep=$1; }; f"
-
-    
     ##########
     # Alias
     ##########
-    # Quote / unquote a sh command, converting it to / from a git alias string
-    quote-string = "!read -r l; printf \\\"!; printf %s \"$l\" | sed 's/\\([\\\"]\\)/\\\\\\1/g'; printf \" #\\\"\\n\" #"
-    quote-string-undo = "!read -r l; printf %s \"$l\" | sed 's/\\\\\\([\\\"]\\)/\\1/g'; printf \"\\n\" #"
-    hist = log --graph --use-mailmap --decorate --format=format:'%C(red)%h%C(reset) | %C(green)%ad%C(reset) | %C(magenta)%d%C(reset) %C(reset)%s %C(blue)[%aN]%C(reset)' --date=format:'%Y-%m-%d %H:%M:%S'
-    ls-ignored = ls-files --exclude-standard --ignored --others
-    root = rev-parse --show-toplevel
-    
-  #  === Common Commands ===
-  s        = status                  # Raccourci pour status
-  b        = branch                  # Raccourci pour branch
-  
-  m        = mergetool               # Raccourci pour mergetool
-  f        = fetch --all --prune     # Fetch and prune all remotes
-  po       = push origin             # Raccourci pour push origin
-  pu       = push upstream           # Raccourci pour push upstream
-  cp       = cherry-pick             # Raccourci pour cherry-pick
-  cpcont   = cherry-pick --continue  # Raccourci pour cherry-pick --continue
-  rh       = reset --hard            # Raccourci pour reset hard
-  rb       = rebase                  # Raccourci pour rebase
-  rcont    = rebase --continue       # Raccourci pour rebase --continue
-  ra       = rebase --abort          # Raccourci pour rebase --abort
-  rem      = remote                  # Raccourci pour remote
-  pr       = remote prune            # Raccourci pour remote prune
-  prune    = remote prune            # Raccourci pour remote prune
-  rd       = range-diff              # Raccourci pour range-diff
-  pushf    = push --force-with-lease # Forcer push, mais seulement si rien a été mis à jour sur le distant qui n'a pas été récupéré (fetch)
-
-  #  === Assorted ===
-  stu      = !git stash show -p | git apply -R                                 # Stash un-apply
-  alias    = "!grep -E '(  =|^$)' ~/.gitconfig | sed -E -e 's/=.+#//' | less"  # List formatted aliases and descriptions
-  al2      = "!git config -l" | grep alias | cut -c 7-                         # List aliases with expanded commands
-  mff      = merge --ff-only                                                   # Raccourci pour merge ff only
-  mnf      = merge --no-ff                                                     # Raccourci pour merge no ff
-  rmh      = remote set-head origin -d                                         # Remove origin/HEAD
-  ignore   = !git rm -r --cached . && git add .                                # Fix untracked files, commit all changes first
-  orig     = !find -name "*.orig" -delete                                      # Delete all files ending in ".orig"
-  hide     = update-index --skip-worktree                                      # Keep a certain file from appearing in diffs
-  unhide   = update-index --no-skip-worktree                                   # Allow a hidden file to again appear in diffs
+	# Quote / unquote a sh command, converting it to / from a git alias string
+	quote-string = "!read -r l; printf \\\"!; printf %s \"$l\" | sed 's/\\([\\\"]\\)/\\\\\\1/g'; printf \" #\\\"\\n\" #"
+	quote-string-undo = "!read -r l; printf %s \"$l\" | sed 's/\\\\\\([\\\"]\\)/\\1/g'; printf \"\\n\" #"    # Commentaire '
+	hist = log --graph --decorate --format=format:'%C(red)%h%C(reset) | %C(green)%ad%C(reset) | %C(magenta)%d%C(reset) %C(reset)%s %C(blue)[%aN]%C(reset)' --date=format:'%Y-%m-%d %H:%M:%S'
 
 
-  #  === File Management ===
-  un       = reset HEAD            # More logical name for reset HEAD
-  disc     = checkout --           # Reverts a path to the last committed state
-  co       = checkout              # Raccourci pour checkout
-  cob      = checkout -b           # Create a new branch and then switch to the newly created branch
-
-  #  === Commit Commands ===
-  cm       = commit -n             # Raccourci pour commit
-  cmv      = commit --amend --verbose
-  com      = commit -nm             # Commit with in-line message
-  cam      = commit -nam            # Stage all tracked and untracked files and then commit with in-line message
-  amend    = commit -n --amend        # Add staged files to the previous commit.  Changes the SHA-1 of the previous commit
-  fix       = commit -n --amend --no-edit    # Amend the previous commit with all current changes keeping the previous commit message
-  tmp      = commit -nm 'WIP - incremental commit' # Quick command for saving work progress which will be modified later
-
-  #  === Working with Previous Commit Commands ===
-  r1       = reset HEAD^               # Move HEAD pointer back one commit and keep all changes in the working directory
-  r2       = reset HEAD^^              # Move HEAD pointer back two commits and keep all changes in the working directory
-  f1       = reset HEAD@{1}            # Move HEAD pointer forward one commit 
-  d1       = difftool HEAD^ HEAD       # Diff a file with itself from the previous commit
-  d2       = difftool HEAD^^ HEAD      # Diff a file with itself from two commits ago
-  doc      = ! /c/batch/diffOneCommit.bat # Get the diff of a single commit ("diff one commit")
-  dh       = remote set-head origin -d
-  dname    = diff --name-only          # Show the names of all files changed between two commits.  Usage:  "git dname SHA1 SHA2"
-
-  #  === Branch management ===
-  dbr             = push origin --delete                             # Delete branch remote 
-  parseBranchName = !git branch | grep '*' | sed 's/* //'            # Get the current branch name 
-  publish         = !git parseBranchName | xargs git po -u           # Create a copy of the current branch on origin 
-  pushup          = !git branch | grep '*' | sed 's/* /head:zp\\//' | xargs git push up -u       # Create current branch on remote 'up' with prefix 'zp/'
-  delup           = !git branch | grep '*' | sed 's/* /zp\\//'      | xargs git push up --delete # Delete the remote branch matching 'zp/<current-branch>'
-  del             = branch -D                                        # Delete local branch
-  master          = !git move master up/master
-  main            = !git move main up/main
-  dev             = !git move dev up/dev
-  move            = branch -f 
+[include]
+    path = ~/.gitconfig.local
 
 
-  #  === Logging ===
-  last    = log -1 --decorate                                                       # Show the last commit on the current branch
-  # Possible colors:  normal, black, red, green, yellow, blue, magenta, cyan, white
-  # Possible modifiers:  bold (neon), dim, ul, blink, reverse
-  # Common placeholders:  %C()-change color, %h-short commit hash, %d-ref names, %cn-committer name, %ar-relative date
-  pretty  = log --pretty=format:"%C(auto)%h%d\\ %s\\ %C(cyan)[%aN]"
-  lsb     = !git pretty --graph   # List commits on this branch, formatted
-  lsd     = log --pretty=format:"%C(auto)%h%d\\ %s\\ %C(cyan)[%aN]\\ %C(magenta)[%ad]" --graph --all -20 # List commits including date
-  lsa     = !git lsb --all                                            # List all commits
-  ls      = !git lsa -20                                              # List last 20 commits
-  lsfa    = !git lsa --numstat                                        # List all commits and their changed files
-  lsf     = !git lsfa -10                                             # List last 10 commits and their changed files
-  local-branch-dates  = !git for-each-ref --sort=committerdate refs/heads/ --format='%(HEAD) %(color:yellow)%(refname:short)%(color:reset) - %(color:red)%(objectname:short)%(color:reset) - %(authorname) (%(color:green)%(committerdate:relative)%(color:reset))' # Get the activity date for each local branch
-  remote-branch-dates = !git branch -r --sort=-committerdate --format='%(HEAD)%(color:yellow)%(refname:short)|%(color:bold green)%(committerdate:relative)|%(color:blue)|%(color:magenta)%(authorname)%(color:reset)' --color=always | column -ts'|'
-  lm      = log --pretty=%B -1 # Print out the entirety of the previous log message, pipe to pbcopy for copying to clipboard.
-  search  = !git pretty --all -S # Search for text within a commit
-
-
-  #  === Windows helpers ===
-  xp      = !explorer .         # Opens Windows Explorer to the current directory
-  op      = !start              # Starts the default editor for the specified file
-  cmd     = !sh -c 'start'      # Starts Windows Command Prompt to the current directory
-
-  #  === URL generation ===
-  rrl     = !sh -c 'echo $(git config remote.${1:-origin}.url | sed -E s/[a-z]+@\\(.+?\\):\\(.+\\)\\.git$/\\\\\\1\\\\\\/\\\\\\2/)' - # Get the URL of a repository (origin by default)
-  crl     = !sh -c 'echo $(git rrl)"/commit/"$(echo $(git rev-parse $([ "$0" = "sh" ] && echo HEAD || echo $0)))' # Get the GitHub URL of the revision (HEAD by default)
-  brl     = !sh -c 'BRANCH=${1:-$(git symbolic-ref --short HEAD)} && echo $(git rrl $(git config branch.$BRANCH.remote))"/tree/"$(git config branch.$BRANCH.merge | sed -E s/refs.heads.//)' - # Get the GitHub URL of a branch (HEAD by default)
-
-  #  == Web launching ===
-  hb      = !sh -c 'git web--browse $(git rrl ${1})' -        # Launches a web browser for a remote repository (origin by default)
-  chb     = !sh -c 'git web--browse $(git crl ${1})' -        # Launches a web browser for a specific commit (HEAD by default)
-  bhb     = !sh -c 'git web--browse $(git brl ${1})' -        # Launches a web browser for a specific branch (HEAD by default)
-
-  # == Proxy ===
-  setproxy = !git config --global http.proxy http://172.16.0.1:3128 && git config --global https.proxy https://172.16.0.1:3128
-  rmvproxy = !git config --global --unset http.proxy && git config --global --unset https.proxy
-
-
-
-  st         = 'status'
-  br         = 'branch'
-  ci         = 'commit'
-  cl         = 'clone'
-  d          = 'diff'
-  r          = 'reset'
-
-  auth       = 'shortlog -sne --all'
-  dc         = 'diff --cached'
-  diff       = 'diff --word-diff'
-  ls-ignored = 'ls-files --exclude-standard --ignored --others'
-  root       = 'rev-parse --show-toplevel'   # Show the absolute path of the top-level directory of the working tree.
-  unstage    = 'reset HEAD --'
+# cat gitconfig | sed -e 's/^[ \t]*//' | sed '/^$/d' | grep -v "^#" |sort| less
