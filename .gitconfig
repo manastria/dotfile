@@ -78,6 +78,12 @@
 # Rename [branch] to done-[branch]
 	done = "!f() { git branch | grep "$1" | cut -c 3- | grep -v done | xargs -I{} git branch -m {} done-{}; }; f"
 
+# Rename branch local and push
+    mvrbranch = "!moveit() { git branch -m $1 $2; git push origin :$1; git push --set-upstream origin $2; }; moveit"
+# Rename branch local
+    mvbranch = "!moveit() { git branch -m $1; }; moveit"
+
+
 
 # Assume : remove mark file as unchanged
 	# Assume a file as unchanged
@@ -160,7 +166,10 @@
     undomerge = reset --hard HEAD@{1};
 
     # Undo changes not commited
-    undo = reset --hard;
+    undo2 = reset --hard;
+
+	# Undo Last Git Commit
+	undo = git reset --soft HEAD~1
 
     # Undo last commit and remove from stage
     # Example
