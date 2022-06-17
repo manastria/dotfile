@@ -234,7 +234,10 @@
 
     # View the current working tree status using the short format
     s = status -s;
-
+	
+	# Voir tous les fichiers modifié, pas seulement les répertoires
+	sall = status -uall;
+	
     # Montrer la branche et l’information de suivi
     sts = status -sb
 
@@ -347,7 +350,7 @@
 
     # Tracking and publishing git branches (usage: `git publish`) 
     current-branch = !git branch | grep '^*' | sed s/\\*\\ //
-    track = !git branch --set-upstream $(git current-branch) origin/$(git current-branch)
+    track = !git branch --track $(git current-branch) origin/$(git current-branch)
     publish = !git push origin $(git current-branch) && echo $(git track)
 
     ##########
@@ -367,6 +370,14 @@
 	# Quote / unquote a sh command, converting it to / from a git alias string
 	quote-string = "!read -r l; printf \\\"!; printf %s \"$l\" | sed 's/\\([\\\"]\\)/\\\\\\1/g'; printf \" #\\\"\\n\" #"
 	quote-string-undo = "!read -r l; printf %s \"$l\" | sed 's/\\\\\\([\\\"]\\)/\\1/g'; printf \"\\n\" #"    # Commentaire '
+
+	# List all aliases, only the names
+    alias = !git config --list | grep 'alias\\.' | sed 's/alias\\.\\([^=]*\\)=\\(.*\\)/\\1/' | sort;
+
+    # List all aliases, names and commands
+    aliases = !git config --list | grep 'alias\\.' | sed 's/alias\\.\\([^=]*\\)=\\(.*\\)/\\1\\\t\\2/' | sort;
+
+
 	hist = log --graph --decorate --format=format:'%C(red)%h%C(reset) | %C(green)%ad%C(reset) | %C(magenta)%d%C(reset) %C(reset)%s %C(blue)[%aN]%C(reset)' --date=format:'%Y-%m-%d %H:%M:%S'
 
 
