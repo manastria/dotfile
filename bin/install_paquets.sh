@@ -4,5 +4,5 @@
 sudo apt update && sudo apt upgrade -y
 
 # Installe les paquets nécessaires
-sudo apt install -y bat fdfind zsh fzf sqlite3
+sudo apt install -y bat fd-find zsh fzf sqlite3
 
