@@ -390,6 +390,13 @@
 	hist = log --graph --decorate --format=format:'%C(red)%h%C(reset) | %C(green)%ad%C(reset) | %C(magenta)%d%C(reset) %C(reset)%s %C(blue)[%aN]%C(reset)' --date=format:'%Y-%m-%d %H:%M:%S'
 
 
+    ##########
+    # Avtiver / désactiver l'exécution des scripts
+    ##########
+    setx = update-index --chmod=+x
+    unsetx = update-index --chmod=-x
+
+
 [include]
     path = ~/.gitconfig.local
 
