@@ -107,7 +107,6 @@ in = !git fetch && git log --pretty=oneline --abbrev-commit --graph ..@{u}  # Li
 mergeto = "!f() { BRANCH=$(git rev-parse --abbrev-ref HEAD); git pull origin ${BRANCH} && git push origin ${BRANCH} && git checkout $1 && git pull origin $1 && git merge ${BRANCH} && git push origin $1 && git checkout ${BRANCH}; }; f"  # Fusionne la branche actuelle dans une autre branche et la met à jour
 out = log --pretty=oneline --abbrev-commit --graph @{u}..  # Liste des commits à pousser
 post = !git push origin $(git rev-parse --abbrev-ref HEAD)  # Pousse les modifications de cette branche vers le dépôt distant
-pullall = !"git pull origin $(git rev-parse --abbrev-ref HEAD); git submodule foreach git pull origin master"  # Récupère les modifications à distance pour le dépôt courant et tous ses sous-modules
 update = "!f() { BRANCH=$(git rev-parse --abbrev-ref HEAD); git s && git pull origin ${BRANCH} && git push origin ${BRANCH}; }; f"   # Récupère et pousse les modifications de cette branche
 url = remote -v                  # Affiche les URLs des dépôts distants
 
@@ -155,7 +154,6 @@ alias = !git config --list | grep 'alias\\.' | sed 's/alias\\.\\([^=]*\\)=\\(.*\
 aliases = !git config --list | grep 'alias\\.' | sed 's/alias\\.\\([^=]*\\)=\\(.*\\)/\\1\\\t\\2/' | sort  # List all aliases, names and commands
 la = "!git config -l | grep alias | cut -c 7-" # Liste tous les alias configurés
 verifuser = config --get-regexp 'user.*' # Vérifie les configurations d'utilisateur (nom et email)
-cloneall = clone --recursive     # Clone un dépôt et ses sous-modules
 
 # ====================
 # Ajout & Préparation
@@ -216,6 +214,15 @@ quote-string = "!read -r l; printf \\\"!; printf %s \"$l\" | sed 's/\\([\\\"]\\)
 quote-string-undo = "!read -r l; printf %s \"$l\" | sed 's/\\\\\\([\\\"]\\)/\\1/g'; printf \"\\n\" #" # Convertit une chaîne d'alias git en commande sh
 alias = !git config --list | grep 'alias\\.' | sed 's/alias\\.\\([^=]*\\)=\\(.*\\)/\\1/' | sort; # Liste uniquement les noms des alias
 aliases = !git config --list | grep 'alias\\.' | sed 's/alias\\.\\([^=]*\\)=\\(.*\\)/\\1\\\t\\2/' | sort; # Liste les noms et commandes des alias
+
+
+# ====================
+# Sous modules
+# ====================
+pullall = !"git pull origin $(git rev-parse --abbrev-ref HEAD); git submodule foreach git pull origin master"  # Récupère les modifications à distance pour le dépôt courant et tous ses sous-modules
+cloneall = clone --recursive     # Clone un dépôt et ses sous-modules
+update-subs = submodule update --remote # Met à jour les sous-modules
+addsub = "!f() { git submodule add $1 $2; git commit -m \"Add $2 submodule\"; }; f"  # Ajoute un sous-module
 
 [include]
     path = ~/.gitconfig.local
