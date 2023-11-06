@@ -76,7 +76,7 @@ m = commit --amend --verbose # Modifie le dernier commit avec détails TODO: com
 reb = "!r() { git rebase -i HEAD~$1; }; r"   # Réorganise interactivement les "$number" derniers commits
 save = !git add -A && git commit -m 'SAVEPOINT' # Ajoute tous les changements et crée un commit avec le message "SAVEPOINT"
 start = ! git init && git commit --allow-empty -m "Initial commit" # Initialise un nouveau dépôt avec un commit vide initial
-undo = git reset --soft HEAD~1   # Annule le dernier commit tout en conservant les changements
+undo = ! git reset --soft HEAD~1   # Annule le dernier commit tout en conservant les changements
 wip = commit -am "WIP" # Crée un commit avec le message "WIP" pour tous les changements
 
 
