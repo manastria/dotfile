@@ -32,6 +32,10 @@ if [[ $ZSH_THEME =~ '.*powerlevel10k.*' ]]; then
       PFILE=${HOME}/.zsh/powerlevel10k/p10k.zsh.simple
       [[ ! -f ${PFILE} ]] || source ${PFILE}
       ;;
+    omzp10writer)
+      PFILE=${HOME}/.zsh/powerlevel10k/p10k.zsh.writer
+      [[ ! -f ${PFILE} ]] || source ${PFILE}
+      ;;
   esac
 fi
 
