@@ -152,10 +152,10 @@ set nonumber
 " Quickly time out on keycodes, but never time out on mappings
 set notimeout ttimeout ttimeoutlen=200
 
-" Use <F2> to toggle between 'paste' and 'nopaste'
-nnoremap <F2> :set invpaste paste?<CR>
-set pastetoggle=<F2>
-
+" Utiliser Ctrl + p pour basculer entre 'paste' et 'nopaste' en mode normal et insertion
+nnoremap <C-p> :set invpaste paste?<CR>
+inoremap <C-p> <C-O>:set invpaste paste?<CR>
+set pastetoggle=<C-p>
 
 " Indentation settings for using 4 spaces instead of tabs.
 " Do not change 'tabstop' from its default value of 8 with this setup.
