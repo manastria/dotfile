@@ -157,6 +157,11 @@ nnoremap <C-p> :set invpaste paste?<CR>
 inoremap <C-p> <C-O>:set invpaste paste?<CR>
 set pastetoggle=<C-p>
 
+" Utiliser Ctrl + w pour basculer 'wrap' en mode normal et insertion
+nnoremap <C-w> :set wrap!<CR>
+inoremap <C-w> <Esc>:set wrap!<CR>i
+
+
 " Indentation settings for using 4 spaces instead of tabs.
 " Do not change 'tabstop' from its default value of 8 with this setup.
 set shiftwidth=4
