@@ -10,4 +10,4 @@ alias fasdon='eval "$(fasd --init auto)"'
 alias backup_permissions="stat -c '%a %U %G' fichier_cible > permissions_owner_group.txt"
 alias restore_permissions="read chmod_value owner group && chmod $chmod_value fichier_cible && chown $owner:$group fichier_cible"
 
-alias nm-con-status='nmcli -f NAME,TYPE,DEVICE,STATE con show --active'
+alias nm-con-status='nmcli -f NAME,TYPE,DEVICE,STATE con show' # --active

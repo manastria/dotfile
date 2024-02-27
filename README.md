@@ -38,11 +38,21 @@ Si vous souhaitez changer l'URL du dépôt distant de HTTPS à SSH (ou vice vers
 yadm remote set-url origin git@github.com:manastria/dotfile.git
 ```
 
+Uniquement pour push :
+```bash
+yadm remote set-url --push origin git@github.com:manastria/dotfile.git
+```
+
 ### Passage de SSH à HTTPS
 
 ```bash
 yadm remote set-url origin https://github.com/manastria/dotfile.git
 ```
+Uniquement pour push :
+```bash
+yadm remote set-url --push origin https://github.com/manastria/dotfile.git
+```
+
 
 Assurez-vous d'avoir configuré correctement vos clés SSH si vous choisissez d'utiliser l'URL SSH.
 
