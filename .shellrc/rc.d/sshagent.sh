@@ -7,6 +7,7 @@ SSH_ENV="$HOME/.ssh/agent-environment"
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Fonction pour afficher les messages avec des couleurs
@@ -16,7 +17,7 @@ log() {
     echo -e "${color}$*${NC}"
 }
 
-log $GREEN "SSH agent script starting."
+log $BLUE "SSH agent script starting."
 
 # Fonction pour vérifier si un agent SSH est en cours d'exécution.
 # Elle teste si la variable SSH_AUTH_SOCK est définie et si `ssh-add -l` peut lister des clés.
@@ -113,4 +114,4 @@ fi
 # Nettoie les variables d'environnement utilisées temporairement dans le script.
 unset env
 
-log $GREEN "SSH agent script completed."
+log $BLUE "SSH agent script completed."
