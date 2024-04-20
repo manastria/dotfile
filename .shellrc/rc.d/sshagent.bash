@@ -1,4 +1,3 @@
-# Définit le mode de fichier pour être interprété comme un script bash.
 # -*- mode: bash -*-
 
 # Chemin du fichier où l'agent SSH stocke ses variables d'environnement.
@@ -64,14 +63,14 @@ elif ! agent_has_keys; then
     ssh-add
 fi
 
-# Support pour l'ajout de plusieurs clés SSH.
-# Les chemins des clés peuvent être spécifiés via la variable SSH_KEYS, ou par défaut.
-default_keys="$HOME/.ssh/id_rsa $HOME/.ssh/id_ecdsa"
-keys_to_add="${SSH_KEYS:-$default_keys}"
-for key in $keys_to_add; do
-    # Ajoute la clé si elle existe.
-    [ -f "$key" ] && ssh-add "$key"
-done
+#     # Support pour l'ajout de plusieurs clés SSH.
+#     # Les chemins des clés peuvent être spécifiés via la variable SSH_KEYS, ou par défaut.
+#     default_keys="$HOME/.ssh/id_rsa $HOME/.ssh/id_ecdsa"
+#     keys_to_add="${SSH_KEYS:-$default_keys}"
+#     for key in $keys_to_add; do
+#         # Ajoute la clé si elle existe.
+#         [ -f "$key" ] && ssh-add "$key"
+#     done
 
 # Nettoie les variables d'environnement utilisées temporairement dans le script.
 unset env
