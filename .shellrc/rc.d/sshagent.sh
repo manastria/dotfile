@@ -45,6 +45,8 @@ agent_is_valid() {
     [ -n "$SSH_AGENT_PID" ] && kill -0 "$SSH_AGENT_PID" 2>/dev/null
 }
 
+echo "SSH agent script loaded."
+
 # Logique principale pour gérer l'agent SSH.
 # Charge d'abord l'environnement de l'agent s'il n'est pas en cours d'exécution.
 if ! agent_is_running; then
