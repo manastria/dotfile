@@ -1,4 +1,5 @@
 #!/bin/bash
+# -*- mode: bash -*-
 
 # Couleurs
 RED='\033[0;31m'
@@ -10,7 +11,8 @@ NC='\033[0m' # Pas de couleur
 sudo apt update && sudo apt upgrade -y
 
 # Liste des paquets à installer
-packages=(vim bat fd-find zsh fzf sqlite3 git curl wget htop tree ncdu aptitude tmux)
+packages=(vim bat fd-find zsh fzf sqlite3 git curl wget htop tree ncdu aptitude tmux exa)
+to_install=()
 
 # Boucle sur chaque paquet
 for pkg in "${packages[@]}"; do
@@ -20,10 +22,18 @@ for pkg in "${packages[@]}"; do
     else
         # Vérifie si le paquet existe dans les dépôts
         if apt-cache show $pkg &> /dev/null; then
-            echo -e "${GREEN}Installation du paquet $pkg...${NC}"
-            sudo apt install -y $pkg
+            echo -e "${GREEN}Le paquet $pkg sera installé.${NC}"
+            to_install+=($pkg)  # Ajoute le paquet à la liste des paquets à installer
         else
             echo -e "${RED}Le paquet $pkg n'existe pas dans les dépôts.${NC}"
         fi
     fi
 done
+
+# Installe tous les paquets en une seule commande
+if [ ${#to_install[@]} -gt 0 ]; then
+    echo "Installation des paquets: ${to_install[*]}"
+    sudo apt install -y "${to_install[@]}"
+else
+    echo "Aucun nouveau paquet à installer."
+fi
