@@ -4,5 +4,5 @@
 sudo apt update && sudo apt upgrade -y
 
 # Installe les paquets nécessaires
-sudo apt install -y vim bat fd-find zsh fzf sqlite3
+sudo apt install -y vim bat fd-find zsh fzf sqlite3 git curl wget htop tree ncdu
 
