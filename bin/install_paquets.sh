@@ -11,7 +11,7 @@ NC='\033[0m' # Pas de couleur
 sudo apt update && sudo apt upgrade -y
 
 # Liste des paquets à installer
-packages=(vim bat fd-find zsh fzf sqlite3 git curl wget htop tree ncdu aptitude tmux exa)
+packages=(yadm vim bat fd-find zsh fzf sqlite3 git curl wget htop tree ncdu aptitude tmux exa)
 to_install=()
 
 # Boucle sur chaque paquet
