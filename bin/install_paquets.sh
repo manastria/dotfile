@@ -11,7 +11,9 @@ NC='\033[0m' # Pas de couleur
 sudo apt update && sudo apt upgrade -y
 
 # Liste des paquets à installer
-packages=(yadm vim bat fd-find zsh fzf sqlite3 git curl wget htop tree ncdu aptitude tmux exa)
+packages=(vim bat fd-find zsh fzf sqlite3 git curl wget htop tree ncdu aptitude tmux haveged)
+# Liste des paquets à installer pour les addons de VirtualBox
+packages+=(dkms build-essential module-assistant)
 to_install=()
 
 # Boucle sur chaque paquet
