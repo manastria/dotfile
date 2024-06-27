@@ -10,6 +10,9 @@ YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Variable pour activer/désactiver le mode debug
+DEBUG=${DEBUG:-0}
+
 # Fonction pour afficher les messages avec des couleurs
 log() {
     color=$1
@@ -17,33 +20,37 @@ log() {
     echo -e "${color}$*${NC}"
 }
 
+# Fonction pour afficher les messages de debug
+debug_log() {
+    if [ "$DEBUG" -eq 1 ]; then
+        log $1 $2
+    else
+        logger -t ssh-agent-script "$2"
+    fi
+}
+
 log $BLUE "SSH agent script starting."
 
 # Fonction pour vérifier si un agent SSH est en cours d'exécution.
-# Elle teste si la variable SSH_AUTH_SOCK est définie et si `ssh-add -l` peut lister des clés.
 agent_is_running() {
     if [ "$SSH_AUTH_SOCK" ]; then
-        # ssh-add -l teste si l'agent a des clés
-        # 0 = agent en cours d'exécution avec des clés
-        # 1 = agent en cours d'exécution sans clés
-        # 2 = agent non en cours d'exécution
-        ssh-add -l >/dev/null 2>&1 || [ $? -eq 1 ]
-        log $GREEN "  Agent is already running. PID: $SSH_AGENT_PID, Socket: $SSH_AUTH_SOCK."
-        true
-    else
-        log $YELLOW "  No running agent linked to current session."
-        false
+        if ssh-add -l >/dev/null 2>&1 || [ $? -eq 1 ]; then
+            debug_log $GREEN "  Agent is already running. PID: $SSH_AGENT_PID, Socket: $SSH_AUTH_SOCK."
+            return 0
+        fi
     fi
+    debug_log $YELLOW "  No running agent linked to current session."
+    return 1
 }
 
 # Fonction pour vérifier si l'agent SSH actuel a des clés chargées.
 agent_has_keys() {
     if ssh-add -l >/dev/null 2>&1; then
-        log $GREEN "  Agent has keys loaded."
-        true
+        debug_log $GREEN "  Agent has keys loaded."
+        return 0
     else
-        log $YELLOW "  Agent is running but no keys are loaded."
-        false
+        debug_log $YELLOW "  Agent is running but no keys are loaded."
+        return 1
     fi
 }
 
@@ -51,10 +58,10 @@ agent_has_keys() {
 agent_load_env() {
     if [ -f "$SSH_ENV" ]; then
         . "$SSH_ENV" >/dev/null
-        log $GREEN "  Environment loaded from $SSH_ENV."
-        log $GREEN "  Loaded agent details: PID: $SSH_AGENT_PID, Socket: $SSH_AUTH_SOCK."
+        debug_log $GREEN "  Environment loaded from $SSH_ENV."
+        debug_log $GREEN "  Loaded agent details: PID: $SSH_AGENT_PID, Socket: $SSH_AUTH_SOCK."
     else
-        log $RED "  No environment file found. A new SSH agent might be started."
+        debug_log $RED "  No environment file found. A new SSH agent might be started."
     fi
 }
 
@@ -69,11 +76,11 @@ agent_start() {
 # Fonction pour vérifier si l'agent stocké dans le fichier d'environnement est toujours valide.
 agent_is_valid() {
     if [ -n "$SSH_AGENT_PID" ] && kill -0 "$SSH_AGENT_PID" 2>/dev/null; then
-        log $GREEN "  Agent with PID $SSH_AGENT_PID is still valid."
-        true
+        debug_log $GREEN "  Agent with PID $SSH_AGENT_PID is still valid."
+        return 0
     else
-        log $RED "  Agent with PID $SSH_AGENT_PID is no longer valid."
-        false
+        debug_log $RED "  Agent with PID $SSH_AGENT_PID is no longer valid."
+        return 1
     fi
 }
 
@@ -102,14 +109,13 @@ elif ! agent_has_keys; then
     ssh-add
 fi
 
-#     # Support pour l'ajout de plusieurs clés SSH.
-#     # Les chemins des clés peuvent être spécifiés via la variable SSH_KEYS, ou par défaut.
-#     default_keys="$HOME/.ssh/id_rsa $HOME/.ssh/id_ecdsa"
-#     keys_to_add="${SSH_KEYS:-$default_keys}"
-#     for key in $keys_to_add; do
-#         # Ajoute la clé si elle existe.
-#         [ -f "$key" ] && ssh-add "$key"
-#     done
+# Support pour l'ajout de plusieurs clés SSH.
+default_keys="$HOME/.ssh/id_rsa $HOME/.ssh/id_ecdsa"
+keys_to_add="${SSH_KEYS:-$default_keys}"
+for key in $keys_to_add; do
+    # Ajoute la clé si elle existe.
+    [ -f "$key" ] && ssh-add "$key"
+done
 
 # Nettoie les variables d'environnement utilisées temporairement dans le script.
 unset env
