@@ -1,0 +1,12 @@
+; DO NOT EDIT (unless you know what you are doing)
+;
+; This subdirectory is a git "subrepo", and this file is maintained by the
+; git-subrepo command. See https://github.com/ingydotnet/git-subrepo#readme
+;
+[subrepo]
+	remote = https://github.com/manastria/zsh-dircolors-solarized.git
+	branch = master
+	commit = 11d07009948c7c0c993c3b7e418f680ebc2a7d70
+	parent = 21db1cd9da4f0a9971537a59c259bb5e24de20bd
+	method = merge
+	cmdver = 0.4.9
