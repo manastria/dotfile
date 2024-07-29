@@ -1,0 +1,11 @@
+; DO NOT EDIT (unless you know what you are doing)
+;
+; This subdirectory is a git "subrepo", and this file is maintained by the
+; git-subrepo command. See https://github.com/git-commands/git-subrepo#readme
+;
+[subrepo]
+	remote = https://github.com/evanmiller/nginx-vim-syntax.git
+	branch = master
+	commit = 8dffab7043185482414ac9c4d7041e26d77cb898
+	parent = 6ca000d98a1d03c21adfe6a402218f8e3a18690d
+	cmdver = 0.3.0
