@@ -26,6 +26,7 @@ sudo
 systemadmin
 systemd
 z
+safe-paste
 zsh-autosuggestions
 zsh-completions
 zsh-dircolors-solarized
