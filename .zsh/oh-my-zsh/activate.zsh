@@ -30,7 +30,7 @@ zsh-autosuggestions
 zsh-completions
 zsh-dircolors-solarized
 zsh-syntax-highlighting
-zsh-vi-mode
+#zsh-vi-mode
 )
 
 
