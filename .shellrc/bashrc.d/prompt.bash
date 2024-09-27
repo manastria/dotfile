@@ -40,23 +40,38 @@ __prompt_command() {
         PS1+="${Gre}\u${RCol}"
     fi
 
-    PS1+="${RCol}@${BBlu}\h ${Pur}\W${BYel}\\$ ${RCol}"
+    PS1+="${RCol}@${BBlu}\h ${Pur}\w${BYel}\\$ ${RCol}"
 	PS1+="\[\e]1337;CurrentDir="'$(pwd)\a\]'
 }
 
+
 if [ "$color_prompt" = yes ]; then
+    # Si l'option color_prompt est activée (c'est-à-dire si le terminal supporte les couleurs),
+    # on définit PROMPT_COMMAND comme étant la fonction __prompt_command.
+    # Cette fonction est appelée après chaque commande exécutée pour régénérer la variable PS1
+    # qui contient la définition de l'invite (le prompt).
+    # La ligne commentée en dessous montre une alternative pour PS1 sans utiliser PROMPT_COMMAND.
+    # Elle définissait un prompt coloré directement sans la fonction __prompt_command.
     # PS1='${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '
-    PROMPT_COMMAND=__prompt_command # Func to gen PS1 after CMDs
+    PROMPT_COMMAND=__prompt_command  # Appelle la fonction __prompt_command pour définir PS1 dynamiquement
 else
+    # Si le terminal ne supporte pas les couleurs, on définit PS1 sans utiliser la fonction __prompt_command,
+    # en générant un prompt simple avec le nom d'utilisateur (\u), le nom d'hôte (\h) et le chemin complet (\w).
     PS1='${debian_chroot:+($debian_chroot)}\u@\h:\w\$ '
 fi
+
+# On désactive les variables color_prompt et force_color_prompt une fois qu'on n'en a plus besoin
 unset color_prompt force_color_prompt
 
-# If this is an xterm set the title to user@host:dir
+# Si le terminal est un xterm ou rxvt (terminaux graphiques populaires),
+# on définit le titre de la fenêtre du terminal comme "user@host:dir" (nom d'utilisateur @ nom d'hôte : répertoire).
 case "$TERM" in
 xterm*|rxvt*)
+    # Ajoute une séquence d'échappement pour définir le titre de la fenêtre du terminal,
+    # puis ajoute ce prompt à PS1 pour que le titre s'affiche dans la barre de titre.
     PS1="\[\e]0;${debian_chroot:+($debian_chroot)}\u@\h: \w\a\]$PS1"
     ;;
 *)
+    # Si ce n'est pas un xterm ou rxvt, on ne fait rien.
     ;;
 esac
