@@ -118,14 +118,16 @@ init_prompt() {
     # Sélectionne le style de prompt en fonction du paramètre
     set_prompt_style "$PROMPT_STYLE" || return 1
 
-    # Si c'est un xterm ou rxvt, définit le titre de la fenêtre
-    case "$TERM" in
-        xterm*|rxvt*)
-            PS1="\[\e]0;\u@\h: \w\a\]$PS1"
-            ;;
-        *)
-            ;;
-    esac
+    set-window-title() {
+        echo -en "\033]0;$(pwd | sed -e "s;^$HOME;~;")\a"
+    }
+
+    if [[ "$PROMPT_COMMAND" ]]; then
+        export PROMPT_COMMAND="$PROMPT_COMMAND;set-window-title"
+    else
+        export PROMPT_COMMAND=set-window-title
+    fi
+
 
     # Nettoie les variables temporaires
     unset color_prompt force_color_prompt

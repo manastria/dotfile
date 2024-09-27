@@ -63,15 +63,9 @@ fi
 # On désactive les variables color_prompt et force_color_prompt une fois qu'on n'en a plus besoin
 unset color_prompt force_color_prompt
 
-# Si le terminal est un xterm ou rxvt (terminaux graphiques populaires),
-# on définit le titre de la fenêtre du terminal comme "user@host:dir" (nom d'utilisateur @ nom d'hôte : répertoire).
-case "$TERM" in
-xterm*|rxvt*)
-    # Ajoute une séquence d'échappement pour définir le titre de la fenêtre du terminal,
-    # puis ajoute ce prompt à PS1 pour que le titre s'affiche dans la barre de titre.
-    PS1="\[\e]0;${debian_chroot:+($debian_chroot)}\u@\h: \w\a\]$PS1"
-    ;;
-*)
-    # Si ce n'est pas un xterm ou rxvt, on ne fait rien.
-    ;;
-esac
+# Modification du titre de la fenêtre du terminal
+set-window-title() {
+    echo -en "\033]0;$(pwd | sed -e "s;^$HOME;~;")\a"
+}
+
+PS1="$PS1;set-window-title"
