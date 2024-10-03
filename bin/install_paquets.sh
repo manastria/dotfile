@@ -39,7 +39,7 @@ fi
 # Étape 3: Installation des nouveaux paquets
 echo -e "${YELLOW}Étape 3: Installation des nouveaux paquets${NC}"
 # Liste des paquets à installer
-packages=(vim bat fd-find zsh fzf sqlite3 git curl wget htop tree ncdu aptitude tmux haveged openssh-server auto-apt-proxy)
+packages=(vim bat fd-find zsh fzf sqlite3 git curl wget htop tree ncdu aptitude tmux haveged openssh-server auto-apt-proxy lsd)
 # Liste des paquets à installer pour les addons de VirtualBox
 packages+=(dkms build-essential module-assistant)
 to_install=()
