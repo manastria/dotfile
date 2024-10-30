@@ -54,6 +54,8 @@ setup_ssh_directory() {
 
 # Remplace authorized_keys s'il est un lien symbolique et qu'un fichier authorized_keys2 existe
 replace_symlink() {
+  # Vérifie si authorized_keys est un lien symbolique (-L) et si authorized_keys2 est un fichier régulier (-f).
+  # Si ces deux conditions sont vraies, le lien symbolique est remplacé par authorized_keys2.
   if [ -L ~/.ssh/authorized_keys -a -f ~/.ssh/authorized_keys2 ]; then
     rm ~/.ssh/authorized_keys
     mv ~/.ssh/authorized_keys2 ~/.ssh/authorized_keys
@@ -63,6 +65,10 @@ replace_symlink() {
 
 # Crée un lien symbolique vers authorized_keys
 create_symlink() {
+  # Supprime authorized_keys2 s'il existe (fichier ou lien symbolique)
+  if [ -e ~/.ssh/authorized_keys2 ]; then
+    rm ~/.ssh/authorized_keys2
+  fi
   ln -sf ~/.ssh/authorized_keys ~/.ssh/authorized_keys2
   echo "Lien symbolique ~/.ssh/authorized_keys2 créé ou mis à jour."
 }
