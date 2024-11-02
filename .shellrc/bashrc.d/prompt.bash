@@ -22,6 +22,16 @@ if [ -n "$force_color_prompt" ]; then
     fi
 fi
 
+# Fonction pour définir le titre de la fenêtre
+set_window_title() {
+    # Vérifie si on est dans un terminal graphique
+    case "$TERM" in
+        xterm*|rxvt*|konsole*|gnome*|alacritty)
+            echo -en "\033]0;$(pwd | sed -e "s;^$HOME;~;")\a"
+            ;;
+    esac
+}
+
 __prompt_command() {
     local EXIT="$?"             # This needs to be first
     PS1=""
@@ -41,8 +51,11 @@ __prompt_command() {
     fi
 
     PS1+="${RCol}@${BBlu}\h ${Pur}\w${BYel}\\$ ${RCol}"
-	PS1+="\[\e]1337;CurrentDir="'$(pwd)\a\]'
+	
+    # Mise à jour du titre de la fenêtre uniquement pour les terminaux graphiques
+    set_window_title
 }
+
 
 
 if [ "$color_prompt" = yes ]; then
@@ -62,10 +75,3 @@ fi
 
 # On désactive les variables color_prompt et force_color_prompt une fois qu'on n'en a plus besoin
 unset color_prompt force_color_prompt
-
-# Modification du titre de la fenêtre du terminal
-set-window-title() {
-    echo -en "\033]0;$(pwd | sed -e "s;^$HOME;~;")\a"
-}
-
-PS1="$PS1;set-window-title"
