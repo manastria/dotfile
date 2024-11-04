@@ -88,6 +88,20 @@ fi
 # colored GCC warnings and errors
 #export GCC_COLORS='error=01;31:warning=01;35:note=01;36:caret=01;32:locus=01:quote=01'
 
+# Chargement des alias
+if [ -f ~/.bash_aliases ] && [ -r ~/.bash_aliases ] && [ -s ~/.bash_aliases ]; then
+    # Vérifier les permissions du fichier
+    if [ "$(stat -c %a ~/.bash_aliases)" = "600" ] || [ "$(stat -c %a ~/.bash_aliases)" = "644" ]; then
+        # Vérifier que le propriétaire est bien l'utilisateur courant
+        if [ "$(stat -c %U ~/.bash_aliases)" = "$USER" ]; then
+            . ~/.bash_aliases
+        else
+            echo "ATTENTION: ~/.bash_aliases n'appartient pas à l'utilisateur courant"
+        fi
+    else
+        echo "ATTENTION: ~/.bash_aliases a des permissions incorrectes"
+    fi
+fi
 
 # some more ls aliases
 #alias ll='ls -alF'
