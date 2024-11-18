@@ -36,7 +36,7 @@ import argparse
 
 # Configuration des proxys disponibles
 APT_PROXIES = ["172.25.253.25:3142", "172.16.0.1:3128"]
-DOCKER_PROXIES = ["172.25.253.25:8081", "192.168.1.21:8081"]
+DOCKER_PROXIES = ["172.25.253.25:5000"]
 HTTP_PROXIES = ["172.16.0.1:3128"]
 GW_CLASSROOM = "172.25.254.254"
 
