@@ -66,7 +66,7 @@ if [ "$color_prompt" = yes ]; then
     # La ligne commentée en dessous montre une alternative pour PS1 sans utiliser PROMPT_COMMAND.
     # Elle définissait un prompt coloré directement sans la fonction __prompt_command.
     # PS1='${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '
-    PROMPT_COMMAND=__prompt_command  # Appelle la fonction __prompt_command pour définir PS1 dynamiquement
+    PROMPT_COMMAND="${PROMPT_COMMAND:+$PROMPT_COMMAND$'\n'}__prompt_command"  # Appelle la fonction __prompt_command pour définir PS1 dynamiquement
 else
     # Si le terminal ne supporte pas les couleurs, on définit PS1 sans utiliser la fonction __prompt_command,
     # en générant un prompt simple avec le nom d'utilisateur (\u), le nom d'hôte (\h) et le chemin complet (\w).
