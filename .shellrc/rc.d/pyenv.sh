@@ -1,6 +1,9 @@
 # Vérifie si pyenv est installé
-if command -v pyenv > /dev/null 2>&1; then
+# Si le répertoire ~/.pyenv/bin existe
+if [ -d "$HOME/.pyenv/bin" ]; then
+    # Ajoute le répertoire ~/.pyenv/bin au PATH
     export PATH="$HOME/.pyenv/bin:$PATH"
+    # Initialise pyenv
     eval "$(pyenv init --path)"
     eval "$(pyenv init -)"
     eval "$(pyenv virtualenv-init -)"
