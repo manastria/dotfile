@@ -34,6 +34,9 @@ alias psess='ps -o ppid,pid,stat,tty,user,cmd' # Affichage des processus avec le
 # Options :
 #   -p : Affiche les PIDs (identifiants des processus).
 #   -c : Désactive le regroupement des processus similaires.
-#   -w : Évite la troncature des lignes longues.
-alias treeproc='pstree -p -c -w $$'
-alias stree='pstree -p -c -w $$' # Contraction de "Shell Tree", indiquant l’arborescence des processus autour du shell.
+#   -l : Évite la troncature des lignes longues.
+alias treeproc='pstree -p -c -l $$'
+alias stree='pstree -p -c -l $$' # Contraction de "Shell Tree", indiquant l’arborescence des processus autour du shell.
+
+# Affiche tous les processus enfants de terminator
+alias termtree='pstree -p -c -l $(ps -o ppid= -p $$)'
