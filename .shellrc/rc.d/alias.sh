@@ -21,8 +21,14 @@ alias pgp_import_private='function gpg_import_private() { gpg --import-options r
 
 alias grepcolor='grep --color=always'
 
-# Affichage des processus avec les colonnes essentielles
-alias psess='ps -o ppid,pid,stat,tty,user,cmd'
+# Affiche les processus avec les colonnes essentielles pour une analyse rapide :
+#   - PPID : PID du processus parent.
+#   - PID  : Identifiant du processus.
+#   - STAT : État du processus (Running, Sleeping, etc.).
+#   - TTY  : Terminal associé au processus (ou ? si aucun).
+#   - USER : Utilisateur propriétaire du processus.
+#   - CMD  : Commande utilisée pour démarrer le processus.
+alias psess='ps -o ppid,pid,stat,tty,user,cmd' # Affichage des processus avec les colonnes essentielles
 
 # Affiche l'arborescence complète des processus à partir du shell courant.
 # Options :
