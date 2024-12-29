@@ -21,4 +21,5 @@ alias pgp_import_private='function gpg_import_private() { gpg --import-options r
 
 alias grepcolor='grep --color=always'
 
+# Affichage des processus avec les colonnes essentielles
 alias psess='ps -o ppid,pid,stat,tty,user,cmd'
