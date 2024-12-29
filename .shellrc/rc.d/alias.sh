@@ -23,3 +23,11 @@ alias grepcolor='grep --color=always'
 
 # Affichage des processus avec les colonnes essentielles
 alias psess='ps -o ppid,pid,stat,tty,user,cmd'
+
+# Affiche l'arborescence complète des processus à partir du shell courant.
+# Options :
+#   -p : Affiche les PIDs (identifiants des processus).
+#   -c : Désactive le regroupement des processus similaires.
+#   -w : Évite la troncature des lignes longues.
+alias treeproc='pstree -p -c -w $$'
+alias stree='pstree -p -c -w $$' # Contraction de "Shell Tree", indiquant l’arborescence des processus autour du shell.
