@@ -21,8 +21,6 @@ disable_proxy() {
 # Fonction pour installer les logiciels snap
 install_snaps() {
     snap refresh
-    snap find 1password
-    sudo snap install 1password
     sudo snap install --classic code
     sudo snap install --classic obsidian
     echo "Logiciels snap installés avec succès."
