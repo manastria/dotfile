@@ -5,3 +5,8 @@ cat << EOF > ${HOME}/.gitconfig.local
       name = manastria
       email = manastria@users.noreply.github.com
 EOF
+
+
+cat << EOF > ${HOME}/.github_config
+username = manastria
+EOF
