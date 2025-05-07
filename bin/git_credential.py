@@ -19,7 +19,7 @@ if config_file.exists():
             match = re.match(r'^username\s*=\s*(.+)$', line)
             if match:
                 username = match.group(1).strip()
-                print(f"GitHub username loaded from {config_file}")
+                print(f"GitHub username loaded from {config_file} : {username}")
                 break
 
 # Si aucun nom d'utilisateur trouvé, le demander à l'utilisateur
