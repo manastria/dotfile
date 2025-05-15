@@ -69,3 +69,50 @@ alias pgp_export_private='function gpg_export_private() { gpg --armor --export-s
 alias pgp_import_private='function gpg_import_private() { gpg --import-options restore,keep-ownertrust --import "$1-private.asc"; }; gpg_import_private'
 
 
+# Démarrer rapidement les conteneurs (mode interactif)
+alias dcu="docker compose up"
+
+# Démarrer en arrière-plan (detach)
+alias dcud="docker compose up -d"
+
+# Redémarrer proprement (arrêt + relance)
+alias dcr="docker compose down && docker compose up"
+
+# Reconstruire et relancer
+alias dcrb="docker compose down && docker compose up --build"
+
+# Supprimer volumes + rebuild complet
+alias dcpurge="docker compose down -v --remove-orphans && docker compose up --build"
+
+# Arrêter
+alias dcd="docker compose down"
+
+# Voir les logs
+alias dcl="docker compose logs -f"
+
+# Voir l'état
+alias dcs="docker compose ps"
+
+# Ouvrir un shell dans un conteneur (usage : dce <nom_service>)
+alias dce="docker compose exec"
+
+# Nettoyer tous les conteneurs, volumes et images non utilisés
+alias dcclean="docker system prune -af && docker volume prune -f"
+
+
+
+# Lance les services Docker (en arrière-plan)
+alias webup="docker compose up -d"
+
+# Arrête les services Docker
+alias webstop="docker compose down"
+
+# Affiche l'adresse IP de la VM (pour y accéder depuis Windows)
+alias webip="ip -4 addr show eth0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n1"
+
+
+
+
+alias gulp="docker compose exec node gulp"
+alias npm-install="docker compose exec node npm install"
+alias gulp-watch="docker compose exec node gulp watch"
