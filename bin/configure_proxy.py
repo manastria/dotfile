@@ -165,7 +165,7 @@ def find_available_proxy(proxies: List[str]) -> Optional[str]:
     for proxy in proxies:
         log.debug(f"Test du proxy {proxy}...")
         if test_proxy(proxy):
-            log.info(f"[green]Proxy {proxy} disponible.[/green]")
+            console.print(f"[green]Proxy {proxy} disponible.[/green]")
             return proxy
     log.warning("Aucun proxy disponible trouvé dans la liste.")
     return None
