@@ -23,6 +23,8 @@ install_snaps() {
     snap refresh
     sudo snap install --classic code
     sudo snap install --classic obsidian
+    sudo snap install --classic brave
+    sudo snap install --classic code
     echo "Logiciels snap installés avec succès."
 }
 
