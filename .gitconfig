@@ -21,3 +21,5 @@
 
 
 # cat gitconfig | sed -e 's/^[ \t]*//' | sed '/^$/d' | grep -v "^#" |sort| less
+[init]
+	defaultBranch = master
