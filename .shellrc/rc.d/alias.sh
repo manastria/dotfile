@@ -111,6 +111,24 @@ alias dcclean="docker system prune -af && docker volume prune -f"
 # Nettoyage complet : volumes, conteneurs orphelins, images locales
 alias dcxclean="docker compose down --volumes --remove-orphans --rmi local"
 
+# Télécharger les images sans démarrer
+alias dcpull="docker compose pull"
+
+# Rebuild uniquement (pas de démarrage)
+alias dcbuild="docker compose build"
+
+# Build puis up en mode détaché
+alias dcub="docker compose up --build -d"
+
+# Force recreate sans utiliser le cache d'exécution
+alias dcuf="docker compose up --force-recreate -d"
+
+# Rebuild complet sans cache (forcé) + démarrage en mode détaché
+# À utiliser après modification du Dockerfile ou de fichiers copiés dans l'image
+alias dcufull="docker compose build --no-cache && docker compose up -d"
+
+
+
 
 
 # # Lance les services Docker (en arrière-plan)
