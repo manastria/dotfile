@@ -78,68 +78,22 @@ alias pgp_import_private='function gpg_import_private() { gpg --import-options r
 ################################################################################
 
 
-# Démarrer rapidement les conteneurs (mode interactif)
+# Docker Compose shortcuts
 alias dcu="docker compose up"
-
-# Démarrer en arrière-plan (detach)
 alias dcud="docker compose up -d"
-
-# Redémarrer proprement (arrêt + relance)
-alias dcr="docker compose down && docker compose up"
-
-# Reconstruire et relancer
-alias dcrb="docker compose down && docker compose up --build"
-
-# Supprimer volumes + rebuild complet
-alias dcpurge="docker compose down -v --remove-orphans && docker compose up --build"
-
-# Arrêter
 alias dcd="docker compose down"
-
-# Voir les logs
-alias dcl="docker compose logs -f"
-
-# Voir l'état
+alias dcl="docker compose logs"
 alias dcs="docker compose ps"
-
-# Ouvrir un shell dans un conteneur (usage : dce <nom_service>)
 alias dce="docker compose exec"
 
-# Nettoyer tous les conteneurs, volumes et images non utilisés
-alias dcclean="docker system prune -af && docker volume prune -f"
-
-# Nettoyage complet : volumes, conteneurs orphelins, images locales
-alias dcxclean="docker compose down --volumes --remove-orphans --rmi local"
-
-# Télécharger les images sans démarrer
-alias dcpull="docker compose pull"
-
-# Rebuild uniquement (pas de démarrage)
-alias dcbuild="docker compose build"
-
-# Build puis up en mode détaché
-alias dcub="docker compose up --build -d"
-
-# Force recreate sans utiliser le cache d'exécution
+# Dev / Rebuild
+alias dcre="docker compose down --volumes --remove-orphans && docker compose up --build"
 alias dcuf="docker compose up --force-recreate -d"
+alias dcr="docker compose down && docker compose up"
 
-# Rebuild complet sans cache (forcé) + démarrage en mode détaché
-# À utiliser après modification du Dockerfile ou de fichiers copiés dans l'image
-alias dcufull="docker compose build --no-cache && docker compose up -d"
-
-
-
-
-
-# # Lance les services Docker (en arrière-plan)
-# alias webup="docker compose up -d"
-# 
-# # Arrête les services Docker
-# alias webstop="docker compose down"
-# 
-# # Affiche l'adresse IP de la VM (pour y accéder depuis Windows)
-# alias webip="ip -4 addr show eth0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n1"
-
+# Cleanup
+alias dcclean="docker system prune -af && docker volume prune -f"
+alias dcxclean="docker compose down --volumes --remove-orphans && docker system prune -af && docker volume prune -f"
 
 
 
