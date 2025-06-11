@@ -87,9 +87,9 @@ alias dcs="docker compose ps"
 alias dce="docker compose exec"
 
 # Dev / Rebuild
-alias dcre="docker compose down --volumes --remove-orphans && docker compose up --build -d"
-alias dcuf="docker compose up --force-recreate -d"
-alias dcr="docker compose down && docker compose up -d"
+alias dcre="docker compose down --volumes --remove-orphans && docker compose up --build"
+alias dcuf="docker compose up --force-recreate"
+alias dcr="docker compose down && docker compose up"
 
 # Cleanup
 alias dcclean="docker system prune -af && docker volume prune -f"
