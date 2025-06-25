@@ -60,6 +60,7 @@ packages=(
     auto-apt-proxy
     bat
     curl
+    direnv
     fd-find
     fzf
     gh
