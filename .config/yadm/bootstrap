@@ -5,23 +5,30 @@ set -e
 
 echo "--- Début du bootstrap yadm ---"
 
-echo "1. Configuration du sparse-checkout pour exclure les fichiers de dev..."
+# Chemin vers notre fichier de configuration personnalisé
+CONFIG_SOURCE_FILE="$HOME/.config/yadm/sparse-checkout-patterns"
 
-# On demande à yadm de bien vouloir utiliser le sparse-checkout
+# On vérifie que notre fichier de configuration existe bien
+if [ ! -f "$CONFIG_SOURCE_FILE" ]; then
+  echo "Erreur : Le fichier de configuration des exclusions $CONFIG_SOURCE_FILE est introuvable."
+  exit 1
+fi
+
+echo "1. Configuration du sparse-checkout à partir du fichier de règles..."
+
+# On active le mode sparse-checkout
 yadm config yadm.sparse-checkout true
 
-# On récupère le chemin absolu vers le dépôt yadm, c'est plus robuste
+# On récupère le chemin absolu vers le dépôt yadm
 YADM_REPO=$(yadm rev-parse --git-dir)
+CONFIG_DEST_FILE="$YADM_REPO/info/sparse-checkout"
 
-# On écrit les règles d'exclusion dans le fichier de config local du clone
-# printf est plus propre pour gérer les sauts de ligne
-printf "/*\n!/.gitignore\n!/.editorconfig\n" > "$YADM_REPO/info/sparse-checkout"
-# Ajoutez ici d'autres fichiers à exclure sur la même syntaxe : !/nom_du_fichier
+# On copie notre fichier de règles pour qu'il devienne la configuration active
+cp "$CONFIG_SOURCE_FILE" "$CONFIG_DEST_FILE"
 
-echo "2. Application des règles de sparse-checkout..."
+echo "2. Application des nouvelles règles..."
 
-# On force la mise à jour du répertoire de travail ($HOME) pour que les fichiers
-# exclus soient bien supprimés.
+# On force la mise à jour du répertoire de travail ($HOME)
 yadm checkout HEAD
 
 echo "--- Bootstrap terminé avec succès ! ---"
