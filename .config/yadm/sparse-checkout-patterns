@@ -1,3 +1,6 @@
 /*
 !/.gitignore
+!/.gitmodules
 !/.editorconfig
+!/README.md
+!/add_submodules.sh
