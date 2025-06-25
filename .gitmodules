@@ -1,0 +1,28 @@
+[submodule ".zsh/oh-my-zsh"]
+	path = .zsh/oh-my-zsh
+	url = https://github.com/ohmyzsh/ohmyzsh.git
+	shallow = true
+[submodule ".zsh/custom/plugins/zsh-autosuggestions"]
+	path = .zsh/custom/plugins/zsh-autosuggestions
+	url = https://github.com/zsh-users/zsh-autosuggestions
+	shallow = true
+[submodule ".zsh/custom/plugins/zsh-completions"]
+	path = .zsh/custom/plugins/zsh-completions
+	url = https://github.com/zsh-users/zsh-completions
+	shallow = true
+[submodule ".zsh/custom/plugins/zsh-dircolors-solarized"]
+	path = .zsh/custom/plugins/zsh-dircolors-solarized
+	url = https://github.com/manastria/zsh-dircolors-solarized.git
+	shallow = true
+[submodule ".zsh/custom/plugins/zsh-syntax-highlighting"]
+	path = .zsh/custom/plugins/zsh-syntax-highlighting
+	url = https://github.com/zsh-users/zsh-syntax-highlighting.git
+	shallow = true
+[submodule ".zsh/custom/plugins/zsh-vi-mode"]
+	path = .zsh/custom/plugins/zsh-vi-mode
+	url = https://github.com/jeffreytse/zsh-vi-mode
+	shallow = true
+[submodule ".zsh/custom/themes/powerlevel10k"]
+	path = .zsh/custom/themes/powerlevel10k
+	url = https://github.com/romkatv/powerlevel10k.git
+	shallow = true
