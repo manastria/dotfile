@@ -1,0 +1,27 @@
+#!/bin/sh
+
+# On met 'set -e' pour que le script s'arrête en cas d'erreur
+set -e
+
+echo "--- Début du bootstrap yadm ---"
+
+echo "1. Configuration du sparse-checkout pour exclure les fichiers de dev..."
+
+# On demande à yadm de bien vouloir utiliser le sparse-checkout
+yadm config yadm.sparse-checkout true
+
+# On récupère le chemin absolu vers le dépôt yadm, c'est plus robuste
+YADM_REPO=$(yadm rev-parse --git-dir)
+
+# On écrit les règles d'exclusion dans le fichier de config local du clone
+# printf est plus propre pour gérer les sauts de ligne
+printf "/*\n!/.gitignore\n!/.editorconfig\n" > "$YADM_REPO/info/sparse-checkout"
+# Ajoutez ici d'autres fichiers à exclure sur la même syntaxe : !/nom_du_fichier
+
+echo "2. Application des règles de sparse-checkout..."
+
+# On force la mise à jour du répertoire de travail ($HOME) pour que les fichiers
+# exclus soient bien supprimés.
+yadm checkout HEAD
+
+echo "--- Bootstrap terminé avec succès ! ---"
