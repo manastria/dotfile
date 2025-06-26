@@ -107,20 +107,38 @@ if command -v starship &> /dev/null; then
     # --- Starship est installé : on l'active ---
     # echo "Starship détecté. Activation..." # Décommenter pour débugger
 
+    # Le fichier qui stockera notre choix ("default" ou "projector")
+    STARSHIP_PROFILE_FILE=~/.config/starship/current_profile
+
     # On intègre ici votre sélecteur de profil
     function prompt_projector() {
-      export STARSHIP_CONFIG=~/.config/starship/projector.toml
-      echo "✅ Prompt Starship en mode Projection. Appliquez avec 'exec $SHELL'."
+        echo "projector" > "$STARSHIP_PROFILE_FILE"
+        echo "✅ Profil 'Projection' sélectionné pour les prochains terminaux."
+        # On met à jour le shell actuel pour un effet immédiat
+        export STARSHIP_CONFIG=~/.config/starship/projector.toml
+        echo "Prompt appliqué dans ce terminal. Utilisez 'exec $SHELL' pour recharger entièrement."
     }
-    function prompt_default() {
-      export STARSHIP_CONFIG=~/.config/starship/default.toml
-      echo "✅ Prompt Starship en mode Défaut. Appliquez avec 'exec $SHELL'."
-    }
-    # On charge un profil par défaut au démarrage
-    prompt_default
 
-    # Activation de Starship
-    eval "$(starship init bash)" # Remplacer bash par zsh si besoin
+    function prompt_default() {
+        echo "default" > "$STARSHIP_PROFILE_FILE"
+        echo "✅ Profil 'Défaut' sélectionné pour les prochains terminaux."
+        # On met à jour le shell actuel pour un effet immédiat
+        export STARSHIP_CONFIG=~/.config/starship/default.toml
+        echo "Prompt appliqué dans ce terminal. Utilisez 'exec $SHELL' pour recharger entièrement."
+    }
+
+    # 1. On lit le nom du profil dans le fichier d'état.
+    #    S'il n'existe pas, on utilise "default".
+    CURRENT_PROFILE=$(cat "$STARSHIP_PROFILE_FILE" 2>/dev/null || echo "default")
+
+    # 2. On exporte la variable STARSHIP_CONFIG avec le bon chemin.
+    export STARSHIP_CONFIG=~/.config/starship/${CURRENT_PROFILE}.toml
+
+    # 3. On active Starship (qui lira la variable ci-dessus)
+    #    On vérifie quand même si Starship et le fichier de config existent.
+    if [ -f "$STARSHIP_CONFIG" ]; then
+        eval "$(starship init bash)" # ou zsh
+    fi
 
 else
     # --- Starship n'est PAS installé : on utilise le prompt de secours ---
@@ -129,43 +147,13 @@ else
 fi
 
 
-# =============================================================
-# =    Sélecteur de Prompt Starship (Version Persistante)     =
-# =============================================================
 
-# Le fichier qui stockera notre choix ("default" ou "projector")
-STARSHIP_PROFILE_FILE=~/.config/starship/current_profile
 
-# --- Fonctions pour CHANGER le profil ---
-# Elles écrivent simplement le choix dans le fichier d'état.
-
-function prompt_projector() {
-    echo "projector" > "$STARSHIP_PROFILE_FILE"
-    echo "✅ Profil 'Projection' sélectionné pour les prochains terminaux."
-    # On met à jour le shell actuel pour un effet immédiat
-    export STARSHIP_CONFIG=~/.config/starship/projector.toml
-    echo "Prompt appliqué dans ce terminal. Utilisez 'exec $SHELL' pour recharger entièrement."
-}
-
-function prompt_default() {
-    echo "default" > "$STARSHIP_PROFILE_FILE"
-    echo "✅ Profil 'Défaut' sélectionné pour les prochains terminaux."
-    # On met à jour le shell actuel pour un effet immédiat
-    export STARSHIP_CONFIG=~/.config/starship/default.toml
-    echo "Prompt appliqué dans ce terminal. Utilisez 'exec $SHELL' pour recharger entièrement."
-}
 
 # --- Logique exécutée à CHAQUE ouverture de terminal ---
 
-# 1. On lit le nom du profil dans le fichier d'état.
-#    S'il n'existe pas, on utilise "default".
-CURRENT_PROFILE=$(cat "$STARSHIP_PROFILE_FILE" 2>/dev/null || echo "default")
 
-# 2. On exporte la variable STARSHIP_CONFIG avec le bon chemin.
-export STARSHIP_CONFIG=~/.config/starship/${CURRENT_PROFILE}.toml
 
-# 3. On active Starship (qui lira la variable ci-dessus)
-#    On vérifie quand même si Starship et le fichier de config existent.
-if [ -f "$STARSHIP_CONFIG" ]; then
-    eval "$(starship init bash)" # ou zsh
-fi
+
+
+
