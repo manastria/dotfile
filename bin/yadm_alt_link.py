@@ -26,49 +26,40 @@ import platform
 from typing import List
 
 SUFFIX = "##os.None"
+ALT_DIR = pathlib.PurePosixPath(".config/yadm/alt")
 LIST_FILE = pathlib.PurePosixPath(".config/yadm/alt-link-list.txt")
 
-# ───────────────────────── helpers ────────────────────────────────
+# ───────────────────────── git helpers ────────────────────────────
 
-def run_git(*args: str, **kw) -> subprocess.CompletedProcess:
-    """Run git command, returning CompletedProcess."""
-    return subprocess.run(["git", *args], text=True, capture_output=True, **kw)
-
+def git(*args: str, capture: bool = True) -> subprocess.CompletedProcess:
+    """Run git and return CompletedProcess."""
+    return subprocess.run(["git", *args], text=True,
+                          capture_output=capture, check=False)
 
 def repo_root() -> pathlib.Path:
-    return pathlib.Path(run_git("rev-parse", "--show-toplevel").stdout.strip())
+    return pathlib.Path(git("rev-parse", "--show-toplevel").stdout.strip())
 
 
 def exclude_path() -> pathlib.Path:
-    return pathlib.Path(run_git("rev-parse", "--git-path", "info/exclude").stdout.strip())
+    return pathlib.Path(git("rev-parse", "--git-path", "info/exclude").stdout.strip())
 
-
-# ---- link creation cross‑OS --------------------------------------
+# ───────────────────────── link creation ──────────────────────────
 
 def make_link(target: pathlib.Path, link: pathlib.Path) -> None:
     if link.exists():
-        return  # already there
+        return
     try:
         os.symlink(target, link, target_is_directory=target.is_dir())
         return
     except (OSError, NotImplementedError) as err:
-        is_win = platform.system() == "Windows"
-        if not is_win or getattr(err, "winerror", None) != 1314:
+        if platform.system() != "Windows" or getattr(err, "winerror", None) != 1314:
             raise
     # Windows fallback (no symlink privilege)
     cmd = ["cmd", "/c", "mklink"]
-    if target.is_dir():
-        cmd += ["/J"]  # junction
-    else:
-        cmd += ["/H"]  # hard‑link
-    cmd += [str(link), str(target)]
-    try:
-        subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except subprocess.CalledProcessError as e:
-        raise RuntimeError("mklink failed — enable Developer Mode or run as Admin") from e
+    cmd += ["/J" if target.is_dir() else "/H", str(link), str(target)]
+    subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-
-# ---- .git/info/exclude handling ----------------------------------
+# ───────────────────────── exclude handling ───────────────────────
 
 def add_to_exclude(exclude: pathlib.Path, rel: str) -> None:
     exclude.parent.mkdir(parents=True, exist_ok=True)
@@ -80,62 +71,74 @@ def add_to_exclude(exclude: pathlib.Path, rel: str) -> None:
         f.write(rel + "\n")
     print(f"· Added to info/exclude: {rel}")
 
-
-# ---- git index cleanup -------------------------------------------
+# ───────────────────────── index cleanup ──────────────────────────
 
 def remove_from_index(rel: str) -> None:
-    """If path is tracked, git rm --cached (-r) it."""
-    ls = run_git("ls-files", "--error-unmatch", rel)
-    if ls.returncode == 0:
-        rm = run_git("rm", "--cached", "-r", "--", rel)
-        if rm.returncode == 0:
-            print(f"· Removed from index: {rel}")
-        else:
-            print(rm.stderr, file=sys.stderr)
+    if git("ls-files", "--error-unmatch", rel).returncode == 0:
+        git("rm", "--cached", "-r", "--", rel, capture=False)
+        print(f"· Removed from index: {rel}")
 
+# ───────────────────────── targets list ───────────────────────────
 
-# ---- list of targets ---------------------------------------------
-
-def read_list_file(rroot: pathlib.Path) -> List[str]:
-    fp = rroot / LIST_FILE
+def read_list_file(root: pathlib.Path) -> List[str]:
+    fp = root / LIST_FILE
     if not fp.exists():
         return []
     with fp.open() as f:
-        return [ln.strip() for ln in f if ln.strip() and not ln.lstrip().startswith("#")]
+        return [ln.strip() for ln in f if ln.strip() and not ln.lstrip().startswith('#')]
 
 
-def get_targets(rroot: pathlib.Path) -> List[str]:
+def get_targets(root: pathlib.Path) -> List[str]:
     if len(sys.argv) > 1:
         return sys.argv[1:]
-    paths = read_list_file(rroot)
+    paths = read_list_file(root)
     if paths:
-        print(f"No CLI paths — using {LIST_FILE} ({len(paths)} entries)")
+        print(f"No CLI paths – using {LIST_FILE} ({len(paths)} entries)")
         return paths
     print("Error: no paths given and no list file found.")
     sys.exit(1)
 
+# ───────────────────────── processing ─────────────────────────────
 
-# ---- main per‑file process ---------------------------------------
+def variant_path(root: pathlib.Path, rel: str) -> pathlib.Path:
+    p = pathlib.Path(rel)
+    return root / ALT_DIR / p.parent / f"{p.name}{SUFFIX}"
 
-def process_one(rel: str, rroot: pathlib.Path, exclude: pathlib.Path):
-    path = rroot / rel
-    variant = path.with_name(path.name + SUFFIX)
 
-    if variant.exists() and not path.is_symlink():
-        make_link(variant, path)
-        print(f"Symlink created: {rel} → {rel}{SUFFIX}")
-    elif path.exists() and not variant.exists():
-        path.rename(variant)
-        make_link(variant, path)
-        print(f"Moved and linked: {rel} → {rel}{SUFFIX}")
+def ensure_variant_dirs(path: pathlib.Path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+
+def move_existing_root_variant(path: pathlib.Path, var_path: pathlib.Path):
+    root_variant = path.with_name(path.name + SUFFIX)
+    if root_variant.exists() and not var_path.exists():
+        ensure_variant_dirs(var_path)
+        root_variant.rename(var_path)
+        print(f"· Moved existing root variant → {ALT_DIR}/{var_path.relative_to(pathlib.Path('.'))}")
+
+
+def process_one(rel: str, root: pathlib.Path, exclude: pathlib.Path):
+    work_path = root / rel
+    var_path = variant_path(root, rel)
+
+    # Move any pre‑existing root‑level variant
+    move_existing_root_variant(work_path, var_path)
+
+    if var_path.exists() and not work_path.is_symlink():
+        make_link(os.path.relpath(var_path, start=work_path.parent), work_path)
+        print(f"Symlink created: {rel} → {ALT_DIR}/{var_path.relative_to(root/ALT_DIR)}")
+    elif work_path.exists() and not var_path.exists():
+        ensure_variant_dirs(var_path)
+        work_path.rename(var_path)
+        make_link(os.path.relpath(var_path, start=work_path.parent), work_path)
+        print(f"Moved & linked: {rel} → {ALT_DIR}/{var_path.relative_to(root/ALT_DIR)}")
     else:
         print(f"✓ Nothing to do for {rel}")
 
     add_to_exclude(exclude, rel)
     remove_from_index(rel)
 
-
-# ---- main ---------------------------------------------------------
+# ───────────────────────── main ───────────────────────────────────
 
 def main():
     root = repo_root()
@@ -143,12 +146,12 @@ def main():
     exclude = exclude_path()
 
     targets = get_targets(root)
-    for rel in targets:
-        process_one(rel, root, exclude)
+    for t in targets:
+        process_one(t, root, exclude)
 
     if targets:
-        joined = " ".join(f"'{t}{SUFFIX}'" for t in targets)
-        print(f"\nDone. Remember to: git add {joined} && git commit -m 'yadm variants'")
+        variants = " ".join(f"'{ALT_DIR}/{pathlib.Path(t).name}{SUFFIX}'" for t in targets)
+        print(f"\nDone. Remember to: git add {variants} && git commit -m 'yadm variants in alt/'")
 
 if __name__ == "__main__":
     main()
