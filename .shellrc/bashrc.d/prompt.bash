@@ -1,5 +1,15 @@
 # -*- mode: bash -*-
 
+# ===================================================================
+# =                GESTIONNAIRE DE PROMPT DYNAMIQUE                 =
+# = (Starship avec fallback sur un prompt Bash personnalisé)         =
+# ===================================================================
+
+# -------------------------------------------------------------------
+# 1. DÉFINITION DU PROMPT DE SECOURS (VOTRE PROMPT ACTUEL)
+#    Ce prompt sera utilisé si Starship n'est pas trouvé.
+# -------------------------------------------------------------------
+
 # set a fancy prompt (non-color, unless we know we "want" color)
 case "$TERM" in
     xterm-color|*-256color) color_prompt=yes;;
@@ -34,7 +44,21 @@ set_window_title() {
 
 __prompt_command() {
     local EXIT="$?"             # This needs to be first
+
+    # --- Ajout pour VirtualEnv ---
+    local venv_indicator=""
+    if [ -n "$VIRTUAL_ENV" ]; then
+        # On récupère le nom du dossier de l'environnement virtuel
+        local venv_name=$(basename "$VIRTUAL_ENV") 
+        # On définit une couleur (Cyan) et on formate l'indicateur
+        local BCya='\[\e[1;36m\]'
+        local RCol='\[\e[0m\]'
+        venv_indicator="${BCya}(${venv_name}) ${RCol}"
+    fi
+    # --- Fin de l'ajout ---
+
     PS1=""
+    PS1+="${venv_indicator}" # On ajoute l'indicateur au tout début
 
     local RCol='\[\e[0m\]'
 
@@ -45,9 +69,9 @@ __prompt_command() {
     local Pur='\[\e[0;35m\]'
 
     if [ $EXIT != 0 ]; then
-        PS1+="${Red}\u${RCol}"      # Add red if exit code non 0
+        PS1+="${Red}\u${RCol}"      # Utilisateur en rouge si erreur
     else
-        PS1+="${Gre}\u${RCol}"
+        PS1+="${Gre}\u${RCol}"      # Utilisateur en vert sinon
     fi
 
     PS1+="${RCol}@${BBlu}\h ${Pur}\w${BYel}\\$ ${RCol}"
@@ -55,8 +79,6 @@ __prompt_command() {
     # Mise à jour du titre de la fenêtre uniquement pour les terminaux graphiques
     set_window_title
 }
-
-
 
 if [ "$color_prompt" = yes ]; then
     # Si l'option color_prompt est activée (c'est-à-dire si le terminal supporte les couleurs),
@@ -75,3 +97,75 @@ fi
 
 # On désactive les variables color_prompt et force_color_prompt une fois qu'on n'en a plus besoin
 unset color_prompt force_color_prompt
+
+
+# -------------------------------------------------------------------
+# 2. DÉTECTION ET ACTIVATION DU PROMPT
+# -------------------------------------------------------------------
+# On vérifie si la commande 'starship' existe ET est exécutable
+if command -v starship &> /dev/null; then
+    # --- Starship est installé : on l'active ---
+    # echo "Starship détecté. Activation..." # Décommenter pour débugger
+
+    # On intègre ici votre sélecteur de profil
+    function prompt_projector() {
+      export STARSHIP_CONFIG=~/.config/starship/projector.toml
+      echo "✅ Prompt Starship en mode Projection. Appliquez avec 'exec $SHELL'."
+    }
+    function prompt_default() {
+      export STARSHIP_CONFIG=~/.config/starship/default.toml
+      echo "✅ Prompt Starship en mode Défaut. Appliquez avec 'exec $SHELL'."
+    }
+    # On charge un profil par défaut au démarrage
+    prompt_default
+
+    # Activation de Starship
+    eval "$(starship init bash)" # Remplacer bash par zsh si besoin
+
+else
+    # --- Starship n'est PAS installé : on utilise le prompt de secours ---
+    # echo "Starship non trouvé. Utilisation du prompt Bash de secours." # Décommenter pour débugger
+    PROMPT_COMMAND="${PROMPT_COMMAND:+$PROMPT_COMMAND$'\n'}__prompt_command"
+fi
+
+
+# =============================================================
+# =    Sélecteur de Prompt Starship (Version Persistante)     =
+# =============================================================
+
+# Le fichier qui stockera notre choix ("default" ou "projector")
+STARSHIP_PROFILE_FILE=~/.config/starship/current_profile
+
+# --- Fonctions pour CHANGER le profil ---
+# Elles écrivent simplement le choix dans le fichier d'état.
+
+function prompt_projector() {
+    echo "projector" > "$STARSHIP_PROFILE_FILE"
+    echo "✅ Profil 'Projection' sélectionné pour les prochains terminaux."
+    # On met à jour le shell actuel pour un effet immédiat
+    export STARSHIP_CONFIG=~/.config/starship/projector.toml
+    echo "Prompt appliqué dans ce terminal. Utilisez 'exec $SHELL' pour recharger entièrement."
+}
+
+function prompt_default() {
+    echo "default" > "$STARSHIP_PROFILE_FILE"
+    echo "✅ Profil 'Défaut' sélectionné pour les prochains terminaux."
+    # On met à jour le shell actuel pour un effet immédiat
+    export STARSHIP_CONFIG=~/.config/starship/default.toml
+    echo "Prompt appliqué dans ce terminal. Utilisez 'exec $SHELL' pour recharger entièrement."
+}
+
+# --- Logique exécutée à CHAQUE ouverture de terminal ---
+
+# 1. On lit le nom du profil dans le fichier d'état.
+#    S'il n'existe pas, on utilise "default".
+CURRENT_PROFILE=$(cat "$STARSHIP_PROFILE_FILE" 2>/dev/null || echo "default")
+
+# 2. On exporte la variable STARSHIP_CONFIG avec le bon chemin.
+export STARSHIP_CONFIG=~/.config/starship/${CURRENT_PROFILE}.toml
+
+# 3. On active Starship (qui lira la variable ci-dessus)
+#    On vérifie quand même si Starship et le fichier de config existent.
+if [ -f "$STARSHIP_CONFIG" ]; then
+    eval "$(starship init bash)" # ou zsh
+fi

@@ -1,0 +1,24 @@
+# ~/.config/starship/projector.toml
+# Thème à fort contraste et simplifié pour la projection
+
+# Désactive les icônes qui peuvent mal s'afficher sur les projecteurs
+format = """$username$directory$git_branch$character"""
+
+[username]
+show_always = true
+style_user = "white on blue" # Fort contraste
+
+[directory]
+style = "white on #444444" # Gris foncé
+truncation_length = 5
+
+[git_branch]
+style = "black on green"
+
+# On peut désactiver les modules moins importants pour ne pas distraire les étudiants
+[time]
+disabled = true
+
+[character]
+success_symbol = "[➜](bold green)"
+error_symbol = "[➜](bold red)"

@@ -1,0 +1,13 @@
+# ~/.config/starship/default.toml
+
+# Votre configuration personnelle détaillée
+# Par exemple, avec des icônes, des couleurs subtiles, etc.
+[username]
+show_always = true
+style_user = "blue bold"
+
+[directory]
+style = "cyan"
+
+[git_branch]
+symbol = "🌱 "
