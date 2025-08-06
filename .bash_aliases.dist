@@ -1,0 +1,153 @@
+# =================================================================
+# FICHIER DE DEMONSTRATION DES DIFFERENTES SYNTAXES D'ALIAS
+# =================================================================
+# INSTALLATION
+# 1. Copier ce fichier : cp .bash_aliases.dist ~/.bash_aliases
+# 2. Recharger la configuration : source ~/.bashrc
+# =================================================================
+# IMPORTANT: Ce fichier ne doit contenir QUE des alias.
+# Les fonctions doivent aller dans un fichier à créer dans :
+#   - ~/.shellrc/bashrc.d/ pour du bash
+#   - ~/.shellrc/zshrc.d/ pour du zsh
+#   - ~/.shellrc/rc.d pour du shell POSIX (sh)
+# Les variables d'environnement vont dans ~/.profile ou ~/.bashrc
+# =================================================================
+
+# -----------------------------------------------------------------
+# 1. ALIAS SIMPLE - Raccourci basique
+# Format: alias nom='commande'
+# -----------------------------------------------------------------
+alias ll='ls -la'
+alias cls='clear'
+
+# -----------------------------------------------------------------
+# 2. ALIAS AVEC PARAMÈTRES DE LA COMMANDE ORIGINALE
+# L'alias conserve les paramètres passés après la commande
+# Format: alias nom='commande --option1 --option2'
+# -----------------------------------------------------------------
+# Utilisation: grep motif fichier
+# Les paramètres motif et fichier seront ajoutés après les options
+alias grep='grep --color=auto --line-number'
+
+# -----------------------------------------------------------------
+# 3. ALIAS AVEC PIPE
+# Format: alias nom='commande1 | commande2'
+# -----------------------------------------------------------------
+alias ports='netstat -tulanp | grep LISTEN'
+alias psgrep='ps aux | grep'
+
+# -----------------------------------------------------------------
+# 4. ALIAS AVEC GUILLEMETS
+# Simple quote pour figer la valeur
+# Double quotes pour évaluer les variables
+# -----------------------------------------------------------------
+# Figer la valeur (simple quote)
+alias date_fr='date "+%d-%m-%Y"'
+# Évaluer au moment de l'exécution (double quotes)
+alias dir="ls -la `pwd`"
+
+# -----------------------------------------------------------------
+# 5. ALIAS AVEC SUDO
+# Attention à la sécurité !
+# -----------------------------------------------------------------
+alias maj='sudo apt update && sudo apt upgrade'
+# Conserver sudo pour la commande originale
+alias apt='sudo apt'
+
+# -----------------------------------------------------------------
+# 6. ALIAS POUR SÉCURISER LES COMMANDES DANGEREUSES
+# Demande confirmation avant l'action
+# -----------------------------------------------------------------
+alias rm='rm -i'
+alias cp='cp -i'
+alias mv='mv -i'
+
+# -----------------------------------------------------------------
+# 7. ALIAS AVEC CHEMINS
+# Utiliser $HOME plutôt que ~ pour plus de portabilité
+# -----------------------------------------------------------------
+alias cddev='cd $HOME/Developpement'
+alias cdlog='cd /var/log'
+
+# -----------------------------------------------------------------
+# 8. ALIAS AVEC FONCTION INLINE
+# Format: alias nom='function fname() { commandes; }; fname'
+# Permet de créer une fonction temporaire dans l'alias
+# -----------------------------------------------------------------
+
+# Crée un dossier et s'y déplace directement
+# Note : Cet alias peut aussi être défini comme une fonction (voir exemple plus bas)
+alias mkcd='function _mkcd() { mkdir -p "$1" && cd "$1"; }; _mkcd'
+
+# Exemple : compte le nombre de lignes dans plusieurs fichiers
+alias countlines='function _countlines() { wc -l "$@" | sort -n; }; _countlines'
+
+# Exemple : cherche un mot dans un fichier avec numéro de ligne
+alias cherche='function _cherche() { grep -n "$1" "$2" && echo "Recherche terminée dans $2"; }; _cherche'
+
+# REMARQUE: Cette syntaxe est utile quand vous voulez :
+# 1. Utiliser des paramètres positionnels ($1, $2, etc.)
+# 2. Exécuter plusieurs commandes dans un ordre précis
+# 3. Avoir une logique plus complexe qu'un simple alias
+# 4. Éviter de polluer le ~/.bashrc avec des fonctions peu utilisées
+
+# -----------------------------------------------------------------
+# EXEMPLES DE FONCTIONS ÉQUIVALENTES
+# Ces exemples montrent qu'une même fonctionnalité peut être 
+# implémentée soit comme un alias avec fonction inline,
+# soit comme une fonction dans ~/.shellrc/bashrc.d/functions
+# -----------------------------------------------------------------
+# Exemple avec mkcd :
+#
+# Version alias (dans .bash_aliases) :
+# alias mkcd='function _mkcd() { mkdir -p "$1" && cd "$1"; }; _mkcd'
+#
+# Version fonction (à mettre dans ~/.shellrc/bashrc.d/functions) :
+# function mkcd() {
+#     mkdir -p "$1" && cd "$1"
+# }
+#
+# Les deux versions font exactement la même chose.
+# Le choix entre alias et fonction dépend de :
+# - La complexité du code
+# - La fréquence d'utilisation
+# - La nécessité de réutiliser le code dans des scripts
+#
+# Autre exemple avec de fonction :
+#
+# function extract() {
+#     if [ -f $1 ] ; then
+#         case $1 in
+#             *.tar.bz2)   tar xjf $1     ;;
+#             *.tar.gz)    tar xzf $1     ;;
+#             *.bz2)       bunzip2 $1     ;;
+#             *.rar)       unrar e $1     ;;
+#             *.gz)        gunzip $1      ;;
+#             *.tar)       tar xf $1      ;;
+#             *.tbz2)      tar xjf $1     ;;
+#             *.tgz)       tar xzf $1     ;;
+#             *.zip)       unzip $1       ;;
+#             *.Z)         uncompress $1  ;;
+#             *.7z)        7z x $1        ;;
+#             *)          echo "'$1' ne peut être extrait via extract()" ;;
+#         esac
+#     else
+#         echo "'$1' n'est pas un fichier valide"
+#     fi
+# }
+
+# =================================================================
+# BONNES PRATIQUES
+# =================================================================
+# 1. Ce fichier .bash_aliases ne doit contenir QUE des alias
+# 2. Les fonctions vont dans ~/.bashrc
+# 3. Les variables d'environnement vont dans ~/.profile ou ~/.bashrc
+# 4. Utiliser des noms explicites
+# 5. Documenter les alias complexes
+# 6. Grouper les alias par catégorie
+# 7. Attention aux conflits de noms avec les commandes existantes
+# 8. Préférer les simple quotes sauf si besoin d'évaluation
+# 9. Tester les alias avant de les rendre permanents
+# 10. Faire des sauvegardes régulières
+# =================================================================
+

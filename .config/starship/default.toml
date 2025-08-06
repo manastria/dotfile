@@ -1,0 +1,23 @@
+# ~/.config/starship/default.toml
+
+# Get editor completions based on the config schema
+"$schema" = 'https://starship.rs/config-schema.json'
+
+# Inserts a blank line between shell prompts
+add_newline = true
+
+# Votre configuration personnelle détaillée
+# Par exemple, avec des icônes, des couleurs subtiles, etc.
+[username]
+show_always = true
+style_user = "blue bold"
+
+[directory]
+style = "cyan"
+
+[git_branch]
+symbol = "🌱 "
+
+[character]
+success_symbol = '[❯](bold green) '
+error_symbol = '[✗](bold red) '

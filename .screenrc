@@ -1,0 +1,97 @@
+# tell screen that you term can scroll
+termcapinfo xterm ti@:te@
+
+# allow bold colors - necessary for some reason
+attrcolor b ".I"
+# tell screen how to set colors. AB = background, AF=foreground
+termcapinfo xterm "Co#256:AB=\E[48;5;%dm:AF=\E[38;5;%dm"
+termcapinfo xterm-color "Co#256:AB=\E[48;5;%dm:AF=\E[38;5;%dm"
+termcapinfo xterm-256color "Co#256:AB=\E[48;5;%dm:AF=\E[38;5;%dm"
+termcapinfo screen-256color-bce "Co#256:AB=\E[48;5;%dm:AF=\E[38;5;%dm"
+
+term screen-256color-bce
+
+# bind Shift+PgUp/PgDn
+bindkey -m "^[[5;2~" stuff ^b
+bindkey -m "^[[6;2~" stuff ^f
+
+# Support alternate screens so that, for example, when you
+# quit out of vi, the display is redrawn as it was before vi
+# redrew the full screen.
+altscreen on
+autodetach on
+hardstatus on
+hardstatus alwayslastline
+#hardstatus string "%{.bW}%-Lw%{.rW}%n %t%{-}%+Lw %= "
+hardstatus string "%-Lw%{.rW}%n %t%{-}%+Lw %= "
+caption always "%{= bb}%{+b w}%h %=%f %n %t%{..G} %H %{..Y}%d/%m %c "
+shell -zsh
+defscrollback 1000
+startup_message off
+vbell on
+vbell_msg "bip sur %t (%n) [%w:%s]~"
+activity "Activite sur %t(%n) [%w:%s]~"
+defutf8 on
+defencoding utf8
+encoding utf8 utf8
+
+msgwait 15
+
+# mouse tracking allows to switch region focus by clicking
+#mousetrack on
+
+#
+# Run a screensaver if there's nothing happening for a while.
+#
+#idle 420 eval "screen cmatrix -f -o -u 10" "idle 0"
+
+#bindkey -k k; select 0
+#bindkey -k k1 select 1
+#bindkey -k k2 select 2
+#bindkey -k k3 select 3
+#bindkey -k k4 select 4
+#bindkey -k k5 select 5
+#bindkey -k k6 select 6
+#bindkey -k k7 select 7
+#bindkey -k k8 select 8
+
+
+defbce on
+deflogin on
+defflow off
+nethack off
+nonblock on
+crlf off
+
+sorendition +b kG
+
+# Only S-K to kill
+#bind k
+#bind ^k
+#bind K kill
+#
+#bind j focus down
+#bind k focus up
+
+bind ^x
+bind -c REGION 3 split -v
+bind -c REGION 2 split
+bind -c REGION 1 only
+bind -c REGION 0 remove
+bind -c REGION o focus
+bind -c RESIZE = eval 'resize ='  'command -c RESIZE'
+bind -c RESIZE J eval 'resize +5' 'command -c RESIZE'
+bind -c RESIZE K eval 'resize -5' 'command -c RESIZE'
+bind -c RESIZE j eval 'resize +1' 'command -c RESIZE'
+bind -c RESIZE k eval 'resize -1' 'command -c RESIZE'
+bind -c REGION r eval 'echo "j: -1 / k: +1 / other: quit"' 'command -c RESIZE'
+bind x eval "echo '1:only 2:split 3:split-v 0:remove o:focus r:resize'" "command -c REGION"
+
+
+# Recharger le screenrc
+bind R eval "source $HOME/.screenrc" "echo '.screenrc reloaded!'"
+
+bind w windowlist -b
+bind ^R eval 'echo -p "\^\^R%080="' 'command -c region'
+bind -c region n split
+

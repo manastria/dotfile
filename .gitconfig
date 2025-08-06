@@ -1,0 +1,25 @@
+[push]
+	default = current
+[core]
+	pager = \"/usr/bin/less\" -FRXKS
+	editor = \"/usr/bin/vim\"
+    autocrlf = false # Force replacing CRLF line endings with LF
+    ignorecase = false
+
+[merge]
+  ff = no # Never fast forward merge (I would have just moved the branch pointer manually)
+
+[credential]
+	helper = cache --timeout=3600
+
+[pull]
+  ff = only # Disable `git pull` from secretly creating merge commits
+
+[include]
+    path = ~/.gitconfig_alias
+    path = ~/.gitconfig.local
+
+
+# cat gitconfig | sed -e 's/^[ \t]*//' | sed '/^$/d' | grep -v "^#" |sort| less
+[init]
+	defaultBranch = master

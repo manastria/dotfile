@@ -1,0 +1,1510 @@
+# -*- mode: shell-script -*-
+
+# /etc/zsh/zshrc ou ~/.zshrc
+# Fichier de configuration principal de zsh, lu au lancement des shells interactifs
+# (et non des shells d'interprétation de fichier)
+# Formation Debian GNU/Linux par Alexis de Lattre
+# http://formation-debian.via.ecp.fr/
+
+################
+# 1. Les alias #
+################
+
+# Gestion du 'ls' : couleur & ne touche pas aux accents
+alias ls='ls --classify --tabsize=0 --literal --color=auto --show-control-chars --human-readable'
+
+# Copie en récursif et qui garde la date des fichiers copiés
+#alias cp='cp -Rp'
+alias cp='cp -R'            # **cp** copy files and directories recursively # TEST
+
+# Copie distante, ajout de la récursivité tout le temps:
+alias scp='scp -r'
+
+# Demande confirmation avant d'écraser un fichier
+alias cP='cp --interactive'
+alias mv='mv --interactive'
+alias rm='rm --interactive'
+
+# Raccourcis pour 'ls'
+if [ ! $(command -v exa) ]; then
+	alias ll='ls -l'
+	alias la='ls -lA'
+	alias llm='ls -l | $PAGER'
+	alias llv='ls -l | vimmanpager'
+	##Classer par date
+	alias lll='ls -l -t -h -r'
+	alias llll='ls -l -t -h -r'
+	alias lld='ls -l -d */ -h'
+	alias l.='ls -d .*'
+	alias lr='ls -R | grep ":$" | sed -e '\''s/:$//'\'' -e '\''s/[^-][^\/]*\//--/g'\'' -e '\''s/^/   /'\'' -e '\''s/-/|/'\'''
+else
+	alias ll='exa -l --git'
+	alias la='exa -la --git'
+	alias llm='exa -l --git | $PAGER'
+	alias llv='ls -l | vimmanpager'
+	##Classer par date
+	alias lll='exa -l --sort=modified --git'
+	alias llll='exa -l --sort=modified --git'
+	alias llt='exa -l --git --tree'
+	alias lld='exa -l --group-directories-first'
+	alias l.='ls -d .*'
+	alias lr='ls -R | grep ":$" | sed -e '\''s/:$//'\'' -e '\''s/[^-][^\/]*\//--/g'\'' -e '\''s/^/   /'\'' -e '\''s/-/|/'\'''
+fi
+
+alias d='docker'
+
+# sudo
+## Please consider using "Defaults      env_keep+=HOME" configuration in sudoers {{{
+### This is Ubuntu default behaviour.
+### This will allow to share user's homedir/dotfiles with root throught sudo commands
+## }}}
+## Ensure sudo can use aliases (end whitespace) {{{
+### `man zshall` partie Aliasing: "If the text ends with a space, the next word in the shell input is treated as though it were in command position for
+### purposes of alias expansion. "
+alias s='sudo '
+## }}}
+## sudo aliases {{{
+if [ ${USER} != "root" ]; then
+	alias sc='sudo systemctl '
+	alias sd='sudo docker'
+	alias si='sudo iptables -L -vn '
+	alias sj='sudo journalctl '
+	alias sn='sudo nft list ruleset'
+	alias sp='sudo puppet agent -t '
+	alias sv='sudo vi '
+	alias sz='sudo zsh'
+else
+	alias sc='systemctl '
+	alias sd='docker'
+	alias si='iptables -L -vn '
+	alias sj='journalctl '
+	alias sn='nft list ruleset'
+	alias sp='puppet agent -t '
+	alias vi='vi -S ~/.vim/vimrc '
+	alias sv='vi -S ~/.vim/vimrc '
+fi
+## }}}
+
+# Raccourcis pour cat
+alias ca='cat -n'
+
+# Envoyer une notification via libnotify-bin (fin d'une commande, ...)
+# Nécessite le paquet libnotify-bin
+alias alert='notify-send --urgency=low -i "$([ $? = 0 ] && echo terminal || echo error)" "$(history|tail -n1|sed -e '\''s/^\s*[0-9]\+\s*//;s/[;&|]\s*alert$//'\'')"'
+
+# Nettoyage de l'écran
+alias c='clear'
+# Liste le contenu du dossier
+alias dir='dir --color=always'
+# Correct ip command
+alias ipa='ip a'
+# Pour utiliser less avec de la couleur par défaut
+alias less='less -r'
+#alias less='less --quiet'
+
+# Page de manuel en anglais
+alias mane="LANG=C man "
+
+# Afficher les lignes trop longues sur la ligne suivante plutot que de remplacer par un "$":
+alias most='most -w'
+
+# Commandes de gestion des paquets pour aptitude ou yum {{{
+if [ -d /etc/apt ]; then
+  alias acle='sudo aptitude clean'
+  alias afil='apt-file search'
+  alias aful='sudo aptitude full-upgrade'
+  alias ains='sudo aptitude install'
+  alias apol='apt-cache policy'
+  alias apur="sudo aptitude purge '~c'"
+  alias aupd='sudo apt update'
+  alias aupg='sudo aptitude upgrade'
+  alias arem='sudo aptitude remove'
+  alias apts='apt search'
+  alias asea='aptitude search'
+  alias asho='aptitude show'
+  alias aver='apt-show-versions'
+  alias awhy='aptitude why'
+  alias insexperimental='sudo aptitude -t experimental install'
+else
+  alias up='yum update'
+  alias show='yum info'
+  alias se='yum search'
+  alias ins='yum install'
+  alias version='yum info &1|grep "Version"'
+fi
+# }}}
+
+# Grep aliases {{{
+alias grep='grep --color=always -i '
+alias gerp='grep -i'
+alias Grep='\grep '
+alias gdpkg='dpkg -l | grep -E -- '
+alias gmount='mount | grep -E -- '
+alias gdf='df | grep -E -- '
+# }}}
+
+# Espace disque
+alias df='df -kTh'
+alias dus='du -ch|sort -h'
+alias dua='du -ach|sort -h'
+
+# Gestion des processus:
+# Si htop n'est pas installé sur la machine:
+if [ ! -f "`which htop`" ]; then
+  alias htop=top
+fi
+
+# Qu'est-ce qui consomme de la mémoire vive sur le système
+alias wotgobblemem='ps -o time,ppid,pid,nice,pcpu,pmem,user,comm -A | sort -n -k 6 | tail -15'
+
+# Afficher uniquement le processus à partir de ps
+alias px='ps faux|grep -v grep|grep -i -e VSZ -e '
+
+# Décompression
+alias untargz='tar -zxvf'
+alias untarbz2='tar -jxvf'
+
+# Terminal multiplexer
+alias ci='screen -x ssh || screen -c ~/.screen/scr.ssh_ci'
+alias ta='tmux a || tmux'
+alias td='tmux detach'
+
+# Send the content of a file to a privatebin
+# Needs cpaste or any other Third party clients for PrivateBin
+# https://github.com/PrivateBin/PrivateBin/wiki/Third-party-clients
+alias pbin='~/repos/cpaste/cpaste --sourcecode --expire 1week --file '
+
+
+## Git aliases − Try to prefix with 'gg' {{{
+### Get status of the repo
+alias ggstatus='git status'
+### Download any new commits
+alias ggpull='git pull'
+### Show differences between changes and index
+alias ggdiff='git diff'
+### Show only words/characters differences
+alias ggwdiff='git diff --color-words=. --patience'
+### Add changes to index
+alias ggadd='git add'
+### Remove files from the index
+alias ggrm='git rm'
+### Move or rename file
+alias ggmv='git mv'
+### Cancel changes
+alias ggcheckout='git checkout --'
+### Commit changes
+alias ggco='git commit'
+alias ggcommit='git commit'
+### Amend changes
+alias ggamend='git commit --amend'
+### Update remote repository
+alias ggpush='git push'
+### Print lines matching a pattern
+alias ggrep='git grep --color -n -P'
+alias gggrep='git grep --color -n -P'
+### Show commit logs
+alias gglog="git log --graph --full-history --all --color --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset'"
+### Show last 20 commits with graph
+alias gglg="git --no-pager log --graph --pretty=tformat:'%Cred%h%Creset -%C(auto)%d%Creset %s %Cgreen(%an %ar)%Creset' -20"
+### Show all commits with graph
+alias ggllg="git log --graph --pretty=tformat:'%Cred%h%Creset -%C(auto)%d%Creset %s %Cgreen(%an %ar)%Creset'"
+### Display all commits/changes of a file
+alias ggchanges="git log --follow -p --"
+## }}}
+
+# Lister les fichiers de configuration inutiles
+alias purge='grep-status -n -sPackage -FStatus config-files'
+
+## Piped alias
+alias -g H='| head'
+alias -g T='tail -f'
+alias -g G='| grep -v grep | grep -E'
+alias -g L='| less'
+alias -g M="| most"
+alias -g S="| sort"
+alias -g V="| vimmanpager"
+alias -g W="| wc -l"
+alias -g X="| xclip -selection clipboard"
+alias -g TM="| tmux load-buffer -- -"
+alias -g B="&|"
+alias -g HL="--help"
+alias -g MM="2>&1 | most"
+alias -g LL="2>&1 | less"
+alias -g CA="2>&1 | cat -A"
+alias -g NE="2> /dev/null"
+alias -g NUL="> /dev/null 2>&1"
+
+## Affichage de l'historique
+if [ "$PAGER" = "most" ]; then
+  # En commencant par la fin avec most (bidouillage, on est pas sensé avoir):
+  alias hist="fc -El 0 | most +$HISTSIZE"
+  # Une fois dans un fichier avec most, la touche 'B' permet d'aller à la fin du fichier
+else
+  # En commencant par la fin avec less:
+  alias hist="fc -El 0 | $PAGER +G"
+  #alias hist="less +G ~/.zsh/history"
+fi
+alias ghist='fc -El 0 | grep --'
+
+## Gestion des répertoires
+alias u='cd ..'
+alias cd..='cd ..'
+alias ..='cd ..'
+alias ...='cd ../..'
+alias ....='cd ../../..'
+# Revenir dans le dossier dans lequel on se trouvait précédemment
+alias cd-='cd -'
+# Afficher la pile des dossiers:
+alias dirs='dirs -v'
+# Créer les répertoires précédents si ils n'existent pas
+alias mkdir='mkdir -p'
+# Affiche l'arborescence du répertoire courant
+#alias tree="find . | sed 's/[^/]*\//|   /g;s/| *\([^| ]\)/+--- \1/'"
+#La commande tree "basique" fait ça très bien ...
+
+# Affiche la variable $PATH ligne par ligne
+alias path='printf %s $PATH | tr ":" "\n"'
+
+# Edite le dernier fichier d'un dossier
+## Fonctionement:
+## (. correspond au fichier
+## om les classent par date de modification
+## [1] choisit le premier
+##  désactive les options GLOB_DOTS
+alias vil='vi *(.om[1]^D)'
+# Lancer vi pour qu'il ne conserve aucune trace du fichier
+## Faire précéder la commande d'un espace empêche l'enregistrement dans l'historique du shell
+alias vnb='vi -n "+set noundofile" "+set nobackup"'
+
+
+# Différence entre deux fichiers
+alias diff='colordiff -u'
+alias diffs='\diff --side-by-side'
+
+# Recherche toutes les occurences de l'arguments passé en paramètre dans l'historique des commandes
+alias param='fc -l 0 | grep --'
+
+# Multimédia
+##Extraire la piste audio d'un .avi
+alias avi2wav='mplayer -vc dummy -vo null -ao pcm:file=video.wav'
+##Modifie la bar de progression du gestionnaire de téléchargement Axel
+alias axel='axel -a --num-connection=20'
+
+# Calculatrice en ligne de commande
+alias caltos='bc'
+
+#alias df='df --human-readable'
+#alias du='du --human-readable'
+alias m='mutt -y'
+alias md='mkdir'
+alias rd='rmdir'
+
+#Internet
+## Créer un mini serveur web à partir du dossier courant (http://localhost:8002)
+alias httpserv='python -m SimpleHTTPServer'
+## Créer un mini serveur web à partir du quel les utilisateurs peuvent uploader des fichiers sur la machine
+alias httpup="python /home/${USER}/bin/droopy -m \"Salut, c'est Bob l'éponge, envoi moi un fichier stp.\" -p /home/${USER}/avatar.png -d /media/data/download"
+
+## Limite l'envoi à 3 requêtes pour ping
+alias ping="ping -c 3"
+alias ping6="ping6 -c 3"
+
+## JOSM
+alias josm="java -jar -Xmx2048M /opt/josm-tested.jar"
+
+# Keychain
+## For SSH {{{
+function ssh() {
+	## If keychain exists, run ssh from default $PATH as usual
+	if [ -f ~/.keychain/"${HOST}"-sh ]; then
+		command -p ssh "${*}"
+	else ## Otherwise, reload keychain and run ssh
+		keychain --agents ssh
+		source ~/.keychain/"${HOST}"-sh
+		command -p ssh "${*}"
+	fi
+}
+## }}}
+## For GPG {{{
+function gpg() {
+	## If keychain exists, run gpg from default $PATH as usual
+	if [ -f ~/.keychain/"${HOST}"-sh-gpg ]; then
+		command -p gpg ${*}
+	else ## Otherwise, reload keychain and run gpg
+		keychain --agents gpg
+		source ~/.keychain/"${HOST}"-sh-gpg
+		command -p gpg ${*}
+	fi
+}
+## }}}
+
+# ssh
+alias sshdev='ssh -o UserKnownHostsFile=/dev/null'
+alias scpdev='scp -o UserKnownHostsFile=/dev/null'
+
+# systemd
+alias sctl="systemctl"
+alias jctl="journalctl"
+
+# Taskwarrior {{{
+## Aliases
+alias t="task"
+
+alias tawa="task waiting"
+
+## By tag
+alias tawork="task +work | head"
+alias taperso="task +perso | head"
+
+## search a task by it's name (case INsensitive) {{{
+function tase() {
+	search="";
+	for i; do; search="$search /$i/"; done;
+	task rc.search.case.sensitive:no $search all;
+}
+## }}}
+## search a task by it's name (case SENSITIVE) {{{
+function tasec() {
+	search="";
+	for i; do; search="$search /$i/"; done;
+	task $search all;
+}
+## }}}
+## Display tasks of today {{{
+function taday() {
+	if [ "${#}" -eq 0 ]; then
+		timew summary :day :ids
+	else
+		timew summary :day :ids "${*}"
+	fi
+}
+## }}}
+## Display tasks of last day {{{
+function talastday() {
+	if [ "${#}" -eq 0 ]; then
+		timew summary :yesterday :ids
+	else
+		timew summary :yesterday :ids "${*}"
+	fi
+}
+## }}}
+## Display tasks of this week {{{
+function taweek() {
+	if [ "${#}" -eq 0 ]; then
+		timew summary :week :ids
+	else
+		timew summary :week :ids "${*}"
+	fi
+}
+## }}}
+## Display tasks of last week {{{
+function talastweek() {
+	if [ "${#}" -eq 0 ]; then
+		timew summary :lastweek :ids
+	else
+		timew summary :lastweek :ids "${*}"
+	fi
+}
+## }}}
+## Display tasks of this month {{{
+function tamonth() {
+	if [ "${#}" -eq 0 ]; then
+		timew summary :month :ids
+	else
+		timew summary :month :ids "${*}"
+	fi
+}
+## }}}
+## Display tasks of last month {{{
+function talastmonth() {
+	if [ "${#}" -eq 0 ]; then
+		timew summary :lastmonth :ids
+	else
+		timew summary :lastmonth :ids "${*}"
+	fi
+}
+## }}}
+## Display tasks of this year {{{
+function tayear() {
+	if [ "${#}" -eq 0 ]; then
+		timew summary :year :ids
+	else
+		timew summary :year :ids "${*}"
+	fi
+}
+## }}}
+## Display tasks of last year {{{
+function talastyear() {
+	if [ "${#}" -eq 0 ]; then
+		timew summary :lastyear :ids
+	else
+		timew summary :lastyear :ids "${*}"
+	fi
+}
+## }}}
+
+## Completion
+zstyle ':completion:*:*:task:*' verbose yes
+zstyle ':completion:*:*:task:*:descriptions' format '%U%B%d%b%u'
+zstyle ':completion:*:*:task:*' group-name ''
+
+# }}}
+
+# DebOps {{{
+## Apply all config to all hosts except the new cluster nodes
+alias deal="debops -l 'debops_all_hosts:!physix'"
+## Limit to a define host/group
+function deho() {
+	if [ ${ANS_HOST} ]; then
+		debops -l "${ANS_HOST}"
+	else
+		printf '%b' "${MAGENTA}ANS_HOST${RESET} vars is ${REDB}not${RESET} define !\n"
+	fi
+}
+## Limit to a define host/group and to a role
+function dero() {
+	debops -l "${ANS_HOST}" -t role::"${1}"
+}
+## Apply only on new cluster nodes
+alias decc="debops -l 'physix'"
+
+# }}}
+# Web apps {{{
+# Get weather
+alias meteo="curl http://fr.wttr.in/"
+# }}}
+
+#######################################
+#Ouverture d'un programme en fonction
+#de l'extension du fichier
+#######################################
+alias -s txt='$PAGER '
+alias -s odt='libreoffice --writer '
+alias -s rtf='libreoffice --writer '
+alias -s doc='libreoffice --writer '
+alias -s docx='libreoffice --writer '
+alias -s ods='libreoffice --calc '
+alias -s xls='libreoffice --calc '
+alias -s html=$BROWSER
+alias -s org=$BROWSER
+alias -s php=$BROWSER
+alias -s com=$BROWSER
+alias -s net=$BROWSER
+alias -s png='mirage '
+alias -s jpg='mirage '
+alias -s gif='mirage '
+alias -s mp4='smplayer '
+alias -s avi='smplayer '
+alias -s flv='smplayer '
+alias -s log='tail -f'
+alias -s conf='vim '
+alias -s gz='gunzip '
+alias -s bz2='tar -xjvf'
+
+
+#######################################
+# Raccourcis pour les dossier
+# Pour y accéder, faire ~NOM_DU_RACCOURCIS
+#######################################
+hash -d apt="/etc/apt"
+hash -d zsh="/etc/zsh"
+hash -d dl="/media/udata/download/"
+hash -d sid="/media/udata/config_debian"
+hash -d smb="/etc/samba/"
+
+
+# Inutile mais fun :p
+##Affiche le calendrier et le jour courant en couleur
+#alias ccal='var=$(cal -m); echo "${var/$(date +%-d)/$(echo -e "\033[1;31m$(date +%-d)\033[0m")}"'
+alias ccal='var=$(cal); echo "${var/$(date +%-d)/$(echo -e "\033[1;31m$(date +%-d)\033[0m")}"'
+
+##Commande utilisant cowsay (ou PONYSAY!!) pour afficher un message
+function bonjour() {
+  MIN_TIME=$(date +%M)
+  MODULO_MIN=$(($MIN_TIME % 2))
+  if [ $(command -v bash_quote) ] && [ $(command -v cowsay) ]; then
+    if [ $MODULO_MIN -eq 0 ]; then
+      #echo Bonjour $USER, nous sommes le `date +"%A %e %B %Y"`, et il est : `date +"%H"` h `date +"%M"` | cowsay -f $(/bin/ls /usr/share/cowsay/cows -1 | head -n $(expr $$$(date +%s) % $(ls /usr/share/cowsay/cows | wc -w) + 1) | tail -n 1)
+      command bash_quote | cowsay -f $(/bin/ls /usr/share/cowsay/cows -1 | head -n $(expr $$$(date +%s) % $(ls /usr/share/cowsay/cows | wc -w) + 1) | tail -n 1)
+    else
+      #echo Bonjour $USER, nous sommes le `date +"%A %e %B %Y"`, et il est : `date +"%H"` h `date +"%M"` | ponythink
+      command bash_quote | ponythink
+    fi
+  else
+    printf '%b' "${WHITEB}bonjour function${RESET}: One of the prerequesites is unavailable.\nFor bash_quote please see: https://git.101010.fr/dotfiles-gardouille/scripts/blob/master/bash_quote\n"
+  fi
+}
+
+##Affiche quelques statistiques à propos de l'ordinateur
+alias stat_sys="echo ' ' && uname -a && echo ' '&& uptime &&echo ' '&& df && echo ' '"
+
+#####################################
+#####FONCTIONS
+######################################
+
+# SSH
+function clearsshkey() {
+	sed -i "${1}d" ~/.ssh/known_hosts
+}
+
+## Verrouiller le shell avec vlock
+#function TRAPALRM() { vlock }
+
+##Cree le repertoire et va dedans
+function mkcd() {
+  mkdir $1 && cd $_
+}
+
+
+#liste les alias et functions
+function listalias(){
+  cat /etc/zsh/zshrc | egrep "alias|function" | grep -v "^#" | $PAGER
+}
+
+
+#Récupère l'adresse IP publique
+function ippub()
+{
+  #curl ifconfig.me
+  #lynx --dump http://www.whatismyip.com/|grep Your|awk '{print $4}'
+  #wget http://checkip.dyndns.org/ -O - -o /dev/null | cut -d" " -f 6 | cut -d\< -f 1
+  dig +short myip.opendns.com @resolver1.opendns.com
+}
+
+
+#Récupère l'adresse IP (privee)
+function ippriv()
+{
+  for interface in $(find /sys/class/net/ ! -name lo -type l -printf "%f\n" | sort);
+  do
+    IP_INTER=$(ip a s ${interface}|grep "inet "|awk '{print $2}')
+    printf '%b' "${WHITEB}${interface}${RESET}: ${IP_INTER}\n"
+  done
+}
+
+# Test if a network connection is available
+function is_network()
+{
+  for path_interface in $(find /sys/class/net/ ! -name lo -type l);
+  do
+    IS_UP=$(grep 1 ${path_interface}/carrier)
+    if [ ${IS_UP} ]; then
+      return 0
+    fi
+  done
+  printf '%b' "${REDB}Not Online${RESET}\n"
+  return 1
+}
+
+#Renomme les fichiers en minuscule
+function lowercase()
+{
+  for file in *; do
+    filename=${file##*/}
+    case "$filename" in
+      */*) dirname==${file%/*} ;;
+      *) dirname=.;;
+    esac
+    nf=$(printf $filename | tr A-Z a-z)
+    newname="${dirname}/${nf}"
+    if [ "$nf" != "$filename" ]; then
+      mv "$file" "$newname"
+      printf 'lowercase: %s --> %s\n' ${file} ${newname}
+    else
+      printf 'lowercase %s not changed\n' ${file}
+    fi
+  done
+}
+
+##Capture d'écran
+function printscreen()
+{
+  scrot -s -e 'gimp $f ; rm -rf $f'
+}
+
+
+## Latex:
+##Redéfinition de pdflatex:
+# La commande pdflatex est exécutée deux fois pour permettre la construction de l'index
+function pdflatex()
+{
+  # On récupère le nom du fichier sans l'extension
+  file_name="${1:r}"
+  # Le fichier avec l'extension pdf
+  pdf="${file_name}.pdf"
+  # Dossier temporaire
+  temp_dir="temp"
+
+  # On supprime le fichier pdf si il est présent
+  if [ -f "${pdf}" ]; then
+    rm -rf "${pdf}"
+  fi
+
+  # Si le répertoire temporaire n'existe pas, on le crée
+  if [ ! -d "${temp_dir}" ]; then
+    mkdir "${temp_dir}"
+  fi
+
+  # On exécute la commande pour créer le pdf
+  /usr/bin/pdflatex -output-directory ${temp_dir} $1
+  /usr/bin/pdflatex -output-directory ${temp_dir} $1
+
+  # On place le fichier pdf qui est dans le répertoire temporaire dans le répertoire courant
+  mv -f "${temp_dir}"/*.pdf .
+}
+
+#Éteint un pc sous windows à distance
+#Nécessite le paquet samba-common
+# Arguments:
+#  ${1}: l'ip de la machine
+#  ${2}: le nom d'utilisateur
+#  ${3}: le mot de passe de l'utilisateur
+function eteint()
+{
+  net rpc shutdown -f -I $1 -U $2%$3 -t 10 -C "Arrêt en cours..."
+}
+
+# Calculatrice en ligne de commande
+function calc()
+{
+  echo "${1}" | bc -l
+}
+
+# Afficher le code retour de la commande précédente
+function cmd_status {
+  local exit_code=$?            # exit code of command
+  local count=$(jobs | wc -l)   # no. of background jobs
+
+  # Report no. of background jobs if >0
+  if [ $count -gt 0 ]; then
+    echo -n " %{$fg[cyan]%}⎇ %j "
+  fi
+
+  # Report exit code
+  if [ $exit_code -ne 0 ]; then
+    echo -n "%{$fg[yellow]%}%?%{$fg[red]%} ✖%{$reset_color%}"
+  else
+    echo -n "%{$fg[green]%}✔%{$reset_color%}"
+  fi
+}
+
+
+# Affiche un rappel des raccourcis pour se déplacer dans vim
+function rappel_vim()
+{
+  echo "\
+##########################################
+# Rappel basique pour VIM
+##########################################
+# Déplacements basiques :
+H       pour se déplacer vers la gauche
+J       pour se déplacer vers le bas
+K       pour se déplacer vers la droite
+L       pour se déplacer vers la droite
+
+# Déplacements avancés sur une ligne :
+e       pour aller à la fin du mot suivant
+w  pour aller au début du mot suivant
+b       pour aller à la fin du mot précédent
+0       pour aller en début de ligne
+$       pour aller en fin de ligne
+^       pour aller au premier caractère de la ligne qui n'est pas un espace ni une tabulation
+f<c>    pour aller jusqu'au caractère <c> vers l'avant
+3f<c>  pour aller jusqu'à la 3ème occurence du caractère <c> vers l'avant
+F<c>    pour aller jusqu'au caractère <c> vers l'arrière
+nF<c>  pour aller jusqu'à la nème occurence du caractère <c> vers l'arrière
+t<c>    pour aller jusqu'au caractère <c> vers l'avant en s'arrêtant avant
+T<c>    pour aller jusqu'au caractère <c> vers l'arrière en s'arrêtant avant
+
+# Déplacement dans le document :
+gg      pour aller au début du document
+G       pour aller à la fin du document
+nG      pour aller à la ligne <n>
+:<n>    pour aller à la ligne <n>
+%  pour aller à la parenthèse (acollade, crochet) correspondant
+
+# Copier/coller avancé
+\"ayy   Copier la ligne courante dans le buffer \"a\"
+\"5byy  Copier les 5 lignes sous le curseur dans le buffer \"b\"
+<MODE_VISUEL>\"ey   Copier les lignes sélectionnées dans le buffer \"e\"
+
+# undo & redo
+u        pour annuler pour annuler la dernière modification
+CTRL+R  pour refaire la dernière modification
+
+# Gestion du texte
+~       pour inverser la casse du texte sélectionné
+# Supprimer le texte du curseur à la fin de la ligne
+<mode commande> d$
+<mode insertion> CTRL-o D
+# Supprimer le texte du curseur au début de la ligne
+<mode commande> d^
+" | $PAGER
+}
+
+# Affiche un rappel des raccourcis pour se déplacer dans vim
+function rappel_vim_avance()
+{
+  echo "\
+##########################################
+# Utilisation un peu plus avancée de VIM
+##########################################
+# nom fichier
+# Avec par exemple un fichier qui s'appelle fichier.tex dans /home/limax/Documents/
+
+# est le nom du fichier en cours
+:!echo % (renvoie /Documents/fichier.tex )
+:!echo %:r (renvoie /Documents/fichier )
+:!echo %:e (renvoie tex )
+:!echo %:t (renvoie fichier.tex )
+:!echo %:p (renvoie /home/limax/Documents/fichier.tex )
+:!echo %:t (renvoie fichier.tex )
+:!echo %:h (renvoie Documents)
+# Par exemple pour ouvrir le pdf avec lesspipe
+:!lesspipe %:r.pdf
+
+# Indentation
+# Pour réindenter du texte:
+mode visuel
+- sélectionner toutes les lignes à indenter correctement
+touche \"=\"
+# Pour décaler plusieurs lignes de plusieurs tabulations:
+mode visuel
+- sélectionner toutes les lignes à décaler
+:>>>
+
+# Commande
+# Pour exécuter une seule commande à partir du mode insertion
+<mode insertion> CTRL-o suivi de la commande à exécuter
+
+# Code touche
+# Pour afficher le code clavier d'une touche spéciale en mode insertion:
+<mode insertion> CTRL-V
+# Pour afficher le code interne d'une touche spéciale:
+<mode insertion> CTRL-K
+# Pour obtenir le code ascii d'un caractère:
+ga
+
+# Plier/déplier
+zm  Plier tout le document sur un niveau de plus
+zr  Déplier tout le document sur un niveau de plus
+zc  Plier un bloc/fonction/class
+zo  Déplier un bloc/fonction/class
+
+
+" | $PAGER
+}
+
+
+# Affiche un rappel pour l'édition de fichier Latex
+function rappel_latex()
+{
+  echo "\
+-\\/-           Permet d'afficher -- et non un tiret cadratin
+Ligne vide      Permet un retour à la ligne entre deux textes
+\\ldots         Affiche correctement \"...\"
+
+
+# itemize
+Mettre un \\vspace{0.5cm} après une liste?
+Laisser une ligne vide après une commande root dans une liste?
+
+# À faire
+Ajouter un style pour les notes d'informations
+Ajouter un style pour les notes importantes
+
+
+" |  $PAGER
+}
+
+## Vérifier les logins et logouts de tous les comptes incluant le mien.
+watch=all
+# Vérifie toutes les 30 secondes
+logcheck=30
+# Change le format de watch pour quelques chose avec plus d'informations
+#  %n = username, %M = hostname, %a = action, %l = tty, %T = time,
+#  %W = date
+WATCHFMT="%n from %M has %a tty%l at %T %W"
+
+
+# Crypte le fichier passer en paramètre en utilisant le certificat public
+#   de l'utilisateur.
+# Arguments:
+#  ${1}: fichier à crypter
+#  ${2}:
+function crypt()
+{
+  openssl smime -encrypt -aes128 -in ${1} -out .${1}.ls ~/.openssl/mycert.crt
+}
+
+# Décrypte le fichier passer en paramètre en fonction de la clef ssl de
+#   l'utilisateur et trouve la ligne contenant le mot rechercher par l'user
+# Arguments:
+#  ${1}: le fichier à décrypter
+#  ${2}: le paramètre rechercher dans le fichier
+function getpdw()
+{
+  openssl smime -decrypt -in ${1} -inkey ~/.openssl/mykey.key | grep ${2}
+}
+
+
+# Décrypte le fichier passer en paramètre en fonction de la clef ssl de
+#   l'utilisateur et le fichier de sorti est le second paramètre
+# Arguments:
+#  ${1}: le fichier à décrypter
+#  ${2}: le fichier de sorti
+function decrypt()
+{
+  openssl smime -decrypt -in ${1} -out ${2} -inkey ~/.openssl/mykey.key
+}
+
+# Traduire en français avec Gogole:
+function tradfr()
+{
+  wget -U "Mozilla/5.0" -qO - "http://translate.google.com/translate_a/t?client=t&text=${*}&sl=auto&tl=fr" | sed 's/\[\[\[\"//' | cut -d \" -f 1
+}
+
+# Traduire du français à l'anglais avec Gogole:
+function traden()
+{
+	wget -qO- "http://ajax.googleapis.com/ajax/services/language/translate?v=2&q=$1&langpair=$2|${3:-en}" | sed 's/.*"translatedText":"\([^"]*\)".*}/\1\n/'
+  #wget -U "Mozilla/5.0" -qO - "http://translate.google.com/translate_a/t?client=t&text=${*}&sl=fr&tl=en" | sed 's/\[\[\[\"//' | cut -d \" -f 1
+}
+
+# Traduire le texte (1er argument) de la langue source (2nd argument) dans la langue de destination (3ème argument)
+function translate()
+{
+  wget -U "Mozilla/5.0" -qO - "http://translate.google.com/translate_a/t?client=t&text=${1}&sl=${2}&tl=${3}" | sed 's/\[\[\[\"//' | cut -d \" -f 1
+}
+
+################################################
+# 2. Prompt et définition des touches basiques #
+################################################
+
+# Prompt couleur (la couleur n'est pas la même pour le root et
+# pour les simples utilisateurs)
+# Définition des couleurs:
+bleu_clair="[36;1m"
+bleu_fonce="[34;1m"
+rouge="[31m"
+jaune="[33m"
+blanc="[37m"
+vert="[32m"
+couleur_normale="[0m"
+# Définition du texte du prompt
+heure="%{$bleu_clair%}%T"
+user="%{$bleu_fonce%}%n"
+user_root="%{$rouge%}%n"
+at="%{$jaune%}@"
+host="%{$blanc%}%m"
+repertoire_courant="%{$vert%}%c"
+repertoire_absolu="%{$vert%}%d"
+# Chemin du répertoire courant en relatif à ~
+repertoire_relatif="%{$vert%}%~"
+root="%{$jaune%}%#"
+noroot="%{$jaune%}%%"
+normal="%{$couleur_normale%}"
+# Définition du prompt
+if [ "`id -u`" -eq 0 ]; then ## Root
+  export PS1="$heure $user_root$at$host $repertoire_courant$root $normal"
+#  export PS1="%{$bleu_clair%T %{$rouge%n%{$jaune@%{$blanc%m %{$vert%c%{$jaune%#%{[0m%} "
+else ## Simple utilisateur
+  export PS1="$heure $host $repertoire_courant$noroot $normal"
+fi
+
+
+# Prise en charge des touches [début], [fin] et autres
+typeset -A key
+
+key[Home]=${terminfo[khome]}
+key[End]=${terminfo[kend]}
+key[Insert]=${terminfo[kich1]}
+key[Delete]=${terminfo[kdch1]}
+key[Up]=${terminfo[kcuu1]}
+key[Down]=${terminfo[kcud1]}
+key[Left]=${terminfo[kcub1]}
+key[Right]=${terminfo[kcuf1]}
+key[PageUp]=${terminfo[kpp]}
+key[PageDown]=${terminfo[knp]}
+
+[[ -n "${key[Home]}"    ]]  && bindkey  "${key[Home]}"    beginning-of-line
+[[ -n "${key[End]}"     ]]  && bindkey  "${key[End]}"     end-of-line
+[[ -n "${key[Insert]}"  ]]  && bindkey  "${key[Insert]}"  overwrite-mode
+[[ -n "${key[Delete]}"  ]]  && bindkey  "${key[Delete]}"  delete-char
+[[ -n "${key[Up]}"      ]]  && bindkey  "${key[Up]}"      up-line-or-history
+[[ -n "${key[Down]}"    ]]  && bindkey  "${key[Down]}"    down-line-or-history
+[[ -n "${key[Left]}"    ]]  && bindkey  "${key[Left]}"    backward-char
+[[ -n "${key[Right]}"   ]]  && bindkey  "${key[Right]}"   forward-char
+[[ -n "${key[PageUp]}"   ]] && bindkey  "${key[PageUp]}"   history-beginning-search-backward
+[[ -n "${key[PageDown]}" ]] && bindkey  "${key[PageDown]}" history-beginning-search-forward
+
+# ctrl+← and ctrl+→ issue
+bindkey "^[[1;5C" vi-forward-word-end
+bindkey "^[[1;5D" backward-word
+
+
+
+
+# Titre de la fenêtre d'un xterm
+case $TERM in
+   xterm*)
+       precmd () {print -Pn "\e]0;%n@%m: %~\a"}
+       ;;
+esac
+
+# Gestion de la couleur pour 'ls' (exportation de LS_COLORS)
+if [ -x /usr/bin/dircolors ]
+then
+  if [ -r ~/.dir_colors ]
+  then
+    eval "`dircolors ~/.dir_colors`"
+  elif [ -r /etc/dir_colors ]
+  then
+    eval "`dircolors /etc/dir_colors`"
+  else
+    eval "`dircolors`"
+  fi
+fi
+
+
+#######################################
+# 3. Comportement ligne de commandes  #
+#######################################
+# La ligne de commande dans zsh peut fonctionner suivant différents schémas (options).
+# Les principaux que je vais utiliser sont fait pour la ligne de commande dans zhs se
+#   comporte à la vim. Il y a donc un mode commande/normal et un mode insertion.
+
+# Afficher le mode courant dans le prompt de droite (normal|insertion)
+function zle-line-init zle-keymap-select {
+  RPS1="$(cmd_status) ${${KEYMAP/vicmd/-CMD-}/(main|viins)/-INS-}"
+  RPS2=$RPS1
+  zle reset-prompt
+}
+
+# easy color names in this config
+autoload -U colors && colors
+
+# Chargement des keymaps
+zle -N zle-line-init
+zle -N zle-keymap-select
+
+### Raccourcis communs à tous les modes
+autoload -U   edit-command-line
+zle -N        edit-command-line
+bindkey           ''      edit-command-line                     # Ouvrir la commande actuelle dans l'éditeur
+bindkey           ''      history-incremental-search-backward   # Recherche incrémentale qui monte dans l'historique
+#bindkey           ''      history-incremental-search-forward    # Recherche incrémentale qui descend dans l'historique
+
+### Raccourcis spécifiques au mode insertion
+bindkey -M viins  ''      beginning-of-line                     # Début de ligne
+bindkey -M viins  ''      vi-forward-blank-word-end             # Fin du mot courant
+#bindkey -M viins  ''      vi-forward-blank-word                 # Début du mot suivant
+bindkey -M viins  ''      vi-backward-word                      # Début du mot précédent
+bindkey -M viins  ''      vi-find-prev-char                     # Rechercher la précédente occurence d'une lettre
+#bindkey -M viins  ' ;'     vi-repeat-find                        # Aller à la prochaine occurence de la lettre recherchée
+
+### Raccourcis spécifiques au mode commande
+# Le mode commande dispose déjà de la plupart d'un fonctionnement très semblable
+#   au mode normal de vim. Seul problème pour le moment, l'absence d'un mode visuel.
+
+
+
+###########################################
+# 4. Options de zsh (cf 'man zshoptions') #
+###########################################
+
+# Je ne veux JAMAIS de beeps
+unsetopt beep
+unsetopt hist_beep
+unsetopt list_beep
+
+# Redirection de la sortie:
+# >| doit être utilisés pour pouvoir écraser un fichier déjà existant ;
+# le fichier ne sera pas écrasé avec '>'
+unsetopt clobber
+
+# Ctrl+D est équivalent à 'logout'
+unsetopt ignore_eof
+
+# Affiche le code de sortie si différent de '0'
+setopt print_exit_value
+
+# Demande confirmation pour 'rm *'
+unsetopt rm_star_silent
+# Attend 10 secondes avant d'exécuter une commande rm qui contient un * (asterisk).
+setopt rmstarwait
+
+# Correction orthographique des commandes
+# Désactivé car, contrairement à ce que dit le "man", il essaye de
+# corriger les commandes avant de les hasher
+setopt correct
+# Si on utilise des jokers dans une liste d'arguments, retire les jokers
+# qui ne correspondent à rien au lieu de donner une erreur
+setopt nullglob
+
+# Désactivé le raccourcis '='
+# Par défaut, `ls -l =vim` indiquera l'emplacement de vim.
+# =vim équivaut à `which vim`
+#setopt noequals
+
+## Activation des fonctions internes de ZSH:
+# Liste des fonctions disponibles:
+#zcalc : une calculatrice (plus besoin de bc ou autres expr)
+#zargs : un super xargs
+#zmv : une commande permettant de faire du renommage/déplaçage en masse de fichiers.
+#zftp : un client ftp natif
+autoload -U zfinit
+zfinit
+
+# Les jobs qui tournent en tâche de fond sont nicé à '0'
+unsetopt bg_nice
+# N'envoie pas de "HUP" aux jobs qui tourent quand le shell se ferme
+unsetopt hup
+
+# Lancer le manuel en se placant sur une commande et en faisant {ESC,ALT}+{H,h}
+autoload -U run-help
+
+## Gestion de la pile des dossiers:
+# Taille maximale de la pile placé dans zshenv
+# L'exécution de "cd" met le répertoire d'où l'on vient sur la pile
+setopt auto_pushd
+# Ignore les doublons dans la pile
+setopt pushd_ignore_dups
+# N'affiche pas la pile après un "pushd" ou "popd"
+setopt pushd_silent
+# Inverse l'action de cd +1 et cd +1
+setopt pushdminus
+# "pushd" sans argument = "pushd $HOME"
+setopt pushd_to_home
+## Pour bien utiliser la pile:
+# `dirs` va afficher la pile
+# `cd -NUMÉRO` ira dans le dossier correspondant au numéro du dossier dans la pile
+
+## Dirstack
+DIRSTACKSIZE=20
+setopt autopushd pushdsilent pushdtohome
+## Remove duplicate entries
+setopt pushdignoredups
+## This reverts the +/- operators.
+setopt pushdminus
+
+#DIRSTACKFILE="$HOME/.zsh/cache/dirs"
+#if [[ -f $DIRSTACKFILE ]] && [[ $#dirstack -eq 0 ]]; then
+  #dirstack=( ${(f)"$(< $DIRSTACKFILE)"} )
+  #[[ -d $dirstack[1] ]] && cd $dirstack[1]
+#fi
+
+#chpwd() {
+  #print -l $PWD ${(u)dirstack} >> $DIRSTACKFILE
+#}
+
+
+
+###################################
+###### Options de complétion ######
+###################################
+
+# Schémas de complétion
+
+# - Schéma A :
+# 1ère tabulation : complète jusqu'au bout de la partie commune
+# 2ème tabulation : propose une liste de choix
+# 3ème tabulation : complète avec le 1er item de la liste
+# 4ème tabulation : complète avec le 2ème item de la liste, etc...
+# -> c'est le schéma de complétion par défaut de zsh.
+
+# Schéma B :
+# 1ère tabulation : propose une liste de choix et complète avec le 1er item
+#                   de la liste
+# 2ème tabulation : complète avec le 2ème item de la liste, etc...
+# Si vous voulez ce schéma, décommentez la ligne suivante :
+#setopt menu_complete
+
+# Schéma C :
+# 1ère tabulation : complète jusqu'au bout de la partie commune et
+#                   propose une liste de choix
+# 2ème tabulation : complète avec le 1er item de la liste
+# 3ème tabulation : complète avec le 2ème item de la liste, etc...
+# Ce schéma est le meilleur à mon goût !
+# Si vous voulez ce schéma, décommentez la ligne suivante :
+unsetopt list_ambiguous
+
+# Quand le dernier caractère d'une complétion est '/' et que l'on
+# tape 'espace' après, le '/' est effacé
+setopt auto_remove_slash
+# Ne fait pas de complétion sur les fichiers et répertoires cachés
+unsetopt glob_dots
+
+# Traite les liens symboliques comme il faut
+setopt chase_links
+
+# Quand l'utilisateur commence sa commande par '!' pour faire de la
+# complétion historique, il n'exécute pas la commande immédiatement
+# mais il écrit la commande dans le prompt
+setopt hist_verify
+# Si la commande est invalide mais correspond au nom d'un sous-répertoire
+# exécuter 'cd sous-répertoire'
+setopt auto_cd
+
+
+###############################################
+# 5. Paramètres de l'historique des commandes #
+###############################################
+
+# Définition des variables
+SAVEHIST=5000
+HISTSIZE=5000
+HISTFILE=$HOME/.zsh/history
+#export TIMEFMT="%E"
+
+export SAVEHIST HISTSIZE HISTFILE
+
+# Toutes les sessions zsh partage le même historique
+#setopt SHARE_HISTORY
+
+# Ajoute l'historique à la fin de l'ancien fichier
+#setopt append_history
+
+# Chaque ligne est ajoutée dans l'historique à mesure qu'elle est tapée
+setopt inc_append_history
+
+# Ne stocke pas une ligne dans l'historique si elle est identique à la
+# précédente
+setopt hist_ignore_dups
+
+# Supprime les  répétitions dans le fichier  d'historique, ne conservant
+# que la dernière occurrence ajoutée
+#setopt hist_ignore_all_dups
+
+# Supprime les répétitions dans l'historique lorsqu'il est plein, mais
+# pas avant
+setopt hist_expire_dups_first
+
+# N'enregistre  pas plus d'une fois  une même ligne, quelles  que soient
+# les options fixées pour la session courante
+#setopt hist_save_no_dups
+
+# La recherche dans  l'historique avec l'éditeur de commandes de zsh ne
+# montre  pas  une même  ligne  plus  d'une fois,  même  si  elle a  été
+# enregistrée plusieurs fois
+setopt hist_find_no_dups
+
+# Affichage de la date du début de la commande et sa durée (depuis epoch)
+# Culture time: epoch: 1er janvier 1970
+setopt extended_history
+
+# Ne pas enregistrer les commandes précédées d'un espace:
+setopt hist_ignore_space
+
+###########################################
+# 6. Complétion des options des commandes #
+###########################################
+
+zstyle ':completion:*' matcher-list '' 'm:{a-z}={A-Z}'
+zstyle ':completion:*' max-errors 3 numeric
+zstyle ':completion:*' use-compctl false
+
+## Pour la liste des processus que l'on peut kill, avec un menu et couleur
+zstyle ':completion:*:*:*:*:processes' menu yes select
+#zstyle ':completion:*:*:*:*:processes' force-list always
+zstyle ':completion:*:processes' command 'ps -fau$USER'
+zstyle ':completion:*:*:kill:*:processes' list-colors "=(#b) #([0-9]#)*=36=31"
+
+## Pour éviter de reproposer un argument déjà utiliser dans la commande lors de la complétion
+zstyle ':completion:*:(rm|mv|cp|ls|scp):*' ignore-line yes
+
+## cd ne sélectionnera pas le dossier courant lorsqu'il devra remonter d'un dossier
+# cd ../<TAB> ne proposera pas le dossier courant par exemple.
+zstyle ':completion:*:cd:*' ignore-parents parent pwd
+
+## Pour la liste des fichiers qu'on peut ouvrir avec vim
+zstyle ':completion:*:*:vim:*' menu yes select
+## Mettre en cache les résultats de l'auto-complétion car certaines fonctions sont lentes (apt, dpkg, ...)
+# Ne pas hésiter à faire un petit aptitude install <TAB> et de lister tous les résultats possibles une première fois, histoire d'avoir tous les paquets en cache (~600ko), ça vaut le coup!
+zstyle ':completion:*' use-cache on
+zstyle ':completion:*' cache-path ~/.zsh/cache
+
+## Ajout des couleurs pour la complétion
+zmodload -i zsh/complist
+zstyle ':completion:*' list-colors ${(s.:.)LS_COLORS}
+
+## Complétion de la commande cd avec les répertoires locaux puis ceux de la variable CDPATH
+zstyle ':completion:*:*:cd:*' tag-order local-directories path-directories
+
+## Complétion des commandes ssh avec le contenu du fichier ~/.ssh/config et le contenu de host
+local HOSTS
+#[[ -f ~/.ssh/config ]] && HOSTS=(`sed -n \'s/^Host \(.*\)/\1/p\' ~/.ssh/config`)
+#if [ -f ~/.ssh/config ]; then
+#HOSTS=(`grep ^Host ~/.ssh/config | sed s/Host\ // | egrep -v ‘^\*$’`)
+#fi
+#zstyle ':completion:*:(ssh|scp|sftp|sshfs):*' hosts ${HOSTS}
+
+# Complétions pour certains programmes en fonction des extensions
+zstyle ':completion:*:*:vlc:*' file-patterns '*.(mkv|MKV|avi|AVI|flv|FLV|mp4|MP4|webm|WEBM|mov|MOV|flac|FLAC|mp3|MP3|ogg|OGG|ogv|OGV|wmv|WMV)\ *(-/):directories'
+
+## Ajout de la complétion pour plusieurs fonctions:
+autoload -U compinit
+autoload -U zutil
+autoload -U complist
+# Activation
+compinit
+
+
+###########################################
+# 7. Création des fichiers et répertoires #
+###########################################
+# Dossier .zsh dans le répertoire personnel
+if [ ! -d ~/.zsh ]; then
+  mkdir ~/.zsh
+fi
+
+# Fichier contenant l'historique pour chaque utilisateur
+if [ ! -f ~/.zsh/history ]; then
+  touch ~/.zsh/history
+fi
+
+# Dossier contenant le cache pour chaque utilisateur
+if [ ! -d ~/.zsh/cache ]; then
+  mkdir ~/.zsh/cache
+fi
+
+
+###########################################
+############## 8. Globbing ################
+###########################################
+
+# Activation du globbing étendu
+setopt extendedglob
+## '^' inverse la pattern qui suit.
+# Exemple:
+# `ls ^*.log` listera tous les fichiers exceptés *.log
+
+
+###########################################
+############### 9. Modules ################
+###########################################
+
+## fzf
+if [ -d ~/.fzf ]; then
+
+if [[ ! "$PATH" == *"${HOME}"/.fzf/bin* ]]; then
+  export PATH="$PATH:${HOME}/.fzf/bin"
+fi
+
+if [ -f ~/bin/fd ]; then
+	export FZF_DEFAULT_COMMAND='fd --type f'
+fi
+
+# Auto-completion
+# ---------------
+[[ $- == *i* ]] && source "${HOME}/.fzf/shell/completion.zsh" 2> /dev/null
+
+# Key bindings
+# ------------
+source "${HOME}/.fzf/shell/key-bindings.zsh"
+
+# ff - cd to selected directory (exclude hidden directories
+ff() {
+	local dir
+	dir=$(find ${1:-.} -path '*/\.*' -prune \
+		-o -type d -print 2> /dev/null | fzf +m) &&
+		cd "$dir"
+}
+
+# ffh - hidden directories only
+ffh() {
+	local dir
+	dir=$(find ${1:-.} -type d 2> /dev/null | fzf +m) && cd "$dir"
+}
+
+# ffa - all directories
+
+# ffr - cd to selected parent directory
+ffr() {
+	local declare dirs=()
+	get_parent_dirs() {
+		if [[ -d "${1}" ]]; then dirs+=("$1"); else return; fi
+		if [[ "${1}" == '/' ]]; then
+			for _dir in "${dirs[@]}"; do echo $_dir; done
+		else
+			get_parent_dirs $(dirname "$1")
+		fi
+	}
+	local DIR=$(get_parent_dirs $(realpath "${1:-$PWD}") | fzf-tmux --tac)
+	cd "$DIR"
+}
+
+# fff - cd into the directory of the selected file
+fff() {
+	local file
+	local dir
+	file=$(fzf +m -q "$1") && dir=$(dirname "$file") && cd "$dir"
+}
+
+# cf - fuzzy cd from anywhere
+# ex: cf word1 word2 ... (even part of a file name)
+# zsh autoload function
+cf() {
+	local file
+
+	file="$(locate -Ai -0 $@ | grep -z -vE '~$' | fzf --read0 -0 -1)"
+
+	if [[ -n $file ]]
+	then
+		if [[ -d $file ]]
+		then
+			cd -- $file
+		else
+			cd -- ${file:h}
+		fi
+	fi
+}
+
+fi
+
+# v - fuzzy open with vi from current directory
+# cd into the directory of the selected file
+# open the selected file with vi
+v() {
+	local files
+
+	files=$(find ${1:-.} -path '*/\.*' -prune \
+		-o -print 2> /dev/null | fzf +m) &&
+
+	if [[ -n $files ]]
+	then
+		dir=$(dirname "${files}")
+		cd "${dir}"
+		file=$(basename "${files}")
+		vi -- "${file}"
+	fi
+}
+
+# PDF with fzf {{{
+# pdf - fuzzy open with "${PDF_VIEWER}" from current directory
+# cd into the directory of the selected file
+# open the selected file with "${PDF_VIEWER}"
+pdf() {
+	local files
+
+	files=$(find ${1:-.} -iname "*.pdf" 2> /dev/null | fzf +m) &&
+
+	if [[ -n $files ]]
+	then
+		dir=$(dirname "${files}")
+		cd "${dir}"
+		file=$(basename "${files}")
+		"${PDF_VIEWER}" -- "${file}"
+	fi
+}
+
+# pdfe - fuzzy open with evince from current directory
+# cd into the directory of the selected file
+# open the selected file with evince
+pdfe() {
+	local files
+
+	files=$(find ${1:-.} -iname "*.pdf" 2> /dev/null | fzf +m) &&
+
+	if [[ -n $files ]]
+	then
+		dir=$(dirname "${files}")
+		cd "${dir}"
+		file=$(basename "${files}")
+		evince -- "${file}"
+	fi
+}
+
+# pdfz - fuzzy open with zathura from current directory
+# cd into the directory of the selected file
+# open the selected file with zathura
+pdfz() {
+	local files
+
+	files=$(find ${1:-.} -iname "*.pdf" 2> /dev/null | fzf +m) &&
+
+	if [[ -n $files ]]
+	then
+		dir=$(dirname "${files}")
+		cd "${dir}"
+		file=$(basename "${files}")
+		zathura -- "${file}"
+	fi
+}
+# }}}
+# LibreOffice with fzf {{{
+
+# odt - fuzzy open wordprocessor related files
+#		Look for some known extensions (odt, rtf, doc,…).
+#		cd into the directory of the selected file.
+#		Open in background the selected file with libreoffice-writer.
+odt() {
+	local files
+
+	files=$(find ${1:-.} -regextype posix-extended -regex ".*\.(odt|rtf|doc|docx)" 2> /dev/null | fzf +m) &&
+
+	if [[ -n $files ]]
+	then
+		dir=$(dirname "${files}")
+		cd -- "${dir}"
+		file=$(basename "${files}")
+		command libreoffice --writer "${file}" &
+	fi
+}
+
+# ods - fuzzy open spreadsheet related files
+#		Look for some known extensions (ods, xls,…).
+#		cd into the directory of the selected file.
+#		Open in background the selected file with libreoffice-calc.
+ods() {
+	local files
+
+	files=$(find ${1:-.} -regextype posix-extended -regex ".*\.(ods|xls|xlsx)" 2> /dev/null | fzf +m) &&
+
+	if [[ -n $files ]]
+	then
+		dir=$(dirname "${files}")
+		cd -- "${dir}"
+		file=$(basename "${files}")
+		command libreoffice --calc "${file}" &
+	fi
+}
+
+# odp - fuzzy open presentation related files
+#		Look for some known extensions (odp, ppt,…).
+#		cd into the directory of the selected file.
+#		Open in background the selected file with libreoffice-impress.
+odp() {
+	local files
+
+	files=$(find ${1:-.} -regextype posix-extended -regex ".*\.(odp|ppt|pptx)" 2> /dev/null | fzf +m) &&
+
+	if [[ -n $files ]]
+	then
+		dir=$(dirname "${files}")
+		cd -- "${dir}"
+		file=$(basename "${files}")
+		command libreoffice --impress "${file}" &
+	fi
+}
+
+# }}}
+# zsh-syntax-highlighting {{{
+## Activate if plugin is available
+[ -f ~/repos/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ] && source ~/repos/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+
+## Additionnal highlighters
+### The order is important. Put **regexp** before **main** to prioritize
+###  the double quotation marks
+ZSH_HIGHLIGHT_HIGHLIGHTERS=(regexp main brackets pattern)
+### Dangerous commands
+ZSH_HIGHLIGHT_PATTERNS+=('rm -rf *' 'fg=white,bold,bg=red')
+ZSH_HIGHLIGHT_REGEXP+=('\bsudo\b' 'fg=white,bold,bg=red')
+### CLI
+ZSH_HIGHLIGHT_REGEXP+=('\ \-[^- ]+' 'fg=227') # short args in yellow (-l)
+ZSH_HIGHLIGHT_REGEXP+=('\ \--[^ ]+' 'fg=214') # long args in orange (--all)
+### Taskwarrior
+ZSH_HIGHLIGHT_REGEXP+=('\ \+[^ ]+' 'fg=226') # tags in yellow (+txt)
+ZSH_HIGHLIGHT_REGEXP+=('[^ ]+\:' 'fg=135')   # metadata in purple (project:)
+ZSH_HIGHLIGHT_REGEXP+=('\ \_[^ ]+' 'fg=32')  # subcommands in blue (_command)
+# }}}

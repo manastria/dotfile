@@ -1,0 +1,24 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Git: Rendre le fichier courant exécutable (+x)",
+            "type": "shell",
+            "command": "git",
+            "args": [
+                "update-index",
+                "--chmod=+x",
+                "${file}" // Variable VS Code qui représente le fichier actuellement ouvert
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": true
+            },
+            "problemMatcher": []
+        }
+    ]
+}
