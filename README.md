@@ -57,7 +57,7 @@ bin/install_starship.sh
 Après avoir cloné le dépôt, récupérez les submodules avec :
 
 ```bash
-git submodule update --init --recursive
+yadm submodule update --init --recursive
 ```
 
 Cette commande initialisera et téléchargera tous les submodules configurés dans le dépôt.
