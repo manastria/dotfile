@@ -1,7 +1,7 @@
 # -*- mode: shell-script -*-
 
 # Path to your oh-my-zsh installation.
-export ZSH="${HOME}/.zsh/oh-my-zsh"
+export ZSH="${HOME}/.oh-my-zsh"
 
 # Définir le chemin de vos customs ($ZSH_CUSTOM)
 export ZSH_CUSTOM="${HOME}/.zsh/custom"
