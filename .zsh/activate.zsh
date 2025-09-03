@@ -35,6 +35,7 @@ zsh-completions
 zsh-dircolors-solarized
 zsh-syntax-highlighting
 #zsh-vi-mode
+atuin
 )
 
 
