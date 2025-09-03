@@ -95,6 +95,20 @@ alias dcr="docker compose down && docker compose up"
 alias dcclean="docker system prune -af && docker volume prune -f"
 alias dcxclean="docker compose down --volumes --remove-orphans && docker system prune -af && docker volume prune -f"
 
+# Docker Monitoring & Debugging
+alias dstat="docker stats"
+alias dci="docker inspect"
+alias dclf="docker compose logs -f --tail=50"
+alias dpsa="docker ps -a"
+
+# Fine-grained Cleanup
+alias dils='docker images -f "dangling=true"'
+alias dip="docker image prune -f"
+alias dcrmoff='docker rm $(docker ps -aq -f "status=exited")'
+alias dvls="docker volume ls"
+alias dvp="docker volume prune -f"
+alias dnls="docker network ls"
+alias dnp="docker network prune -f"
 
 
 # alias gulp="docker compose exec node gulp"
