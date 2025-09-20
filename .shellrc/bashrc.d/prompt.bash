@@ -33,19 +33,25 @@ if [ -n "$force_color_prompt" ]; then
 fi
 
 # Fonction pour définir le titre de la fenêtre
+# Met à jour le titre d’onglet : host: chemin
+# - Utilise sed pour remplacer $HOME par ~ (cas exact + sous-répertoires)
+# - Reste compatible avec MobaXterm (séquence OSC 0). Mets 2 au lieu de 0 si tu veux "titre seul".
 set_window_title() {
     case "$TERM" in
         xterm*|rxvt*|konsole*|gnome*|alacritty)
-            # cwd avec ~ pour $HOME
-            local cwd="${PWD/#$HOME/~}"
-            # HOSTNAME sans le domaine (foo au lieu de foo.example)
+            # Chemin avec ~ pour $HOME (deux règles : exacte, puis préfixe)
+            local cwd
+            cwd="$(pwd | sed -e "s#^$HOME\$#~#" -e "s#^$HOME/#~/#")"
+
+            # Nom d’hôte court
             local short_host="${HOSTNAME%%.*}"
-            # Titre: user@host: /chemin
-            printf '\033]0;%s@%s: %s\007' "$USER" "$short_host" "$cwd"
+            [ -z "$short_host" ] && short_host="$(hostname -s 2>/dev/null || echo "$HOSTNAME")"
+
+            # Titre : user@host: chemin
+            echo -en "\033]0;${short_host}: ${cwd}\a"
             ;;
     esac
 }
-
 
 __prompt_command() {
     local EXIT="$?"             # This needs to be first

@@ -39,4 +39,18 @@ atuin
 )
 
 
+# =============================================================
+# MA CONFIGURATION PERSONNALISÉE DU TITRE DE FENÊTRE
+# =============================================================
+
+# 1. Définir une fonction pour mettre à jour le titre
+set_custom_window_title() {
+    print -Pn "\e]0;%m: %~\a"
+}
+
+# 2. Ajouter cette fonction à la liste des fonctions `precmd`
+#    Utiliser `+=` pour ne pas écraser les fonctions existantes
+precmd_functions+=(set_custom_window_title)
+
+
 source $ZSH/oh-my-zsh.sh

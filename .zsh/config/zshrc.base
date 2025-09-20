@@ -32,8 +32,15 @@ prompt="$phost %(?..%{$fg[red]%}(%?%)%{$reset_color%}) %T
 #RPROMPT='${vim_mode} '
 # print an empty line before the PROMPT
 # precmd() { print "" }
-precmd() { echo -n "\x1b]1337;CurrentDir=$(pwd)\x07" }
+# Fonction exécutée avant chaque affichage du prompt
+precmd() {
+    # Intégration iTerm2 (votre ligne existante)
+    echo -n "\x1b]1337;CurrentDir=$(pwd)\x07"
 
+    # Mise à jour du titre de la fenêtre/onglet : host: path
+    # On utilise print -P pour interpréter les séquences de prompt comme %m et %~
+    print -Pn "\e]0;%m: %~\a"
+}
 
 # Nouveau prompt
 set promptchars=";;"
@@ -170,16 +177,10 @@ unsetopt hup                    # no hup signal at shell exit
 unsetopt ignore_eof             # do not exit on end-of-file
 unsetopt list_beep              # no bell on ambiguous completion
 unsetopt rm_star_silent         # ask for confirmation for `rm *' or `rm path/*'
-print -Pn "\e]0; %n@%M: %~\a"   # terminal title
 
 alias ping='ping -c 5'
 alias clr='clear; echo Currently logged in on $TTY, as $USER in directory $PWD.'
 alias path='print -l $path'
-
-
-
-
-
 
 ##########
 ## vim mode
