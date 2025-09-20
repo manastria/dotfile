@@ -19,6 +19,7 @@ MODULE_ORDER = ["docker", "gh", "git", "shell", "libsecret", "extra"]
 
 EXTRA_RM_PATHS = [
     "~/.gitconfig.local",
+    "~/.local/share/marks/marks.sqlite",
     # "~/.cache/my-app",
 ]
 

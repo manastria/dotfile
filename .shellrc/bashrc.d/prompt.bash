@@ -34,13 +34,18 @@ fi
 
 # Fonction pour définir le titre de la fenêtre
 set_window_title() {
-    # Vérifie si on est dans un terminal graphique
     case "$TERM" in
         xterm*|rxvt*|konsole*|gnome*|alacritty)
-            echo -en "\033]0;$(pwd | sed -e "s;^$HOME;~;")\a"
+            # cwd avec ~ pour $HOME
+            local cwd="${PWD/#$HOME/~}"
+            # HOSTNAME sans le domaine (foo au lieu de foo.example)
+            local short_host="${HOSTNAME%%.*}"
+            # Titre: user@host: /chemin
+            printf '\033]0;%s@%s: %s\007' "$USER" "$short_host" "$cwd"
             ;;
     esac
 }
+
 
 __prompt_command() {
     local EXIT="$?"             # This needs to be first
@@ -81,19 +86,29 @@ __prompt_command() {
 }
 
 if [ "$color_prompt" = yes ]; then
-    # Si l'option color_prompt est activée (c'est-à-dire si le terminal supporte les couleurs),
-    # on définit PROMPT_COMMAND comme étant la fonction __prompt_command.
-    # Cette fonction est appelée après chaque commande exécutée pour régénérer la variable PS1
-    # qui contient la définition de l'invite (le prompt).
-    # La ligne commentée en dessous montre une alternative pour PS1 sans utiliser PROMPT_COMMAND.
-    # Elle définissait un prompt coloré directement sans la fonction __prompt_command.
-    # PS1='${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '
-    PROMPT_COMMAND="${PROMPT_COMMAND:+$PROMPT_COMMAND$'\n'}__prompt_command"  # Appelle la fonction __prompt_command pour définir PS1 dynamiquement
+    # Terminal compatible couleurs : on s’appuie sur __prompt_command.
+    #
+    # Rappel : PROMPT_COMMAND est exécuté par bash *juste avant l’affichage
+    # du prompt suivant* (donc après chaque commande). C’est l’endroit idéal
+    # pour :
+    #   - régénérer dynamiquement PS1 (couleurs, indicateurs, etc.) ;
+    #   - mettre à jour le titre d’onglet/fenêtre ;
+    #   - effectuer d’autres hooks utiles (ex. synchro d’historique).
+    #
+    # On ajoute la fonction __prompt_command à la variable PROMPT_COMMAND **une seule fois** grâce
+    # à l’anti-doublon ci-dessous, afin d’éviter des exécutions multiples.
+    case ";$PROMPT_COMMAND;" in
+      *";__prompt_command;"*) : ;;               # déjà présent → ne rien faire
+      "" ) PROMPT_COMMAND="__prompt_command" ;;  # vide → on initialise
+      * )  PROMPT_COMMAND+=$'\n''__prompt_command' ;;  # on empile proprement
+    esac
 else
-    # Si le terminal ne supporte pas les couleurs, on définit PS1 sans utiliser la fonction __prompt_command,
-    # en générant un prompt simple avec le nom d'utilisateur (\u), le nom d'hôte (\h) et le chemin complet (\w).
+    # Terminal sans couleurs : on évite d’appeler __prompt_command et on
+    # définit un PS1 simple et statique. Ainsi, on ne montre pas de séquences
+    # d’échappement non interprétées sur des terminaux basiques.
     PS1='${debian_chroot:+($debian_chroot)}\u@\h:\w\$ '
 fi
+
 
 # On désactive les variables color_prompt et force_color_prompt une fois qu'on n'en a plus besoin
 unset color_prompt force_color_prompt
