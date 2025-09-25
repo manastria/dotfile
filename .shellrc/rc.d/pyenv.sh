@@ -19,3 +19,6 @@ if command -v pyenv >/dev/null 2>&1; then
   fi
 fi
 # --------------------------------------------------------------------
+
+# Retourne toujours un code de sortie 0
+return 0 2>/dev/null || true
