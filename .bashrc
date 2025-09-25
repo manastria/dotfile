@@ -121,3 +121,6 @@ export PATH=$PATH:/usr/games
 # Install Ruby Gems to ~/gems
 export GEM_HOME=$HOME/gems
 export PATH=$HOME/gems/bin:$PATH
+
+# Retourne toujours un code de sortie 0
+return 0 2>/dev/null || true
