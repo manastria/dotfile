@@ -6,6 +6,15 @@
 # that can't tolerate any output. so make sure this doesn't display
 # anything or bad things will happen !
 
+if [ -n "$TRACE_RC" ]; then
+  exec 9>"/tmp/bash-rc-trace.$$"
+  export BASH_XTRACEFD=9
+  export PS4='+ ${BASH_SOURCE##*/}:${LINENO}:${FUNCNAME[0]:-main}: [$?] '
+  set -x
+  trap 'printf "ERR %s:%s: %s -> %s\n" "${BASH_SOURCE##*/}" "$LINENO" "$BASH_COMMAND" "$?" >>/tmp/bash-rc-errors.$$' ERR
+fi
+
+
 # test for an interactive shell. there is no need to set anything
 # past this point for scp and rcp, and it's important to refrain from
 # outputting anything in those cases.
