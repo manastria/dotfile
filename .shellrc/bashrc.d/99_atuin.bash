@@ -1,7 +1,5 @@
-# Charger Atuin s'il est installé
-if command -v atuin &> /dev/null; then
+# Atuin DOIT arriver après Starship
+if command -v atuin >/dev/null 2>&1; then
+  # Optionnel : si tu veux garder la flèche ↑ native Bash, ajoute --disable-up-arrow
   eval "$(atuin init bash)"
 fi
-
-# Retourne toujours un code de sortie 0
-return 0 2>/dev/null || true
