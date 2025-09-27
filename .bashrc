@@ -117,10 +117,37 @@ export PATH=$PATH:${HOME}/bin
 # Ajout du répertoire pour 'sl'
 export PATH=$PATH:/usr/games
 
+# Déduplique PATH proprement (sans processus externe)
+path_clean() {
+  local saveIFS="$IFS"
+  IFS=':'
 
-# Install Ruby Gems to ~/gems
-export GEM_HOME=$HOME/gems
-export PATH=$HOME/gems/bin:$PATH
+  # tableau associatif pour marquer les chemins déjà vus (Bash ≥ 4)
+  local -A seen=()
+  local -a out=()
+  local p
+
+  for p in $PATH; do
+    # ignorer les entrées vides
+    [[ -z $p ]] && continue
+    # enlever un éventuel slash final pour normaliser
+    p="${p%/}"
+    [[ ! -d $p ]] && continue        # <- filtre les chemins inexistants
+    # ignorer si déjà présent
+    [[ -n ${seen["$p"]} ]] && continue
+    seen["$p"]=1
+    out+=("$p")
+  done
+
+  # reconstruire PATH avec des :
+  IFS=':'
+  PATH="${out[*]}"
+  IFS="$saveIFS"
+  export PATH
+}
+
+# Nettoyer PATH à chaque ouverture de shell interactif
+path_clean
 
 # Retourne toujours un code de sortie 0
 return 0 2>/dev/null || true
