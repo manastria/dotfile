@@ -68,6 +68,7 @@ packages=(
     git-lfs
     haveged
     htop
+    jq
     lsd
     ncdu
     openssh-server
