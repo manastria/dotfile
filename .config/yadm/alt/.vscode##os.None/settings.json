@@ -1,5 +1,8 @@
 {
     "editor.insertSpaces": false,
     "git.ignoreSubmodules": true,
-    "git.detectSubmodules": false
+    "git.detectSubmodules": false,
+    "files.exclude": {
+        "**/.zsh/oh-my-zsh": true
+    }
 }
