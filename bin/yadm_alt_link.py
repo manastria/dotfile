@@ -24,6 +24,8 @@ import subprocess
 import pathlib
 import platform
 import shutil
+import argparse
+import filecmp
 from typing import List
 
 # --- Configuration ---
@@ -36,6 +38,7 @@ NO_SYMLINK = {
     ".gitattributes",
     ".gitmodules",
 }
+MAX_TRACKED_LIST = 30
 
 # ───────────────────────── git helpers ────────────────────────────
 
@@ -135,6 +138,66 @@ def create_working_link_or_file(
 
     make_link(target, link)
 
+def print_link_created(rel: str, relative_var_path: str, action: str = "Lien créé") -> None:
+    """Affiche un message standard pour la création de lien."""
+    print(f"{action}: {rel} → {ALT_DIR.as_posix()}/{relative_var_path}")
+
+# ───────────────────────── working path checks ────────────────────
+
+def resolve_symlink_target(link: pathlib.Path) -> pathlib.Path:
+    """Résout la cible d'un symlink en chemin absolu."""
+    try:
+        target = os.readlink(link)
+    except OSError:
+        return pathlib.Path()
+    if not os.path.isabs(target):
+        target = os.path.abspath(os.path.join(link.parent, target))
+    return pathlib.Path(target)
+
+
+def is_same_inode(path_a: pathlib.Path, path_b: pathlib.Path) -> bool:
+    """Indique si deux chemins pointent vers le même inode."""
+    try:
+        return os.path.samefile(path_a, path_b)
+    except OSError:
+        return False
+
+
+def is_same_content(path_a: pathlib.Path, path_b: pathlib.Path) -> bool:
+    """Compare le contenu de deux fichiers."""
+    if not path_a.is_file() or not path_b.is_file():
+        return False
+    try:
+        return filecmp.cmp(path_a, path_b, shallow=False)
+    except OSError:
+        return False
+
+
+def working_is_correct(
+    work_path: pathlib.Path,
+    var_path: pathlib.Path,
+    avoid_symlink: bool,
+) -> bool:
+    """Vérifie si le working-name correspond déjà à la variante."""
+    if not var_path.exists():
+        return False
+    if work_path.is_symlink():
+        if avoid_symlink:
+            return False
+        return resolve_symlink_target(work_path) == var_path.resolve()
+    if is_same_inode(work_path, var_path):
+        return True
+    return is_same_content(work_path, var_path)
+
+
+def remove_working_path(work_path: pathlib.Path) -> None:
+    """Supprime le working-name sans toucher à la variante."""
+    if work_path.is_symlink() or work_path.is_file():
+        work_path.unlink()
+        return
+    if work_path.is_dir():
+        shutil.rmtree(work_path)
+
 # ───────────────────────── exclude handling ───────────────────────
 
 def add_to_exclude(exclude: pathlib.Path, rel: str) -> None:
@@ -153,12 +216,73 @@ def add_to_exclude(exclude: pathlib.Path, rel: str) -> None:
 
 # ───────────────────────── index cleanup ──────────────────────────
 
-def remove_from_index(rel: str) -> None:
-    """Retire un fichier de l'index git s'il y est présent."""
-    if git("ls-files", "--error-unmatch", rel).returncode == 0:
-        print(f"· '{rel}' est suivi par git. Tentative de retrait de l'index...")
-        git("rm", "--cached", "-r", "--", rel, capture=False)
-        print(f"· Retiré de l'index: {rel}")
+def is_dir_target(rel: str, root: pathlib.Path) -> bool:
+    """Détermine si le chemin cible est un dossier."""
+    if rel.endswith("/"):
+        return True
+    candidate = root / rel
+    return candidate.exists() and candidate.is_dir()
+
+
+def git_lines(*args: str) -> List[str]:
+    """Retourne la sortie de git sous forme de lignes non vides."""
+    result = git(*args)
+    if result.returncode != 0:
+        return []
+    return [ln for ln in result.stdout.splitlines() if ln.strip()]
+
+
+def warn_tracked(rel: str, tracked: List[str]) -> None:
+    """Affiche un avertissement clair pour les fichiers suivis."""
+    if not tracked:
+        return
+    print(f"WARN: Exclusion en conflit: {rel} contient des fichiers suivis par git.")
+    show = tracked[:MAX_TRACKED_LIST]
+    for line in show:
+        print(f"   - {line}")
+    remaining = len(tracked) - len(show)
+    if remaining > 0:
+        print(f"   +{remaining} autres")
+
+
+def check_tracked(rel: str, root: pathlib.Path) -> List[str]:
+    """Détecte les fichiers suivis par git pour un chemin donné."""
+    if is_dir_target(rel, root):
+        query = rel.rstrip("/") + "/"
+        return git_lines("ls-files", "--", query)
+
+    tracked = git_lines("ls-files", "--", rel)
+    if tracked:
+        stage = git_lines("ls-files", "--stage", "--", rel)
+        if stage:
+            tracked.extend([f"index: {ln}" for ln in stage])
+    return tracked
+
+
+def remove_from_index(rel: str, root: pathlib.Path, fix_tracked: bool, check_only: bool) -> None:
+    """Diagnostique et retire de l'index si nécessaire, y compris pour les dossiers.
+
+    Exemple d'output (dossier exclu mais contenu suivi):
+    # WARN: Exclusion en conflit: config/ contient des fichiers suivis par git.
+    #    - config/app.yml
+    #    - config/secret.env
+    #    +2 autres
+    """
+    tracked = check_tracked(rel, root)
+    if not tracked:
+        return
+
+    warn_tracked(rel, tracked)
+    if check_only:
+        print("· Mode check-only: aucun changement dans l'index.")
+        return
+    if not fix_tracked:
+        print("· Correction désactivée (--no-fix-tracked-excluded).")
+        return
+
+    print(f"· Retrait des entrées de l'index pour: {rel}")
+    git("rm", "--cached", "-r", "--", rel, capture=False)
+    print(f"· Retiré de l'index: {rel}")
 
 # ───────────────────────── targets list ───────────────────────────
 
@@ -171,10 +295,10 @@ def read_list_file(root: pathlib.Path) -> List[str]:
         return [ln.strip() for ln in f if ln.strip() and not ln.lstrip().startswith('#')]
 
 
-def get_targets(root: pathlib.Path) -> List[str]:
+def get_targets(root: pathlib.Path, paths: List[str]) -> List[str]:
     """Obtient la liste des chemins à traiter, soit depuis les arguments, soit depuis le fichier."""
-    if len(sys.argv) > 1:
-        return sys.argv[1:]
+    if paths:
+        return paths
         
     paths = read_list_file(root)
     if paths:
@@ -208,7 +332,14 @@ def move_existing_root_variant(path: pathlib.Path, var_path: pathlib.Path):
         print(f"· Déplacement de la variante existante → {rel_var_path.as_posix()}")
 
 
-def process_one(rel: str, root: pathlib.Path, exclude: pathlib.Path):
+def process_one(
+    rel: str,
+    root: pathlib.Path,
+    exclude: pathlib.Path,
+    fix_tracked: bool,
+    check_only: bool,
+    force: bool,
+):
     """Traite un seul chemin : le transforme en variante et crée un lien."""
     print(f"\n--- Traitement de : {rel} ---")
     work_path = root / rel
@@ -224,52 +355,99 @@ def process_one(rel: str, root: pathlib.Path, exclude: pathlib.Path):
 
     relative_var_path = var_path.relative_to(root / ALT_DIR).as_posix()
 
-    # Cas 1 : La variante existe, mais le lien de travail n'existe pas ou n'est pas un lien.
-    if var_path.exists() and not work_path.is_symlink():
-        if work_path.exists():
-            if avoid_symlink:
-                print(f"✓ Déjà configuré. pour {rel}")
-            else:
-                print(f"Avertissement : '{rel}' existe mais n'est pas un lien. Il sera ignoré pour éviter la perte de données.")
-        else:
-            create_working_link_or_file(var_path, work_path, rel, root)
-            if not avoid_symlink:
-                print(f"Lien créé: {rel} → {ALT_DIR.as_posix()}/{relative_var_path}")
-            
-    # Cas 2 : Le fichier de travail existe, mais la variante n'existe pas.
-    elif work_path.exists() and not work_path.is_symlink() and not var_path.exists():
+    # Cas 1 : La variante n'existe pas, mais le working-name existe.
+    if not var_path.exists() and work_path.exists() and not work_path.is_symlink():
         ensure_variant_dirs(var_path)
         work_path.rename(var_path)
         create_working_link_or_file(var_path, work_path, rel, root)
         if avoid_symlink:
             print(f"Déplacé vers la variante: {ALT_DIR.as_posix()}/{relative_var_path}")
         else:
-            print(f"Déplacé & lié: {rel} → {ALT_DIR.as_posix()}/{relative_var_path}")
-        
-    # Cas 3 : Tout est déjà en place ou la situation n'est pas gérée.
-    else:
-        if avoid_symlink and work_path.is_symlink() and var_path.exists():
-            work_path.unlink()
-            create_working_link_or_file(var_path, work_path, rel, root)
+            print_link_created(rel, relative_var_path, action="Déplacé & lié")
+
+    # Cas 2 : La variante existe, mais le working-name n'existe pas.
+    elif var_path.exists() and not work_path.exists() and not work_path.is_symlink():
+        create_working_link_or_file(var_path, work_path, rel, root)
+        if not avoid_symlink:
+            print_link_created(rel, relative_var_path)
+
+    # Cas 3 : La variante existe et le working-name existe.
+    elif var_path.exists() and (work_path.exists() or work_path.is_symlink()):
+        if working_is_correct(work_path, var_path, avoid_symlink):
+            print(f"✓ Déjà configuré. pour {rel}")
         else:
-            status = "Déjà configuré." if (avoid_symlink or work_path.is_symlink()) else "Rien à faire."
-            print(f"✓ {status} pour {rel}")
+            print(f"Avertissement : '{rel}' existe mais ne correspond pas à la variante.")
+            if force:
+                remove_working_path(work_path)
+                create_working_link_or_file(var_path, work_path, rel, root)
+                if not avoid_symlink:
+                    print_link_created(rel, relative_var_path, action="Remplacé & lié")
+            else:
+                print("· Utilisez --force pour remplacer le working-name.")
+
+    # Cas 4 : La variante n'existe pas et le working-name est un symlink.
+    elif not var_path.exists() and work_path.is_symlink():
+        print(f"Avertissement : '{rel}' est un lien mais la variante est absente. Aucun changement appliqué.")
+
+    # Cas 5 : Rien à faire.
+    else:
+        print(f"✓ Rien à faire pour {rel}")
 
     add_to_exclude(exclude, rel)
-    remove_from_index(rel)
+    remove_from_index(rel, root, fix_tracked, check_only)
 
 # ───────────────────────── main ───────────────────────────────────
 
 def main():
     """Fonction principale du script."""
     try:
+        parser = argparse.ArgumentParser(
+            description="Gère les variantes yadm et les liens de travail."
+        )
+        parser.add_argument(
+            "paths",
+            nargs="*",
+            help="Chemins à traiter (sinon via le fichier de liste).",
+        )
+        parser.add_argument(
+            "--fix-tracked-excluded",
+            dest="fix_tracked_excluded",
+            action="store_true",
+            default=True,
+            help="Retire de l'index les chemins exclus suivis (par défaut).",
+        )
+        parser.add_argument(
+            "--no-fix-tracked-excluded",
+            dest="fix_tracked_excluded",
+            action="store_false",
+            help="Ne modifie pas l'index, seulement le diagnostic.",
+        )
+        parser.add_argument(
+            "--check-only",
+            action="store_true",
+            help="Diagnostique uniquement, ne modifie rien.",
+        )
+        parser.add_argument(
+            "--force",
+            action="store_true",
+            help="Remplace le working-name s'il est incohérent.",
+        )
+        args = parser.parse_args()
+
         root = repo_root()
         os.chdir(root) # S'assurer que l'on s'exécute depuis la racine du repo
         exclude = exclude_path()
 
-        targets = get_targets(root)
+        targets = get_targets(root, args.paths)
         for t in targets:
-            process_one(t, root, exclude)
+            process_one(
+                t,
+                root,
+                exclude,
+                fix_tracked=args.fix_tracked_excluded,
+                check_only=args.check_only,
+                force=args.force,
+            )
 
         if targets:
             # Construit la liste des fichiers à ajouter pour le message final
@@ -295,3 +473,29 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# Tests manuels (commandes reproductibles)
+# 1) Cas fichier sensible .gitignore (hardlink/copie, pas de warning git)
+#    printf "test\n" > .gitignore
+#    python3 bin/yadm_alt_link.py .gitignore
+#    file .gitignore
+#    git add .gitignore  # aucun warning "Trop de niveaux de liens symboliques"
+#
+# 2) Cas fichier normal (symlink attendu)
+#    printf "ok\n" > foo.txt
+#    python3 bin/yadm_alt_link.py foo.txt
+#    ls -l foo.txt  # doit indiquer un lien symbolique vers .config/yadm/alt/...
+#
+# 3) Cas dossier (symlink/junction attendu) + exclusion + detection fichiers suivis
+#    mkdir -p some/dir
+#    printf "data\n" > some/dir/a.txt
+#    git add some/dir/a.txt && git commit -m "test: add tracked file"
+#    python3 bin/yadm_alt_link.py some/dir
+#    ls -l some/dir  # lien vers .config/yadm/alt/...##os.None
+#    # attendu: avertissement listant some/dir/a.txt
+#
+# 4) Cas deja versionne (fichier exclu dans l'index)
+#    printf "track\n" > tracked.txt
+#    git add tracked.txt && git commit -m "test: tracked file"
+#    python3 bin/yadm_alt_link.py --fix-tracked-excluded tracked.txt
+#    git ls-files -- tracked.txt  # ne doit rien afficher
