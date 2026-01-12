@@ -1,37 +1,35 @@
 #!/bin/bash
 
-# Script pour installer le navigateur Vivaldi sur Debian/Ubuntu de manière sécurisée
+# Script pour installer Vivaldi (avec nettoyage préalable)
+# Nécessite sudo
 
-# S'assurer que le script est exécuté avec les privilèges root
 if [ "$(id -u)" -ne 0 ]; then
-  echo "Ce script doit être exécuté en tant que root. Utilisez 'sudo ./install_vivaldi.sh'" >&2
+  echo "Ce script doit être exécuté en tant que root." >&2
   exit 1
 fi
 
-# Installer les dépendances nécessaires (wget, gpg)
+# 1. Nettoyage des anciennes configurations conflictuelles
+# C'est ici qu'on résout l'erreur "Signed-By" et le doublon
+echo "--- Nettoyage des anciennes sources Vivaldi ---"
+rm -f /etc/apt/sources.list.d/vivaldi.list
+rm -f /etc/apt/sources.list.d/vivaldi.sources
+
+# 2. Installation des dépendances
 echo "--- Installation des dépendances ---"
-apt update
-apt install -y wget gpg
+apt update && apt install -y wget gpg
 
-# 1. Ajout de la clé GPG officielle de Vivaldi
-echo "--- Téléchargement et ajout de la clé GPG de Vivaldi ---"
-wget -qO- https://repo.vivaldi.com/archive/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/vivaldi-browser-keyring.gpg
+# 3. Gestion de la clé GPG
+echo "--- Configuration de la clé GPG ---"
+wget -qO- https://repo.vivaldi.com/archive/linux_signing_key.pub | gpg --dearmor --yes -o /usr/share/keyrings/vivaldi-browser-keyring.gpg
 
-# Vérifier que la clé a bien été ajoutée
-if [ ! -f /usr/share/keyrings/vivaldi-browser-keyring.gpg ]; then
-    echo "Erreur : La clé GPG de Vivaldi n'a pas pu être téléchargée." >&2
-    exit 1
-fi
-
-# 2. Ajout du dépôt Vivaldi
-echo "--- Ajout du dépôt Vivaldi aux sources APT ---"
+# 4. Ajout du dépôt avec restriction d'architecture (arch=amd64)
+# Cela empêche apt de chercher la version i386 qui n'existe pas
+echo "--- Création du fichier source propre ---"
 echo "deb [signed-by=/usr/share/keyrings/vivaldi-browser-keyring.gpg arch=amd64] https://repo.vivaldi.com/archive/deb/ stable main" > /etc/apt/sources.list.d/vivaldi-archive.list
 
-# 3. Installation de Vivaldi
-echo "--- Mise à jour des paquets et installation de Vivaldi ---"
+# 5. Installation
+echo "--- Installation de Vivaldi ---"
 apt update
 apt install -y vivaldi-stable
 
-echo "--- Installation de Vivaldi terminée avec succès ! ---"
-
-exit 0
+echo "--- Terminé ---"

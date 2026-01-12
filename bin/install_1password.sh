@@ -17,20 +17,28 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
+# Étape 0 : Nettoyage préventif des conflits (AJOUTÉ)
+# On supprime l'ancien format ou les doublons potentiels pour éviter les warnings APT
+if [ -f "/etc/apt/sources.list.d/1password.sources" ]; then
+    echo -e "${YELLOW}Suppression du fichier conflictuel 1password.sources...${NC}"
+    rm /etc/apt/sources.list.d/1password.sources
+fi
+
 # Étape 1 : Ajouter la clé GPG du dépôt
 echo -e "${YELLOW}Ajout de la clé GPG du dépôt 1Password...${NC}"
-curl -sS https://downloads.1password.com/linux/keys/1password.asc | gpg --dearmor --output /usr/share/keyrings/1password-archive-keyring.gpg
+curl -sS https://downloads.1password.com/linux/keys/1password.asc | gpg --dearmor --yes --output /usr/share/keyrings/1password-archive-keyring.gpg
+# Note: ajout de --yes pour écraser sans demander confirmation si la clé existe déjà
 
 # Étape 2 : Ajouter le dépôt APT
 echo -e "${YELLOW}Ajout du dépôt APT pour 1Password...${NC}"
-echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/amd64 stable main' | tee /etc/apt/sources.list.d/1password.list
+echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/amd64 stable main' | tee /etc/apt/sources.list.d/1password.list > /dev/null
 
 # Étape 3 : Ajouter la politique debsig-verify
 echo -e "${YELLOW}Ajout de la politique debsig-verify...${NC}"
 mkdir -p /etc/debsig/policies/AC2D62742012EA22/
-curl -sS https://downloads.1password.com/linux/debian/debsig/1password.pol | tee /etc/debsig/policies/AC2D62742012EA22/1password.pol
+curl -sS https://downloads.1password.com/linux/debian/debsig/1password.pol | tee /etc/debsig/policies/AC2D62742012EA22/1password.pol > /dev/null
 mkdir -p /usr/share/debsig/keyrings/AC2D62742012EA22/
-curl -sS https://downloads.1password.com/linux/keys/1password.asc | gpg --dearmor --output /usr/share/debsig/keyrings/AC2D62742012EA22/debsig.gpg
+curl -sS https://downloads.1password.com/linux/keys/1password.asc | gpg --dearmor --yes --output /usr/share/debsig/keyrings/AC2D62742012EA22/debsig.gpg
 
 # Étape 4 : Mettre à jour les paquets et installer 1Password
 echo -e "${YELLOW}Mise à jour des paquets et installation de 1Password...${NC}"
