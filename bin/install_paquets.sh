@@ -58,7 +58,10 @@ echo -e "${YELLOW}Étape 3: Installation des nouveaux paquets${NC}"
 packages=(
     aptitude
     auto-apt-proxy
+    bash-completion 
     bat
+    byobu
+    ccze
     curl
     direnv
     fd-find
@@ -69,15 +72,26 @@ packages=(
     haveged
     htop
     jq
+    lnav
     lsd
+    mlocate
+    most
+    multitail
     ncdu
     openssh-server
     python3-rich
+    reptyr
+    screen
+    screenfetch
     sqlite3
+    sudo
     tmux
     tree
+    unrar
+    unzip
     vim
     wget
+    zip
     zsh
 )
 packages+=(
