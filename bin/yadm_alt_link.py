@@ -23,6 +23,7 @@ import sys
 import subprocess
 import pathlib
 import platform
+import shutil
 from typing import List
 
 # --- Configuration ---
@@ -30,6 +31,11 @@ SUFFIX = "##os.None"
 ALT_DIR = pathlib.PurePosixPath(".config/yadm/alt")
 LIST_FILE = pathlib.PurePosixPath(".config/yadm/alt-link-list.txt")
 DEBUG = False # Mettre à True pour afficher les informations de débogage
+NO_SYMLINK = {
+    ".gitignore",
+    ".gitattributes",
+    ".gitmodules",
+}
 
 # ───────────────────────── git helpers ────────────────────────────
 
@@ -86,6 +92,48 @@ def make_link(target: pathlib.Path, link: pathlib.Path) -> None:
         cmd = ["cmd", "/c", "mklink"]
         cmd += ["/J" if target.is_dir() else "/H", str(link), str(target)]
         subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+def format_rel(path: pathlib.Path, root: pathlib.Path) -> str:
+    """Retourne un chemin relatif au dépôt (ou absolu si hors dépôt)."""
+    try:
+        return path.relative_to(root).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def should_avoid_symlink(rel: str) -> bool:
+    """Indique si le chemin doit éviter les symlinks."""
+    return pathlib.PurePosixPath(rel).as_posix() in NO_SYMLINK
+
+
+def create_working_link_or_file(
+    target: pathlib.Path,
+    link: pathlib.Path,
+    rel: str,
+    root: pathlib.Path,
+) -> None:
+    """Crée un lien de travail ou un fichier selon les contraintes."""
+    if link.exists() or link.is_symlink():
+        if DEBUG:
+            print(f"DEBUG: Le lien/fichier '{link}' existe déjà.")
+        return
+
+    if should_avoid_symlink(rel):
+        link_rel = format_rel(link, root)
+        target_rel = format_rel(target, root)
+        try:
+            os.link(target, link)
+            print(f"Working file created as hardlink: {link_rel} → {target_rel}")
+            return
+        except OSError:
+            if target.is_dir():
+                shutil.copytree(target, link)
+            else:
+                shutil.copy2(target, link)
+            print(f"Working file created as copy: {link_rel} → {target_rel}")
+            return
+
+    make_link(target, link)
 
 # ───────────────────────── exclude handling ───────────────────────
 
@@ -165,6 +213,7 @@ def process_one(rel: str, root: pathlib.Path, exclude: pathlib.Path):
     print(f"\n--- Traitement de : {rel} ---")
     work_path = root / rel
     var_path = variant_path(root, rel)
+    avoid_symlink = should_avoid_symlink(rel)
     
     if DEBUG:
         print(f"DEBUG: work_path = '{work_path}'")
@@ -178,22 +227,33 @@ def process_one(rel: str, root: pathlib.Path, exclude: pathlib.Path):
     # Cas 1 : La variante existe, mais le lien de travail n'existe pas ou n'est pas un lien.
     if var_path.exists() and not work_path.is_symlink():
         if work_path.exists():
-             print(f"Avertissement : '{rel}' existe mais n'est pas un lien. Il sera ignoré pour éviter la perte de données.")
+            if avoid_symlink:
+                print(f"✓ Déjà configuré. pour {rel}")
+            else:
+                print(f"Avertissement : '{rel}' existe mais n'est pas un lien. Il sera ignoré pour éviter la perte de données.")
         else:
-            make_link(var_path, work_path)
-            print(f"Lien créé: {rel} → {ALT_DIR.as_posix()}/{relative_var_path}")
+            create_working_link_or_file(var_path, work_path, rel, root)
+            if not avoid_symlink:
+                print(f"Lien créé: {rel} → {ALT_DIR.as_posix()}/{relative_var_path}")
             
     # Cas 2 : Le fichier de travail existe, mais la variante n'existe pas.
     elif work_path.exists() and not work_path.is_symlink() and not var_path.exists():
         ensure_variant_dirs(var_path)
         work_path.rename(var_path)
-        make_link(var_path, work_path)
-        print(f"Déplacé & lié: {rel} → {ALT_DIR.as_posix()}/{relative_var_path}")
+        create_working_link_or_file(var_path, work_path, rel, root)
+        if avoid_symlink:
+            print(f"Déplacé vers la variante: {ALT_DIR.as_posix()}/{relative_var_path}")
+        else:
+            print(f"Déplacé & lié: {rel} → {ALT_DIR.as_posix()}/{relative_var_path}")
         
     # Cas 3 : Tout est déjà en place ou la situation n'est pas gérée.
     else:
-        status = "Déjà configuré." if work_path.is_symlink() else "Rien à faire."
-        print(f"✓ {status} pour {rel}")
+        if avoid_symlink and work_path.is_symlink() and var_path.exists():
+            work_path.unlink()
+            create_working_link_or_file(var_path, work_path, rel, root)
+        else:
+            status = "Déjà configuré." if (avoid_symlink or work_path.is_symlink()) else "Rien à faire."
+            print(f"✓ {status} pour {rel}")
 
     add_to_exclude(exclude, rel)
     remove_from_index(rel)
