@@ -144,8 +144,9 @@ setxkbmap fr oss
 echo "Configuration du clavier"
 
 xfconf-query -c keyboard-layout -p /Default/XkbDisable -s false
-xfconf-query -c keyboard-layout -p /Default/XkbLayout  -s fr
-xfconf-query -c keyboard-layout -p /Default/XkbVariant -s oss
+xfconf-query -c keyboard-layout -p /Default/XkbLayout  -s fr --create -t string
+xfconf-query -c keyboard-layout -p /Default/XkbVariant -s oss --create -t string
+
 
 # Application immédiate
 setxkbmap fr oss
