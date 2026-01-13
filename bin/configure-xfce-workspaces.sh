@@ -131,5 +131,24 @@ set_command_shortcut "/commands/custom/Super_R" ""
 
 echo "8) Reload"
 reload_session_bits
+#!/bin/bash
+set -e
+
+xfconf-query -c keyboard-layout -p /Default/XkbDisable -s false
+xfconf-query -c keyboard-layout -p /Default/XkbLayout  -s fr
+xfconf-query -c keyboard-layout -p /Default/XkbVariant -s oss
+
+# Application immédiate
+setxkbmap fr oss
+
+echo "Configuration du clavier"
+
+xfconf-query -c keyboard-layout -p /Default/XkbDisable -s false
+xfconf-query -c keyboard-layout -p /Default/XkbLayout  -s fr
+xfconf-query -c keyboard-layout -p /Default/XkbVariant -s oss
+
+# Application immédiate
+setxkbmap fr oss
+
 
 echo "Done. If needed, log out / log in once."
