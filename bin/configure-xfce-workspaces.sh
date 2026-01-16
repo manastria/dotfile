@@ -131,15 +131,11 @@ set_command_shortcut "/commands/custom/Super_R" ""
 
 echo "8) Reload"
 reload_session_bits
-#!/bin/bash
-set -e
 
-xfconf-query -c keyboard-layout -p /Default/XkbDisable -s false
-xfconf-query -c keyboard-layout -p /Default/XkbLayout  -s fr
-xfconf-query -c keyboard-layout -p /Default/XkbVariant -s oss
-
-# Application immédiate
-setxkbmap fr oss
+# Suppression de quelques raccourcis clavier gênants par défaut
+echo "9) Remove annoying default shortcuts"
+# Supprimer CTRL+F12
+remove_key_if_exists xfce4-keyboard-shortcuts "/xfwm4/custom/<Primary>F12"
 
 echo "Configuration du clavier"
 
