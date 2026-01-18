@@ -3,13 +3,13 @@
 # Flatpak: rendre visibles les lanceurs .desktop (XFCE/Whisker)
 
 # Si flatpak n'est pas installé, inutile de toucher à XDG_DATA_DIRS
-command -v flatpak >/dev/null 2>&1 || exit 0
+command -v flatpak >/dev/null 2>&1 || return 0
 
 SYS_FP="/var/lib/flatpak/exports/share"
 USR_FP="$HOME/.local/share/flatpak/exports/share"
 
 # Rien à faire si les exports Flatpak n'existent pas
-[ -d "$SYS_FP" ] || [ -d "$USR_FP" ] || exit 0
+[ -d "$SYS_FP" ] || [ -d "$USR_FP" ] || return 0
 
 # Fonction: teste si un répertoire est déjà présent dans une variable de type PATH
 has_path_entry() {
