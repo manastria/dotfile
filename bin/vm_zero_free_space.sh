@@ -1,30 +1,25 @@
 #!/bin/bash
 
 # ==============================================================================
-#  Script de nettoyage de l'espace disque libre pour optimisation de VM
-#  Auteur : Votre Nom
+#  Script de nettoyage et d'optimisation (Zero-Fill) pour export OVA
+#  Auteur : Manastria
 #  Date   : 13/10/2025
-#  Version: 1.1
+#  Version: 2.0
 # ==============================================================================
 
 # --- Configuration ---
-# Fichier de log pour suivre l'exécution du script.
 LOG_FILE="/var/log/vm_cleanup.log"
-# Point de montage à nettoyer. Pour plusieurs partitions, voir la section "Pour aller plus loin".
 TARGET_MOUNT="/"
-# Nom du fichier temporaire. '$$' est l'ID du processus pour un nom unique.
 TEMP_FILE_PATH="${TARGET_MOUNT%/}/EMPTY_$$"
 
-
 # --- Fonctions ---
-# Fonction pour enregistrer les messages dans le log et sur la console.
+
 log() {
-    # Formate le message avec la date et l'heure.
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOG_FILE"
 }
 
-# Fonction de nettoyage, exécutée à la fin du script ou en cas d'interruption.
 cleanup() {
+    echo "" # Saut de ligne pour la lisibilité après la barre de progression dd
     log "INFO: Fin du script ou interruption détectée. Lancement du nettoyage..."
     if [ -f "$TEMP_FILE_PATH" ]; then
         log "INFO: Suppression du fichier temporaire '$TEMP_FILE_PATH'..."
@@ -36,43 +31,58 @@ cleanup() {
     fi
 }
 
+clean_system() {
+    log "INFO: [1/5] Nettoyage des paquets apt (clean & autoremove)..."
+    apt-get clean
+    apt-get autoremove -y > /dev/null 2>&1
+
+    log "INFO: [2/5] Nettoyage des logs (journalctl & /var/log)..."
+    journalctl --vacuum-time=1s > /dev/null 2>&1
+    find /var/log -type f -exec truncate -s 0 {} \;
+
+    log "INFO: [3/5] Nettoyage des fichiers temporaires..."
+    rm -rf /tmp/* /var/tmp/*
+    rm -rf /root/.cache
+}
 
 # --- Script principal ---
 
-# 'trap' : exécute la fonction 'cleanup' lorsque le script se termine (EXIT)
-# ou est interrompu (INT, TERM). C'est une sécurité cruciale.
 trap cleanup EXIT INT TERM
 
-# Redirige toute la sortie (stdout et stderr) vers la fonction de logging.
-# exec > >(tee -a "$LOG_FILE") 2>&1 # Décommenter pour une journalisation complète
+log "--- Début de l'optimisation de la VM ---"
 
-log "--- Début du script de nettoyage de disque ---"
-
-# 1. Vérification des privilèges root
+# Vérification root
 if [[ $EUID -ne 0 ]]; then
    log "ERREUR: Ce script doit être exécuté avec les privilèges root (sudo)."
    exit 1
 fi
 
-# 2. Lancer fstrim (pour SSD et disques 'thin provisioned')
-# Informe l'hyperviseur des blocs qui peuvent être libérés.
-log "INFO: Exécution de 'fstrim -av'..."
+# 1. Nettoyage système
+clean_system
+
+# 2. Gestion du Swap
+log "INFO: [4/5] Désactivation du swap pour maximiser le zero-fill..."
+swapoff -a
+
+# 3. Trim (SSD/Thin Provisioning)
+log "INFO: Exécution de fstrim..."
 fstrim -av
 
-# 3. Remplir l'espace libre avec des zéros
-log "INFO: Création du fichier temporaire '$TEMP_FILE_PATH' pour remplir l'espace libre."
-log "INFO: Cette opération va continuer jusqu'à ce que le disque soit plein. C'est le comportement attendu."
+# 4. Remplissage par zéros (Avec Fallback)
+log "INFO: [5/5] Remplissage de l'espace libre avec des zéros..."
+log "NOTE: Ignorez le message 'No space left on device', c'est le but recherché."
 
-# La commande 'dd' va échouer avec une erreur "No space left on device".
-# C'est notre condition de succès ! On ignore donc cette erreur spécifique.
-# 'oflag=direct' contourne le cache du système pour de meilleures performances.
-dd if=/dev/zero of="$TEMP_FILE_PATH" bs=16M oflag=direct status=progress || true
+# Explication de la commande ci-dessous :
+# 1. Tente dd avec accès direct (rapide).
+# 2. Si ça échoue (ou disque plein), tente dd standard (lent mais compatible).
+# 3. '|| true' garantit que le script ne plante pas à la fin.
+dd if=/dev/zero of="$TEMP_FILE_PATH" bs=16M oflag=direct status=progress 2> /dev/null \
+|| dd if=/dev/zero of="$TEMP_FILE_PATH" bs=1M status=progress \
+|| true
 
-# 4. Synchronisation des caches
-# Force l'écriture de toutes les données en mémoire cache sur le disque.
-log "INFO: Synchronisation des données sur le disque (sync)..."
-sync
+# 5. Nettoyage final
+log "INFO: Nettoyage de l'historique Bash..."
+cat /dev/null > /root/.bash_history
+history -c
 
-log "--- Script terminé avec succès ---"
-
-# La fonction 'cleanup' enregistrée par 'trap' s'exécutera automatiquement ici pour supprimer le fichier.
+log "--- Optimisation terminée. Vous pouvez éteindre la VM et exporter l'OVA. ---"
