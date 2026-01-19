@@ -42,7 +42,7 @@ curl -sS https://downloads.1password.com/linux/keys/1password.asc | gpg --dearmo
 
 # Étape 4 : Mettre à jour les paquets et installer 1Password
 echo -e "${YELLOW}Mise à jour des paquets et installation de 1Password...${NC}"
-apt update && apt install -y 1password
+apt update && apt install -y 1password 1password-cli
 
 # Confirmation de l'installation
 if command -v 1password &> /dev/null; then
