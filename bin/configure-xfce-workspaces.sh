@@ -132,18 +132,26 @@ set_command_shortcut "/commands/custom/Super_R" ""
 
 
 echo "8) Divers"
-echo "   Lock Screen : Super+L au lieu de Ctrl+Alt+L"
-# On libère le raccourci par défaut dans xfwm4 (le gestionnaire de fenêtres)
-remove_key_if_exists xfce4-keyboard-shortcuts "/commands/custom/<Primary><Alt>l"
+
+echo "  Nettoyage des conflits AZERTY potentiels"
+
+# Liste de raccourcis souvent pré-configurés qui gênent
+CONFLICTS=(
+  "/commands/custom/<Primary><Alt>l"
+  "/commands/custom/<Primary><Alt>t"
+  "/commands/custom/<Primary><Alt>f"
+  "/commands/custom/<Super>f"
+)
+
+for key in "${CONFLICTS[@]}"; do
+  remove_key_if_exists xfce4-keyboard-shortcuts "$key"
+done
+
 
 # On affecte Super+L à la commande de verrouillage
 set_command_shortcut "/commands/custom/<Super>l" "xflock4"
-
-remove_key_if_exists xfce4-keyboard-shortcuts "/commands/custom/<Primary><Alt>t"
+# On affecte Super+T à l'ouverture du terminal
 set_command_shortcut "/commands/custom/<Super>t" "exo-open --launch TerminalEmulator"
-
-remove_key_if_exists xfce4-keyboard-shortcuts "/commands/custom/<Primary><Alt>f"
-remove_key_if_exists xfce4-keyboard-shortcuts "/commands/custom/<Super>f"
 
 
 echo "9) Reload"
