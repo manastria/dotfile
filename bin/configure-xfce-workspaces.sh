@@ -11,6 +11,7 @@ set -euo pipefail
 # - Move window to workspace: Shift+Super+1..4 => move_window_workspace_1..4
 # - Ensure Whisker is NOT bound to Super_L / Super_R
 # ------------------------------------------------------------
+# Pour voir la liste des raccourcis: `xfconf-query -c xfce4-keyboard-shortcuts -lv`
 
 WORKSPACE_COUNT=4
 WORKSPACE_ROWS=1
@@ -129,7 +130,23 @@ remove_key_if_exists xfce4-keyboard-shortcuts "/commands/custom/<Super>"
 set_command_shortcut "/commands/custom/Super_L" ""
 set_command_shortcut "/commands/custom/Super_R" ""
 
-echo "8) Reload"
+
+echo "8) Divers"
+echo "   Lock Screen : Super+L au lieu de Ctrl+Alt+L"
+# On libère le raccourci par défaut dans xfwm4 (le gestionnaire de fenêtres)
+remove_key_if_exists xfce4-keyboard-shortcuts "/commands/custom/<Primary><Alt>l"
+
+# On affecte Super+L à la commande de verrouillage
+set_command_shortcut "/commands/custom/<Super>l" "xflock4"
+
+remove_key_if_exists xfce4-keyboard-shortcuts "/commands/custom/<Primary><Alt>t"
+set_command_shortcut "/commands/custom/<Super>t" "exo-open --launch TerminalEmulator"
+
+remove_key_if_exists xfce4-keyboard-shortcuts "/commands/custom/<Primary><Alt>f"
+remove_key_if_exists xfce4-keyboard-shortcuts "/commands/custom/<Super>f"
+
+
+echo "9) Reload"
 reload_session_bits
 
 # Suppression de quelques raccourcis clavier gênants par défaut
@@ -147,5 +164,12 @@ xfconf-query -c keyboard-layout -p /Default/XkbVariant -s oss --create -t string
 # Application immédiate
 setxkbmap fr oss
 
+echo "9) Application de la personnalisation .Xmodmap"
+if [ -f "$HOME/.Xmodmap" ]; then
+  xmodmap "$HOME/.Xmodmap"
+  echo "Fichier .Xmodmap chargé avec succès."
+else
+  echo "Note : Aucun fichier .Xmodmap trouvé dans $HOME."
+fi
 
 echo "Done. If needed, log out / log in once."
