@@ -65,12 +65,18 @@ console = Console()
 
 # --- Configuration Principale ---
 GW_CLASSROOM = "172.25.254.254"
+DEFAULT_APT_PROXY_MODE = "detect"  # "detect" ou "auto"
+APT_PROXY_DETECT_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "apt-proxy-detect.sh")
 
 SERVICES_CONFIG = {
     "apt": {
         "proxies": ["172.25.253.25:3142", "172.16.0.1:3128"],
         "config_file": "/etc/apt/apt.conf.d/01proxy",
         "enable_content": 'Acquire::http::Proxy "http://{proxy}";\nAcquire::https::Proxy "http://{proxy}";',
+        "enable_content_auto_detect": (
+            'Acquire::http::Proxy-Auto-Detect "{script}";\n'
+            'Acquire::https::Proxy-Auto-Detect "{script}";\n'
+        ),
         "disable_content": (
             'Acquire::http::Proxy "DIRECT";\n'
             'Acquire::https::Proxy "DIRECT";\n'
@@ -107,7 +113,7 @@ SERVICES_CONFIG = {
             'export http_proxy="http://{proxy}"\n'
             'export https_proxy="http://{proxy}"\n'
             'export ftp_proxy="http://{proxy}"\n'
-            'export no_proxy="localhost,127.0.0.1,.lan,.local,.edgand.fr"\n'
+            'export no_proxy="localhost,127.0.0.1,.lan,.local,.edgand.fr,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"\n'
         ),
     }
 }
@@ -130,6 +136,22 @@ def check_dependencies():
 def is_root() -> bool:
     """Vérifie si le script est exécuté avec les privilèges root."""
     return os.geteuid() == 0
+
+def ensure_root():
+    """Relance le script avec sudo si nécessaire (et chauffe le cache sudo)."""
+    if is_root():
+        return
+    if not shutil.which("sudo"):
+        log.error("Impossible d'élever les privilèges : 'sudo' n'est pas disponible.")
+        sys.exit(1)
+    try:
+        subprocess.run(["sudo", "-v"], check=True)
+    except subprocess.CalledProcessError as e:
+        log.error(f"Échec de l'authentification sudo : {e}")
+        sys.exit(1)
+    script_path = os.path.abspath(sys.argv[0])
+    command = ["sudo", "-E", sys.executable, script_path] + sys.argv[1:]
+    os.execvp(command[0], command)
 
 def run_command(command: List[str], dry_run: bool) -> bool:
     """Exécute une commande système et log le résultat."""
@@ -176,9 +198,26 @@ def find_available_proxy(proxies: List[str]) -> Optional[str]:
     log.warning("Aucun proxy disponible trouvé dans la liste.")
     return None
 
+def ensure_apt_packages(dry_run: bool):
+    """Désinstalle auto-apt-proxy et installe avahi-utils."""
+    if not shutil.which("apt-get"):
+        log.warning("apt-get introuvable. Les paquets APT ne seront pas gérés.")
+        return
+    if not run_command(["apt-get", "-y", "remove", "auto-apt-proxy"], dry_run):
+        log.warning("La désinstallation de 'auto-apt-proxy' a échoué.")
+    if not run_command(["apt-get", "-y", "install", "avahi-utils"], dry_run):
+        log.warning("L'installation de 'avahi-utils' a échoué.")
+
 # --- Logique de Configuration ---
 
-def manage_service(service_name: str, config: Dict, action: str, dry_run: bool, selected_proxy: Optional[str] = None) -> Tuple[str, Optional[str]]:
+def manage_service(
+    service_name: str,
+    config: Dict,
+    action: str,
+    dry_run: bool,
+    selected_proxy: Optional[str] = None,
+    enable_content_override: Optional[str] = None,
+) -> Tuple[str, Optional[str]]:
     """Gère l'activation ou la désactivation d'un service."""
     status = "Échec"
     
@@ -219,8 +258,11 @@ def manage_service(service_name: str, config: Dict, action: str, dry_run: bool, 
                     os.remove(config_file)
             status = "Désactivé"
     # Action d'activation
-    elif action == "enable" and selected_proxy:
-        content = config["enable_content"].format(proxy=selected_proxy)
+    elif action == "enable" and (selected_proxy or enable_content_override):
+        if enable_content_override:
+            content = enable_content_override
+        else:
+            content = config["enable_content"].format(proxy=selected_proxy)
         log.info(f"Création du fichier de configuration : {config_file}")
         if not dry_run:
             try:
@@ -262,20 +304,24 @@ def main():
     parser.add_argument('--dry-run', action='store_true', help="Simuler les actions sans appliquer de modifications.")
     parser.add_argument('--proxy', type=str, help="Forcer une adresse de proxy spécifique (ex: 192.168.1.1:3128).")
     parser.add_argument('--service', type=str, choices=SERVICES_CONFIG.keys(), help="Cibler un seul service.")
+    parser.add_argument(
+        '--apt-proxy-mode',
+        choices=['detect', 'auto'],
+        help="Pour APT: 'detect' cherche un proxy, 'auto' utilise Proxy-Auto-Detect.",
+    )
     parser.add_argument('-v', '--verbose', action='store_true', help="Activer les logs de débogage.")
     args = parser.parse_args()
 
     if args.verbose:
         log.setLevel(logging.DEBUG)
-    
-    if not args.dry_run and not is_root():
-        log.error("Ce script nécessite des privilèges 'root' pour modifier la configuration système. Utilisez 'sudo' ou l'option --dry-run.")
-        sys.exit(1)
+
+    ensure_root()
 
     if args.dry_run:
         console.print("[yellow]-- Mode DRY-RUN activé : Aucune modification ne sera appliquée --[/yellow]")
 
     check_dependencies()
+    ensure_apt_packages(args.dry_run)
 
     # Déterminer l'action principale : 'enable' ou 'disable'
     action = args.command
@@ -297,19 +343,39 @@ def main():
     summary_table.add_column("Proxy Sélectionné", style="yellow")
     summary_table.add_column("Statut", style="green")
 
+    apt_proxy_mode = args.apt_proxy_mode or DEFAULT_APT_PROXY_MODE
+    apt_proxy_mode_forced = args.apt_proxy_mode is not None
+
     services_to_configure = [args.service] if args.service else SERVICES_CONFIG.keys()
     
     for service_name in services_to_configure:
         config = SERVICES_CONFIG[service_name]
         selected_proxy = None
+        enable_content_override = None
+        summary_proxy_display = None
         
         if action == "enable":
+            if service_name == "apt" and apt_proxy_mode == "auto":
+                if not os.path.isfile(APT_PROXY_DETECT_SCRIPT):
+                    log.error(f"Script Proxy-Auto-Detect introuvable : {APT_PROXY_DETECT_SCRIPT}")
+                    if apt_proxy_mode_forced:
+                        summary_table.add_row(service_name.capitalize(), "Aucun", "[red]Non configuré[/red]")
+                        continue
+                    log.warning("Bascule sur la détection de proxy APT classique.")
+                    apt_proxy_mode = "detect"
+                else:
+                    enable_content_override = config["enable_content_auto_detect"].format(script=APT_PROXY_DETECT_SCRIPT)
+                    summary_proxy_display = "Auto-Detect"
+                    if args.proxy:
+                        log.warning("Option --proxy ignorée pour APT en mode auto-detect.")
+            if service_name == "apt" and apt_proxy_mode == "auto" and enable_content_override:
+                selected_proxy = None
             # Si un proxy est forcé par l'utilisateur
-            if args.proxy:
+            if args.proxy and not (service_name == "apt" and apt_proxy_mode == "auto"):
                 log.info(f"Utilisation du proxy forcé par l'utilisateur : {args.proxy}")
                 selected_proxy = args.proxy
             # Sinon, chercher un proxy disponible pour le service
-            else:
+            elif not (service_name == "apt" and apt_proxy_mode == "auto"):
                 log.info(f"Recherche d'un proxy pour le service '{service_name}'...")
                 selected_proxy = find_available_proxy(config["proxies"])
                 if not selected_proxy:
@@ -317,11 +383,18 @@ def main():
                     summary_table.add_row(service_name.capitalize(), "Aucun", "[red]Non configuré[/red]")
                     continue
         
-        status, final_proxy = manage_service(service_name, config, action, args.dry_run, selected_proxy)
+        status, final_proxy = manage_service(
+            service_name,
+            config,
+            action,
+            args.dry_run,
+            selected_proxy,
+            enable_content_override,
+        )
         
         # Mettre à jour le statut dans le tableau
         status_color = "green" if status in ["Activé", "Désactivé"] else "red"
-        proxy_display = final_proxy if final_proxy else "N/A"
+        proxy_display = summary_proxy_display or (final_proxy if final_proxy else "N/A")
         summary_table.add_row(service_name.capitalize(), proxy_display, f"[{status_color}]{status}[/{status_color}]")
 
     console.print(summary_table)
