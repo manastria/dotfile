@@ -107,7 +107,7 @@ SERVICES_CONFIG = {
             'export http_proxy="http://{proxy}"\n'
             'export https_proxy="http://{proxy}"\n'
             'export ftp_proxy="http://{proxy}"\n'
-            'export no_proxy="localhost,127.0.0.1,.lan,.local"\n'
+            'export no_proxy="localhost,127.0.0.1,.lan,.local,.edgand.fr"\n'
         ),
     }
 }
