@@ -1,7 +1,7 @@
 #!/bin/bash
 # Configuration
 # L'IP de ton serveur apt-cacher-ng principal (le plus probable)
-STATIC_IP="192.168.X.Y" 
+STATIC_IP="172.25.253.25" 
 PORT="3142"
 
 # 1. Tentative "Éclair" via Ping
