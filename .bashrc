@@ -19,6 +19,17 @@ if [ -f /etc/bashrc ]; then
 	 . /etc/bashrc
 fi
 
+
+# If this is an xterm set the title to user@host:dir
+case "$TERM" in
+xterm*|rxvt*)
+    PS1="\[\e]0;${debian_chroot:+($debian_chroot)}\u@\h: \w\a\]$PS1"
+    ;;
+*)
+    ;;
+esac
+
+
 # load all files from .shell/bashrc.d directory
 if [ -d "$HOME"/.shellrc/bashrc.d ]; then
   for file in "$HOME"/.shellrc/bashrc.d/*.bash; do
@@ -53,17 +64,6 @@ shopt -s checkwinsize
 if [ -z "${debian_chroot:-}" ] && [ -r /etc/debian_chroot ]; then
     debian_chroot=$(cat /etc/debian_chroot)
 fi
-
-
-# If this is an xterm set the title to user@host:dir
-case "$TERM" in
-xterm*|rxvt*)
-    PS1="\[\e]0;${debian_chroot:+($debian_chroot)}\u@\h: \w\a\]$PS1"
-    ;;
-*)
-    ;;
-esac
-
 
 # enable color support of ls and also add handy aliases
 if [ -x /usr/bin/dircolors ]; then
@@ -112,12 +112,42 @@ if ! shopt -oq posix; then
 fi
 
 # Ajout du répertoire pour le répertoire bin perso
-export PATH=$PATH:${HOME}/bin
+export PATH=$PATH:${HOME}/bin:${HOME}/.local/bin
 
 # Ajout du répertoire pour 'sl'
 export PATH=$PATH:/usr/games
 
+# Déduplique PATH proprement (sans processus externe)
+path_clean() {
+  local saveIFS="$IFS"
+  IFS=':'
 
-# Install Ruby Gems to ~/gems
-export GEM_HOME=$HOME/gems
-export PATH=$HOME/gems/bin:$PATH
+  # tableau associatif pour marquer les chemins déjà vus (Bash ≥ 4)
+  local -A seen=()
+  local -a out=()
+  local p
+
+  for p in $PATH; do
+    # ignorer les entrées vides
+    [[ -z $p ]] && continue
+    # enlever un éventuel slash final pour normaliser
+    p="${p%/}"
+    [[ ! -d $p ]] && continue        # <- filtre les chemins inexistants
+    # ignorer si déjà présent
+    [[ -n ${seen["$p"]} ]] && continue
+    seen["$p"]=1
+    out+=("$p")
+  done
+
+  # reconstruire PATH avec des :
+  IFS=':'
+  PATH="${out[*]}"
+  IFS="$saveIFS"
+  export PATH
+}
+
+# Nettoyer PATH à chaque ouverture de shell interactif
+path_clean
+
+# Retourne toujours un code de sortie 0
+return 0 2>/dev/null || true
