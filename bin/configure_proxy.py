@@ -4,7 +4,7 @@
 
 """
 Nom du fichier    : proxy_manager.py
-Auteur            : Manastria (Amélioré par Gemini)
+Auteur            : Manastria
 Date de création  : 31/10/2024
 Version           : 1.0
 Description       : Script de configuration automatique des proxys pour les environnements
@@ -150,7 +150,7 @@ def ensure_root():
         log.error(f"Échec de l'authentification sudo : {e}")
         sys.exit(1)
     script_path = os.path.abspath(sys.argv[0])
-    command = ["sudo", "-E", sys.executable, script_path] + sys.argv[1:]
+    command = ["sudo", sys.executable, script_path] + sys.argv[1:]
     os.execvp(command[0], command)
 
 def run_command(command: List[str], dry_run: bool) -> bool:
