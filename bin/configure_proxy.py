@@ -21,6 +21,8 @@ Options :
   --dry-run       : Simuler les actions sans appliquer de modifications.
   --proxy <IP:port>: Forcer une adresse de proxy spécifique pour une commande.
   --service <nom> : Spécifier un service unique à configurer (apt, docker, git, env).
+  --apt-proxy-mode {detect,auto}: Pour APT, choisir détection classique ou Proxy-Auto-Detect.
+  -v, --verbose   : Activer les logs de débogage.
   -v, --verbose   : Activer les logs de débogage.
 
 Dépendances       :
