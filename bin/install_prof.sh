@@ -39,6 +39,7 @@ if [ "$USER" != "prof" ]; then
     echo -e "${YELLOW}Bascule vers session prof...${NC}"
     PROXY_ENV=""
     [ -n "$http_proxy" ] && PROXY_ENV="export http_proxy=$http_proxy https_proxy=$https_proxy;"
+    # Le sudo est nécessaire pour basculer vers le compte prof sans demander de mot de passe (grâce à la configuration précédente)
     sudo su - prof -c "$PROXY_ENV curl -fsSL https://raw.githubusercontent.com/manastria/dotfile/refs/heads/dev1/bin/install_prof.sh | bash"
     
 else
