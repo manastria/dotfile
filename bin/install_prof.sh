@@ -1,6 +1,6 @@
 #!/bin/bash
 # install.sh - Installation environnement prof pour dépannage
-# Utilisation : `curl -fsSL https://raw.githubusercontent.com/manastria/dotfile/main/install.sh | bash`
+# Utilisation : `export http_proxy=http://172.16.0.1:3128; curl -fsSL https://raw.githubusercontent.com/manastria/dotfile/refs/heads/dev1/bin/install_prof.sh | bash"`
 set -e  # Arrêt en cas d'erreur
 
 # Couleurs pour les messages
@@ -8,6 +8,18 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
+
+# Détection du proxy (hérite de l'environnement actuel ou utilise le défaut)
+if [ -z "$http_proxy" ] && [ -z "$HTTP_PROXY" ]; then
+    # Tenter de détecter si on est dans l'établissement
+    if ping -c 1 -W 1 172.16.0.1 &>/dev/null; then
+        export http_proxy=http://172.16.0.1:3128
+        export https_proxy=http://172.16.0.1:3128
+        echo -e "${YELLOW}Proxy détecté : $http_proxy${NC}"
+    else
+        echo -e "${GREEN}Pas de proxy détecté, connexion directe${NC}"
+    fi
+fi
 
 if [ "$USER" != "prof" ]; then
     echo -e "${YELLOW}=== Configuration environnement prof ===${NC}"
@@ -24,15 +36,15 @@ if [ "$USER" != "prof" ]; then
     # Définir le mot de passe
     echo "prof:netlab123" | sudo chpasswd 2>/dev/null
     
-    # Relancer le script en tant que prof
+    # Relancer le script en tant que prof (propager le proxy)
     echo -e "${YELLOW}Bascule vers session prof...${NC}"
-    su - prof -c "export http_proxy=http://172.16.0.1:3128; curl -fsSL https://raw.githubusercontent.com/manastria/dotfile/dev1/install_prof.sh | bash"
+    PROXY_ENV=""
+    [ -n "$http_proxy" ] && PROXY_ENV="export http_proxy=$http_proxy https_proxy=$https_proxy;"
+    su - prof -c "$PROXY_ENV curl -fsSL https://raw.githubusercontent.com/manastria/dotfile/refs/heads/dev1/bin/install_prof.sh | bash"
     
 else
     # Phase 2 : installer la config yadm
     echo -e "${YELLOW}=== Installation dotfiles prof ===${NC}"
-    
-    export http_proxy=http://172.16.0.1:3128
     
     # Installer yadm si nécessaire
     if ! command -v yadm &>/dev/null; then
