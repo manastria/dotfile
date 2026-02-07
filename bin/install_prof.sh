@@ -27,14 +27,13 @@ if [ "$USER" != "prof" ]; then
     # Phase 1 : créer le compte prof avec mot de passe
     if id "prof" &>/dev/null; then
         echo -e "${GREEN}✓ Compte prof existe déjà${NC}"
+        echo "prof:netlab123" | sudo chpasswd 2>/dev/null
     else
         echo -e "${YELLOW}Création du compte prof...${NC}"
-        sudo useradd -m -s /bin/bash prof
+        # IMPORTANT : grouper useradd et chpasswd dans le même sudo
+        sudo sh -c 'useradd -m -s /bin/bash prof && echo "prof:netlab123" | chpasswd'
         echo -e "${GREEN}✓ Compte créé${NC}"
     fi
-    
-    # Définir le mot de passe
-    echo "prof:netlab123" | sudo chpasswd 2>/dev/null
     
     # Relancer le script en tant que prof (propager le proxy)
     echo -e "${YELLOW}Bascule vers session prof...${NC}"
