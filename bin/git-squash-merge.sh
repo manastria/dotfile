@@ -82,7 +82,7 @@ git checkout $TARGET_BRANCH > /dev/null 2>&1
 
 # Effectuer le squash merge
 info "Squash merge de $SOURCE_BRANCH dans $TARGET_BRANCH..."
-if git merge --squash --ff $SOURCE_BRANCH; then
+if git merge --squash -X theirs --ff $SOURCE_BRANCH; then
     success "Squash effectué"
 else
     error "Échec du squash merge. Résolvez les conflits manuellement."
