@@ -130,7 +130,6 @@ up = pull --rebase --autostash # Récupère les derniers commits et applique les
 # ====================
 # Configuration & alias
 # ====================
-verifuser = config --get-regexp 'user.*'  # Vérifier le nom d'utilisateur
 quote-string = "!read -r l; printf \\\"!; printf %s \"$l\" | sed 's/\\([\\\"]\\)/\\\\\\1/g'; printf \" #\\\"\\n\" #"  # Quote a command
 quote-string-undo = "!read -r l; printf %s \"$l\" | sed 's/\\\\\\([\\\"]\\)/\\1/g'; printf \"\\n\" #"  # Unquote a command
 alias = !git config --list | grep 'alias\\.' | sed 's/alias\\.\\([^=]*\\)=\\(.*\\)/\\1/' | sort  # List all alias names
@@ -189,15 +188,6 @@ force-delete-merged-branches = !git branch --merged master | grep -v 'master' | 
 current-branch = !git branch | grep '^*' | sed s/\\*\\ //; # Affiche la branche actuelle
 track = !git branch --track $(git current-branch) origin/$(git current-branch); # Crée un suivi pour la branche actuelle avec le dépôt distant correspondant
 publish = !git push origin $(git current-branch) && echo $(git track); # Publie la branche actuelle et configure le suivi
-
-# ====================
-# Configuration & alias
-# ====================
-quote-string = "!read -r l; printf \\\"!; printf %s \"$l\" | sed 's/\\([\\\"]\\)/\\\\\\1/g'; printf \" #\\\"\\n\" #" # Convertit une commande sh en chaîne pour un alias git
-quote-string-undo = "!read -r l; printf %s \"$l\" | sed 's/\\\\\\([\\\"]\\)/\\1/g'; printf \"\\n\" #" # Convertit une chaîne d'alias git en commande sh
-alias = !git config --list | grep 'alias\\.' | sed 's/alias\\.\\([^=]*\\)=\\(.*\\)/\\1/' | sort; # Liste uniquement les noms des alias
-aliases = !git config --list | grep 'alias\\.' | sed 's/alias\\.\\([^=]*\\)=\\(.*\\)/\\1\\\t\\2/' | sort; # Liste les noms et commandes des alias
-
 
 # ====================
 # Sous modules
