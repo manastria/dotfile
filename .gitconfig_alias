@@ -42,7 +42,7 @@ lnc = log --pretty=format:"%h\\ %s\\ [%cn]"    # Journal des commits sans décor
 logtree = log --graph --oneline --decorate   # Affiche l'arbre des commits
 ls = log --pretty=format:"%C(yellow)%h%Cred%d\\ %Creset%s%Cblue\\ [%cn]" --decorate  # Journal des commits avec formatage spécifique
 mylog = log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --author="$(git config USER.name)"   # Journal des commits de l'utilisateur actuel
-s = status -s     # Affiche le statut de l'arborescence de travail avec le format court
+s = status --short --branch     # Affiche le statut de l'arborescence de travail avec le format court et le nom de la branche
 sall = status -uall   # Affiche tous les fichiers modifiés, pas seulement les répertoires
 sl = stash list # Liste tous les "stash" enregistrés
 sts = status -sb  # Affiche la branche et les informations de suivi
@@ -77,7 +77,7 @@ reb = "!r() { git rebase -i HEAD~$1; }; r"   # Réorganise interactivement les "
 save = !git add -A && git commit -m 'SAVEPOINT' # Ajoute tous les changements et crée un commit avec le message "SAVEPOINT"
 start = "!f() { git init && git commit --allow-empty -m 'Initial commit'; }; f" # Initialise un nouveau dépôt avec un commit vide initial
 undo = ! git reset --soft HEAD~1   # Annule le dernier commit tout en conservant les changements
-wip = commit -am "WIP" # Crée un commit avec le message "WIP" pour tous les changements
+wip = !git add -A && git commit -m \"wip: $(date +%Y-%m-%d_%H:%M)\" # Crée un commit avec le message "WIP" pour tous les changements
 
 
 # ====================
