@@ -196,3 +196,10 @@ pullall = !"git pull origin $(git rev-parse --abbrev-ref HEAD); git submodule fo
 cloneall = clone --recursive     # Clone un dépôt et ses sous-modules
 update-subs = submodule update --remote # Met à jour les sous-modules
 addsub = "!f() { git submodule add $1 $2; git commit -m \"Add $2 submodule\"; }; f"  # Ajoute un sous-module
+
+# ====================
+# SSH
+# ====================
+# ~/.bashrc
+alias sshpw='ssh -o PubkeyAuthentication=no -o PreferredAuthentications=password' # Force l'authentification par mot de passe
+alias sshtest='ssh -o IdentitiesOnly=yes'  # Envoie que les clés spécifiées
