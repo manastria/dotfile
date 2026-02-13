@@ -201,5 +201,5 @@ addsub = "!f() { git submodule add $1 $2; git commit -m \"Add $2 submodule\"; };
 # SSH
 # ====================
 # ~/.bashrc
-alias sshpw='ssh -o PubkeyAuthentication=no -o PreferredAuthentications=password' # Force l'authentification par mot de passe
-alias sshtest='ssh -o IdentitiesOnly=yes'  # Envoie que les clés spécifiées
+sshpw='ssh -o PubkeyAuthentication=no -o PreferredAuthentications=password' # Force l'authentification par mot de passe
+sshtest='ssh -o IdentitiesOnly=yes'  # Envoie que les clés spécifiées
