@@ -57,7 +57,6 @@ echo "" # Ajoute un saut de ligne pour la lisibilité
 echo -e "${YELLOW}Étape 3: Installation des nouveaux paquets${NC}"
 packages=(
     aptitude
-    auto-apt-proxy
     bash-completion 
     bat
     byobu
