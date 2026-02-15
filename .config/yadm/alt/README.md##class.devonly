@@ -1,16 +1,28 @@
-# Configuration Linux avec YADM
+# Installation des dotfiles
 
-Ce dépôt contient les fichiers de configuration Linux de l'utilisateur Manastria. Vous pouvez facilement les utiliser en suivant les étapes ci-dessous.
-
-## Clonage du dépôt
+> [!IMPORTANT]
+> Assurez-vous d'avoir installé `yadm` sur votre système avant de cloner le dépôt.
 
 Pour utiliser ces fichiers de configuration sur votre système, vous pouvez les cloner en utilisant `yadm` en exécutant la commande suivante :
 
 ```bash
-yadm clone https://github.com/manastria/dotfile.git
+yadm clone --recurse-submodules https://github.com/manastria/dotfile.git
 ```
 
 Cela créera une copie locale des fichiers de configuration sur votre système.
+
+> [!NOTE]
+> Pour gagner du temps et de la bande passante, vous pouvez cloner uniquement la dernière version du dépôt sans les sous-modules :
+>
+> ```bash
+> git clone --depth 1 <https://github.com/manastria/dotfile.git>
+> ```
+
+Installer les paquets couramment utilisés :
+
+```bash
+bin/install_paquets.sh
+```
 
 ## Mise à jour des fichiers de configuration
 
@@ -28,35 +40,44 @@ Si vous souhaitez réinitialiser vos fichiers de configuration locaux à l'état
 yadm reset --hard
 ```
 
-## Changement de l'URL du dépôt distant (HTTP vers SSH ou vice versa)
+## Installations
 
-Si vous souhaitez changer l'URL du dépôt distant de HTTPS à SSH (ou vice versa), vous pouvez utiliser la commande `yadm remote set-url`. Voici comment faire :
+### Installer starship
 
-### Passage de HTTPS à SSH
-
-```bash
-yadm remote set-url origin git@github.com:manastria/dotfile.git
-```
-
-Uniquement pour push :
-```bash
-yadm remote set-url --push origin git@github.com:manastria/dotfile.git
-```
-
-### Passage de SSH à HTTPS
+Starship est un prompt shell rapide et personnalisable qui affiche des informations pertinentes tout en restant minimal et élégant.
 
 ```bash
-yadm remote set-url origin https://github.com/manastria/dotfile.git
+bin/install_starship.sh
 ```
-Uniquement pour push :
+
+## Gestion des sous modules
+
+### Téléchargement des sous modules
+
+Après avoir cloné le dépôt, récupérez les submodules avec :
+
 ```bash
-yadm remote set-url --push origin https://github.com/manastria/dotfile.git
+yadm submodule update --init --recursive
 ```
 
+Cette commande initialisera et téléchargera tous les submodules configurés dans le dépôt.
 
-Assurez-vous d'avoir configuré correctement vos clés SSH si vous choisissez d'utiliser l'URL SSH.
+Un script existe dans le répertoire `bin` du dépôt pour mettre à jour les sous modules :
 
-C'est tout ! Vous pouvez maintenant utiliser les fichiers de configuration Linux de Manastria à l'aide de `yadm` et les personnaliser selon vos besoins.
+```bash
+yadm_check_submodules.sh
+```
 
-## Prompt Starship
-<https://starship.rs/>
+### Vérifier l’état des sous-modules
+
+Pour vérifier si les submodules sont à jour, utilisez la commande :
+
+```bash
+git submodule status
+```
+
+Si il y a des modifications à télécharger, utiliser la même commande que ci-dessus :
+
+```bash
+git submodule update --init --recursive
+```
