@@ -69,6 +69,8 @@ alias pgp_export_private='function gpg_export_private() { gpg --armor --export-s
 alias pgp_import_private='function gpg_import_private() { gpg --import-options restore,keep-ownertrust --import "$1-private.asc"; }; gpg_import_private'
 
 
+alias ipb='ip -c -br a'
+
 ################################################################################
 # +--------------------------------------------------------------------------+ #
 # +                                                                          + #
