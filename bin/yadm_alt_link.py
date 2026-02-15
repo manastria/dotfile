@@ -106,6 +106,25 @@ def exclude_path() -> pathlib.Path:
     """Renvoie le chemin du fichier d'exclusion git local."""
     return pathlib.Path(git("rev-parse", "--git-path", "info/exclude").stdout.strip())
 
+# ───────────────────────── link / junction detection ──────────────
+
+def is_link_or_junction(path: pathlib.Path) -> bool:
+    """Vérifie si le chemin est un lien symbolique ou une jonction Windows."""
+    if path.is_symlink():
+        return True
+    # Python 3.12+ expose Path.is_junction()
+    if hasattr(path, 'is_junction'):
+        return path.is_junction()
+    # Fallback pour Python < 3.12 sous Windows
+    if platform.system() == 'Windows':
+        try:
+            os.readlink(path)
+            return True
+        except OSError:
+            pass
+    return False
+
+
 # ───────────────────────── link creation ──────────────────────────
 
 def make_link(target: pathlib.Path, link: pathlib.Path) -> None:
@@ -114,7 +133,7 @@ def make_link(target: pathlib.Path, link: pathlib.Path) -> None:
     Gère la création de liens relatifs et la solution de rechange pour Windows
     (jonction pour les répertoires, lien physique pour les fichiers).
     """
-    if link.exists() or link.is_symlink():
+    if link.exists() or is_link_or_junction(link):
         if DEBUG: print(f"DEBUG: Le lien '{link}' existe déjà.")
         return
 
@@ -162,7 +181,7 @@ def _fix_symlinks_after_rename(root: pathlib.Path, old_name: str, new_name: str)
     fixed = 0
     alt_dir = root / ALT_DIR
     for item in root.iterdir():
-        if item.is_symlink():
+        if is_link_or_junction(item):
             target = os.readlink(item)
             if OLD_SUFFIX in str(target):
                 new_target = str(target).replace(OLD_SUFFIX, SUFFIX)
@@ -216,7 +235,7 @@ def create_working_link_or_file(
     root: pathlib.Path,
 ) -> None:
     """Crée un lien de travail ou un fichier selon les contraintes."""
-    if link.exists() or link.is_symlink():
+    if link.exists() or is_link_or_junction(link):
         if DEBUG:
             print(f"DEBUG: Le lien/fichier '{link}' existe déjà.")
         return
@@ -311,7 +330,7 @@ def working_is_correct(
     """Vérifie si le working-name correspond déjà à la variante."""
     if not var_path.exists():
         return False
-    if work_path.is_symlink():
+    if is_link_or_junction(work_path):
         if avoid_symlink:
             return False
         return resolve_symlink_target(work_path) == var_path.resolve()
@@ -322,7 +341,15 @@ def working_is_correct(
 
 def remove_working_path(work_path: pathlib.Path) -> None:
     """Supprime le working-name sans toucher à la variante."""
-    if work_path.is_symlink() or work_path.is_file():
+    if work_path.is_symlink():
+        work_path.unlink()
+        return
+    # Jonction Windows : os.rmdir supprime la jonction sans suivre la cible
+    # (shutil.rmtree suivrait la jonction et détruirait le contenu cible)
+    if is_link_or_junction(work_path):
+        os.rmdir(work_path)
+        return
+    if work_path.is_file():
         work_path.unlink()
         return
     if work_path.is_dir():
@@ -534,7 +561,7 @@ def process_one(
     relative_var_path = var_path.relative_to(root / ALT_DIR).as_posix()
 
     # Cas 1 : La variante n'existe pas, mais le working-name existe.
-    if not var_path.exists() and work_path.exists() and not work_path.is_symlink():
+    if not var_path.exists() and work_path.exists() and not is_link_or_junction(work_path):
         ensure_variant_dirs(var_path)
         work_path.rename(var_path)
         create_working_link_or_file(var_path, work_path, rel, root)
@@ -545,14 +572,14 @@ def process_one(
         stats.moved += 1
 
     # Cas 2 : La variante existe, mais le working-name n'existe pas.
-    elif var_path.exists() and not work_path.exists() and not work_path.is_symlink():
+    elif var_path.exists() and not work_path.exists() and not is_link_or_junction(work_path):
         create_working_link_or_file(var_path, work_path, rel, root)
         if not avoid_symlink:
             print_link_created(rel, relative_var_path)
         stats.linked += 1
 
     # Cas 3 : La variante existe et le working-name existe.
-    elif var_path.exists() and (work_path.exists() or work_path.is_symlink()):
+    elif var_path.exists() and (work_path.exists() or is_link_or_junction(work_path)):
         if working_is_correct(work_path, var_path, avoid_symlink):
             print(f"✓ Déjà configuré pour {rel}")
             stats.already_ok += 1
@@ -572,8 +599,8 @@ def process_one(
             else:
                 print("· Utilisez --force pour remplacer le working-name.")
 
-    # Cas 4 : La variante n'existe pas et le working-name est un symlink.
-    elif not var_path.exists() and work_path.is_symlink():
+    # Cas 4 : La variante n'existe pas et le working-name est un lien/jonction.
+    elif not var_path.exists() and is_link_or_junction(work_path):
         print(f"Avertissement : '{rel}' est un lien mais la variante est absente. Aucun changement appliqué.")
         stats.warnings += 1
 
