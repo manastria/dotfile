@@ -51,9 +51,3 @@ lso() { ls -l "$@" | awk '{k=0;for(i=0;i<=8;i++)k+=((substr($1,i+2,1)~/[rwx]/)*2
 
 # Raccourcis vim
 alias vimln="vim +\${1} -c 'set paste' \${2}"
-
-# ZSH
-alias zzz1='TERM=xterm-256color ZSH_PROFILE=omzp10s tmux'
-alias zzz2='TERM=xterm-256color ZSH_PROFILE=base zsh -i'
-alias zzz3="TERM=xterm-256color ZSH_PROFILE=omzp10s zsh -i"
-alias zzz5="TERM=xterm-256color ZSH_PROFILE=omzp10writer tmux"

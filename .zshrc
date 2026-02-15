@@ -14,39 +14,23 @@ fi
 
 
 case $ZSH_PROFILE in
-  omz)
-    # Path to your oh-my-zsh installation.
-    source "${HOME}/.zsh/activate.zsh"
-    ;;
-  omzp10*)
-    # Path to your oh-my-zsh installation.
-    ZSH_THEME="powerlevel10k/powerlevel10k"
-    source "${HOME}/.zsh/activate.zsh"
-    ;;
   base)
     source "${HOME}/.zsh/config/zshrc.base"
     ;;
+  omz)
+    source "${HOME}/.zsh/activate.zsh"
+    ;;
   *)
+    # Convention : ZSH_PROFILE = suffixe du fichier p10k
+    # Ex: ZSH_PROFILE=simple → .zsh/powerlevel10k/p10k.zsh.simple
+    ZSH_THEME="powerlevel10k/powerlevel10k"
+    source "${HOME}/.zsh/activate.zsh"
+    local pfile="${HOME}/.zsh/powerlevel10k/p10k.zsh.${ZSH_PROFILE}"
+    if [[ -f ${pfile} ]]; then
+      source ${pfile}
+    fi
     ;;
 esac
-
-
-if [[ $ZSH_THEME =~ '.*powerlevel10k.*' ]]; then
-  case $ZSH_PROFILE in
-    omzp10)
-      PFILE=${HOME}/.zsh/powerlevel10k/p10k.zsh.powerline
-      [[ ! -f ${PFILE} ]] || source ${PFILE}
-      ;;
-    omzp10s)
-      PFILE=${HOME}/.zsh/powerlevel10k/p10k.zsh.simple
-      [[ ! -f ${PFILE} ]] || source ${PFILE}
-      ;;
-    omzp10writer)
-      PFILE=${HOME}/.zsh/powerlevel10k/p10k.zsh.writer
-      [[ ! -f ${PFILE} ]] || source ${PFILE}
-      ;;
-  esac
-fi
 
 
 #
