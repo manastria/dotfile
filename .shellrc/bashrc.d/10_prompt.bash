@@ -52,7 +52,7 @@ _detect_color_support() {
   # Retourne "yes" ou "no" via echo (usage : COLOR=$(_detect_color_support))
   local term="$TERM"
   case "$term" in
-    xterm-color|*-256color|xterm) ;;
+    xterm-color|*-256color|xterm|linux) ;;
     *) echo "no"; return ;;
   esac
   if command -v tput >/dev/null 2>&1 && tput setaf 1 >/dev/null 2>&1; then
