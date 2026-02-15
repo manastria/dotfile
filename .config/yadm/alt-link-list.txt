@@ -1,3 +1,5 @@
 .vscode
 .editorconfig
 .gitignore
+docs
+CLAUDE.md
