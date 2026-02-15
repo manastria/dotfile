@@ -71,6 +71,12 @@ alias pgp_import_private='function gpg_import_private() { gpg --import-options r
 
 alias ipb='ip -c -br a'
 
+# ====================
+# SSH
+# ====================
+alias sshpw='ssh -o PubkeyAuthentication=no -o PreferredAuthentications=password' # Force l'authentification par mot de passe
+alias sshtest='ssh -o IdentitiesOnly=yes'  # Envoie que les clés spécifiées
+
 ################################################################################
 # +--------------------------------------------------------------------------+ #
 # +                                                                          + #

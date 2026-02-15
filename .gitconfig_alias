@@ -197,9 +197,4 @@ cloneall = clone --recursive     # Clone un dépôt et ses sous-modules
 update-subs = submodule update --remote # Met à jour les sous-modules
 addsub = "!f() { git submodule add $1 $2; git commit -m \"Add $2 submodule\"; }; f"  # Ajoute un sous-module
 
-# ====================
-# SSH
-# ====================
-# ~/.bashrc
-sshpw='ssh -o PubkeyAuthentication=no -o PreferredAuthentications=password' # Force l'authentification par mot de passe
-sshtest='ssh -o IdentitiesOnly=yes'  # Envoie que les clés spécifiées
+
