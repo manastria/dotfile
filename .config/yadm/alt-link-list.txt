@@ -3,3 +3,4 @@
 .gitignore
 docs
 CLAUDE.md
+README.md
