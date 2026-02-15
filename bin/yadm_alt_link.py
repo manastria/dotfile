@@ -2,7 +2,9 @@
 """
 yadm_alt_link.py — manage yadm alternates + dev symlinks (Linux/macOS/WSL/Windows)
 ==================================================================
-* Converts each listed path into a yadm *variant* `<name>##os.None`.
+* Converts each listed path into a yadm *variant* `<name>##class.devonly`.
+  The `class.devonly` suffix never matches any yadm class, so the file is
+  only present in the development checkout, not deployed to $HOME.
 * Creates a working‑name link (symlink, junction, or hard‑link when
   Windows lacks symlink privilege).
 * Adds the working name to `.git/info/exclude`.
@@ -11,6 +13,9 @@ yadm_alt_link.py — manage yadm alternates + dev symlinks (Linux/macOS/WSL/Wind
 
 If no paths are passed, the script reads them from
 `.config/yadm/alt-link-list.txt` (one per line, `#` allowed).
+
+Migration: files using the old `##os.None` suffix are automatically
+renamed to `##class.devonly` on first run.
 
 Windows notes
 -------------
@@ -26,10 +31,12 @@ import platform
 import shutil
 import argparse
 import filecmp
+from dataclasses import dataclass
 from typing import List
 
 # --- Configuration ---
-SUFFIX = "##os.None"
+SUFFIX = "##class.devonly"
+OLD_SUFFIX = "##os.None"
 ALT_DIR = pathlib.PurePosixPath(".config/yadm/alt")
 LIST_FILE = pathlib.PurePosixPath(".config/yadm/alt-link-list.txt")
 DEBUG = False # Mettre à True pour afficher les informations de débogage
@@ -39,6 +46,45 @@ NO_SYMLINK = {
     ".gitmodules",
 }
 MAX_TRACKED_LIST = 30
+
+
+@dataclass
+class ProcessingStats:
+    """Compteurs de suivi pour le traitement des fichiers."""
+    processed: int = 0
+    moved: int = 0
+    linked: int = 0
+    replaced: int = 0
+    already_ok: int = 0
+    warnings: int = 0
+    skipped: int = 0
+    migrated: int = 0
+
+    @property
+    def changes_made(self) -> int:
+        """Nombre total de modifications effectuées."""
+        return self.moved + self.linked + self.replaced + self.migrated
+
+    def summary(self) -> str:
+        """Retourne un résumé formaté des statistiques."""
+        parts = []
+        if self.migrated:
+            parts.append(f"{self.migrated} migré(s)")
+        if self.moved:
+            parts.append(f"{self.moved} déplacé(s)")
+        if self.linked:
+            parts.append(f"{self.linked} lié(s)")
+        if self.replaced:
+            parts.append(f"{self.replaced} remplacé(s)")
+        if self.already_ok:
+            parts.append(f"{self.already_ok} déjà OK")
+        if self.warnings:
+            parts.append(f"{self.warnings} avertissement(s)")
+        if self.skipped:
+            parts.append(f"{self.skipped} ignoré(s)")
+        if not parts:
+            return f"{self.processed} traité(s), aucune modification"
+        return f"{self.processed} traité(s) : " + ", ".join(parts)
 
 # ───────────────────────── git helpers ────────────────────────────
 
@@ -102,6 +148,60 @@ def format_rel(path: pathlib.Path, root: pathlib.Path) -> str:
         return path.relative_to(root).as_posix()
     except ValueError:
         return str(path)
+
+
+# ───────────────────────── migration ──────────────────────────────
+
+def _fix_symlinks_after_rename(root: pathlib.Path, old_name: str, new_name: str) -> int:
+    """Répare les symlinks cassés après un renommage de variante.
+
+    Parcourt la racine du dépôt à la recherche de symlinks dont la cible
+    contient l'ancien nom et les redirige vers le nouveau.
+    Retourne le nombre de symlinks réparés.
+    """
+    fixed = 0
+    alt_dir = root / ALT_DIR
+    for item in root.iterdir():
+        if item.is_symlink():
+            target = os.readlink(item)
+            if OLD_SUFFIX in str(target):
+                new_target = str(target).replace(OLD_SUFFIX, SUFFIX)
+                item.unlink()
+                os.symlink(new_target, item)
+                print(f"  · Symlink réparé : {item.name} → {new_target}")
+                fixed += 1
+    return fixed
+
+
+def migrate_old_suffix(root: pathlib.Path, stats: 'ProcessingStats') -> None:
+    """Migre les fichiers ##os.None vers ##class.devonly dans le répertoire alt/.
+
+    - Renomme les fichiers/dossiers avec l'ancien suffixe
+    - Répare les symlinks cassés par le renommage
+    - Les hardlinks survivent au rename (même inode)
+    """
+    alt_path = root / ALT_DIR
+    if not alt_path.exists():
+        return
+
+    renamed = []
+    for item in sorted(alt_path.iterdir()):
+        if item.name.endswith(OLD_SUFFIX):
+            new_name = item.name.replace(OLD_SUFFIX, SUFFIX)
+            new_path = item.parent / new_name
+            if new_path.exists():
+                print(f"  WARN: '{new_name}' existe déjà, migration ignorée pour '{item.name}'")
+                stats.warnings += 1
+                continue
+            item.rename(new_path)
+            renamed.append((item.name, new_name))
+            stats.migrated += 1
+
+    if renamed:
+        print(f"\n=== Migration {OLD_SUFFIX} → {SUFFIX} ===")
+        for old, new in renamed:
+            print(f"  · {old} → {new}")
+        _fix_symlinks_after_rename(root, OLD_SUFFIX, SUFFIX)
 
 
 def should_avoid_symlink(rel: str) -> bool:
@@ -171,6 +271,36 @@ def is_same_content(path_a: pathlib.Path, path_b: pathlib.Path) -> bool:
         return filecmp.cmp(path_a, path_b, shallow=False)
     except OSError:
         return False
+
+
+def report_sync_divergence(
+    work_path: pathlib.Path,
+    var_path: pathlib.Path,
+    rel: str,
+    root: pathlib.Path,
+) -> None:
+    """Compare les mtime et affiche la commande cp pour re-synchroniser."""
+    if not work_path.exists() or not var_path.exists():
+        return
+    if is_same_inode(work_path, var_path):
+        return
+    if is_same_content(work_path, var_path):
+        return
+
+    work_mtime = work_path.stat().st_mtime
+    var_mtime = var_path.stat().st_mtime
+    work_rel = format_rel(work_path, root)
+    var_rel = format_rel(var_path, root)
+
+    if work_mtime > var_mtime:
+        print(f"  SYNC: '{work_rel}' est plus récent que la variante")
+        print(f"        → cp '{work_rel}' '{var_rel}'")
+    elif var_mtime > work_mtime:
+        print(f"  SYNC: La variante '{var_rel}' est plus récente")
+        print(f"        → cp '{var_rel}' '{work_rel}'")
+    else:
+        print(f"  SYNC: '{rel}' diverge de sa variante (même mtime, contenu différent)")
+        print(f"        Vérifiez manuellement : '{work_rel}' vs '{var_rel}'")
 
 
 def working_is_correct(
@@ -308,6 +438,49 @@ def get_targets(root: pathlib.Path, paths: List[str]) -> List[str]:
     print("Erreur: Aucun chemin n'a été fourni et le fichier de liste est introuvable ou vide.", file=sys.stderr)
     sys.exit(1)
 
+# ───────────────────────── validation ─────────────────────────────
+
+def validate_targets(targets: List[str], root: pathlib.Path) -> List[str]:
+    """Valide et déduplique la liste des chemins cibles.
+
+    - Normalise les / finaux
+    - Détecte et élimine les doublons
+    - Détecte les chemins imbriqués (ex: docs et docs/sub)
+    - Signale les entrées introuvables (ni working-name ni variante)
+    Retourne la liste dédupliquée.
+    """
+    # Normalisation et déduplication
+    seen = {}
+    deduped = []
+    for t in targets:
+        normalized = t.rstrip("/")
+        if not normalized:
+            continue
+        if normalized in seen:
+            print(f"WARN: Doublon ignoré : '{t}' (déjà listé comme '{seen[normalized]}')")
+            continue
+        seen[normalized] = t
+        deduped.append(normalized)
+
+    # Détection des chemins imbriqués
+    sorted_paths = sorted(deduped)
+    for i, p in enumerate(sorted_paths):
+        for j in range(i + 1, len(sorted_paths)):
+            if sorted_paths[j].startswith(p + "/"):
+                print(f"WARN: Chemin imbriqué détecté : '{sorted_paths[j]}' est contenu dans '{p}'")
+
+    # Vérification de l'existence
+    for t in deduped:
+        work = root / t
+        var = variant_path(root, t)
+        # Vérifie aussi l'ancien suffixe pour les fichiers non encore migrés
+        old_var = root / pathlib.Path(str(ALT_DIR / pathlib.Path(t).parent / f"{pathlib.Path(t).name}{OLD_SUFFIX}"))
+        if not work.exists() and not work.is_symlink() and not var.exists() and not old_var.exists():
+            print(f"WARN: Entrée introuvable : '{t}' (ni working-name ni variante)")
+
+    return deduped
+
+
 # ───────────────────────── processing ─────────────────────────────
 
 def variant_path(root: pathlib.Path, rel: str) -> pathlib.Path:
@@ -324,12 +497,14 @@ def ensure_variant_dirs(path: pathlib.Path):
 
 def move_existing_root_variant(path: pathlib.Path, var_path: pathlib.Path):
     """Déplace une variante existante au mauvais endroit vers le répertoire alt/."""
-    root_variant = path.with_name(path.name + SUFFIX)
-    if root_variant.exists() and not var_path.exists():
-        ensure_variant_dirs(var_path)
-        root_variant.rename(var_path)
-        rel_var_path = var_path.relative_to(repo_root())
-        print(f"· Déplacement de la variante existante → {rel_var_path.as_posix()}")
+    for suffix in (SUFFIX, OLD_SUFFIX):
+        root_variant = path.with_name(path.name + suffix)
+        if root_variant.exists() and not var_path.exists():
+            ensure_variant_dirs(var_path)
+            root_variant.rename(var_path)
+            rel_var_path = var_path.relative_to(repo_root())
+            print(f"· Déplacement de la variante existante → {rel_var_path.as_posix()}")
+            break
 
 
 def process_one(
@@ -339,13 +514,16 @@ def process_one(
     fix_tracked: bool,
     check_only: bool,
     force: bool,
+    stats: ProcessingStats,
+    sync: bool = False,
 ):
     """Traite un seul chemin : le transforme en variante et crée un lien."""
     print(f"\n--- Traitement de : {rel} ---")
+    stats.processed += 1
     work_path = root / rel
     var_path = variant_path(root, rel)
     avoid_symlink = should_avoid_symlink(rel)
-    
+
     if DEBUG:
         print(f"DEBUG: work_path = '{work_path}'")
         print(f"DEBUG: var_path  = '{var_path}'")
@@ -364,34 +542,45 @@ def process_one(
             print(f"Déplacé vers la variante: {ALT_DIR.as_posix()}/{relative_var_path}")
         else:
             print_link_created(rel, relative_var_path, action="Déplacé & lié")
+        stats.moved += 1
 
     # Cas 2 : La variante existe, mais le working-name n'existe pas.
     elif var_path.exists() and not work_path.exists() and not work_path.is_symlink():
         create_working_link_or_file(var_path, work_path, rel, root)
         if not avoid_symlink:
             print_link_created(rel, relative_var_path)
+        stats.linked += 1
 
     # Cas 3 : La variante existe et le working-name existe.
     elif var_path.exists() and (work_path.exists() or work_path.is_symlink()):
         if working_is_correct(work_path, var_path, avoid_symlink):
-            print(f"✓ Déjà configuré. pour {rel}")
+            print(f"✓ Déjà configuré pour {rel}")
+            stats.already_ok += 1
+            if sync and avoid_symlink:
+                report_sync_divergence(work_path, var_path, rel, root)
         else:
             print(f"Avertissement : '{rel}' existe mais ne correspond pas à la variante.")
+            stats.warnings += 1
+            if sync and avoid_symlink:
+                report_sync_divergence(work_path, var_path, rel, root)
             if force:
                 remove_working_path(work_path)
                 create_working_link_or_file(var_path, work_path, rel, root)
                 if not avoid_symlink:
                     print_link_created(rel, relative_var_path, action="Remplacé & lié")
+                stats.replaced += 1
             else:
                 print("· Utilisez --force pour remplacer le working-name.")
 
     # Cas 4 : La variante n'existe pas et le working-name est un symlink.
     elif not var_path.exists() and work_path.is_symlink():
         print(f"Avertissement : '{rel}' est un lien mais la variante est absente. Aucun changement appliqué.")
+        stats.warnings += 1
 
     # Cas 5 : Rien à faire.
     else:
         print(f"✓ Rien à faire pour {rel}")
+        stats.skipped += 1
 
     add_to_exclude(exclude, rel)
     remove_from_index(rel, root, fix_tracked, check_only)
@@ -432,13 +621,24 @@ def main():
             action="store_true",
             help="Remplace le working-name s'il est incohérent.",
         )
+        parser.add_argument(
+            "--sync",
+            action="store_true",
+            help="Détecte les divergences entre les fichiers hardlink/copie et leurs variantes.",
+        )
         args = parser.parse_args()
 
         root = repo_root()
         os.chdir(root) # S'assurer que l'on s'exécute depuis la racine du repo
         exclude = exclude_path()
+        stats = ProcessingStats()
+
+        # Migration des anciens suffixes ##os.None → ##class.devonly
+        migrate_old_suffix(root, stats)
 
         targets = get_targets(root, args.paths)
+        targets = validate_targets(targets, root)
+
         for t in targets:
             process_one(
                 t,
@@ -447,19 +647,23 @@ def main():
                 fix_tracked=args.fix_tracked_excluded,
                 check_only=args.check_only,
                 force=args.force,
+                stats=stats,
+                sync=args.sync,
             )
 
-        if targets:
+        # Résumé final
+        print(f"\n=== Résumé : {stats.summary()} ===")
+
+        if stats.changes_made > 0:
             # Construit la liste des fichiers à ajouter pour le message final
             files_to_add = []
             for t in targets:
                 var_p = variant_path(root, t)
                 if var_p.exists():
-                    # Utilise as_posix() pour des chemins propres dans le message
                     files_to_add.append(f"'{var_p.relative_to(root).as_posix()}'")
-            
+
             if files_to_add:
-                print(f"\nTerminé. N'oubliez pas de valider les changements :")
+                print(f"\nN'oubliez pas de valider les changements :")
                 print(f"git add {' '.join(files_to_add)}")
                 print(f"git commit -m 'feat: add yadm variants for cross-platform support'")
 
@@ -491,7 +695,7 @@ if __name__ == "__main__":
 #    printf "data\n" > some/dir/a.txt
 #    git add some/dir/a.txt && git commit -m "test: add tracked file"
 #    python3 bin/yadm_alt_link.py some/dir
-#    ls -l some/dir  # lien vers .config/yadm/alt/...##os.None
+#    ls -l some/dir  # lien vers .config/yadm/alt/...##class.devonly
 #    # attendu: avertissement listant some/dir/a.txt
 #
 # 4) Cas deja versionne (fichier exclu dans l'index)
@@ -499,3 +703,19 @@ if __name__ == "__main__":
 #    git add tracked.txt && git commit -m "test: tracked file"
 #    python3 bin/yadm_alt_link.py --fix-tracked-excluded tracked.txt
 #    git ls-files -- tracked.txt  # ne doit rien afficher
+#
+# 5) Migration automatique ##os.None → ##class.devonly
+#    # Placer un fichier avec l'ancien suffixe dans .config/yadm/alt/
+#    python3 bin/yadm_alt_link.py  # doit migrer et réparer les symlinks
+#    ls .config/yadm/alt/  # doit montrer ##class.devonly
+#
+# 6) Détection de divergence (--sync)
+#    echo "test" >> .gitignore
+#    python3 bin/yadm_alt_link.py --sync  # doit signaler la divergence
+#
+# 7) Doublons dans les cibles
+#    python3 bin/yadm_alt_link.py .editorconfig .editorconfig  # doit signaler le doublon
+#
+# 8) Cas répertoire (ex: docs/)
+#    mkdir -p docs && echo "readme" > docs/index.md
+#    python3 bin/yadm_alt_link.py docs/  # le / final est normalisé
