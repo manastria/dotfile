@@ -85,9 +85,7 @@ alias pgp_publish_openpgp='function pgp_publish_openpgp() { gpg --export "$1" | 
 # +--------------------------------------------------------------------------+ #
 ################################################################################
 
-# Activation a la demande (chargement differe)
-alias fzfon='[ -f ~/.fzf.bash ] && source ~/.fzf.bash'    # Active fzf (recherche fuzzy)
-alias fasdon='eval "$(fasd --init auto)"'                  # Active fasd (acces rapide aux fichiers/dossiers)
+
 
 ################################################################################
 # +--------------------------------------------------------------------------+ #
