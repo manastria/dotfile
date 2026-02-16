@@ -9,9 +9,58 @@
 # Navigation et affichage
 alias ls="ls --color=auto --classify --tabsize=0 --group-directories-first -v"
 alias df="df -x tmpfs -x devtmpfs --human-readable --output=source,fstype,size,used,avail,pcent,itotal,iused,iavail,ipcent"
-# Mon alias personnel eza (propre et efficace)
-alias l='eza -h --group-directories-first --no-permissions --no-user'
-alias ll='eza -lh --group-directories-first --no-permissions --no-user'
+
+# --- Configuration des Alias de fichiers ---
+
+if command -v eza >/dev/null 2>&1; then
+    # 1. L'alias "quotidien" (propre, sans bling-bling, tri intelligent)
+    # -lh : format liste + tailles lisibles (Ko, Mo)
+    # --group-directories-first : dossiers en haut (respecte le tri '_' en tête)
+    # --no-permissions --no-user : épure l'affichage pour l'usage personnel
+    # --git : affiche l'état des fichiers dans les dépôts Git
+    alias l='eza -lh --group-directories-first --no-permissions --no-user --git'
+
+    # 2. Le format long standard (pour le travail plus technique)
+    # Affiche les permissions et les propriétaires contrairement à l'alias 'l'
+    alias ll='eza -lh --group-directories-first --git'
+
+    # 3. Afficher tout (inclut les fichiers cachés commençant par un point)
+    alias la='eza -lah --group-directories-first --git'
+
+    # 4. Tri par date (les fichiers les plus récents en haut de liste)
+    # --sort=modified : trie par date de modification
+    # --reverse : inverse pour avoir le plus récent en premier
+    alias lll='eza -lh --sort=modified --reverse --git'
+    alias llll='lll'
+
+    # 5. Vue en arborescence (remplace avantageusement votre ancien script 'lr')
+    # --tree : affiche la hiérarchie
+    # --level=2 : limite la profondeur pour ne pas saturer l'écran
+    alias llt='eza -lh --tree --level=2 --git'
+
+    # 6. Afficher uniquement les répertoires
+    # -D : filtre pour ne montrer que les dossiers
+    alias lld='eza -lhD --group-directories-first'
+
+    # 7. Afficher uniquement les fichiers cachés
+    alias l.='eza -ldh .*'
+
+    # 8. Pagers (pour les dossiers contenant énormément de fichiers)
+    # Utilise votre variable d'environnement $PAGER (souvent 'less')
+    alias llm='eza -lh --git | $PAGER'
+
+else
+    # --- Fallback : Si eza n'est pas installé, on revient à ls classique ---
+    alias l='ls -F --color=auto --group-directories-first'
+    alias ll='ls -lh --group-directories-first'
+    alias la='ls -lAh --group-directories-first'
+    alias lll='ls -ltrh'
+    alias lld='ls -ld */'
+    alias l.='ls -d .*'
+fi
+
+# Note pour votre mémo : 
+# Pour un format de date ISO (2026-02-16), ajoutez l'option : --time-style=long-iso
 
 # Informations sur les fichiers
 alias getperms="stat -c '%A %a %U %G'"                    # Affiche permissions, proprietaire et groupe
