@@ -63,6 +63,7 @@ packages=(
     ccze
     curl
     direnv
+    eza
     fd-find
     fzf
     gh
@@ -102,7 +103,10 @@ to_install=()
 
 if dpkg -l | grep -q xserver-common; then # Légère amélioration du test
     echo -e "${BLUE}Environnement graphique détecté. Ajout de paquets spécifiques.${NC}"
-    packages+=(terminator)
+    packages+=(
+        terminator
+        nemo
+    )
 else
     echo -e "${BLUE}Aucun environnement graphique détecté.${NC}"
 fi

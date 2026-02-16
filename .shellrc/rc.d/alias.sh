@@ -9,6 +9,9 @@
 # Navigation et affichage
 alias ls="ls --color=auto --classify --tabsize=0 --group-directories-first -v"
 alias df="df -x tmpfs -x devtmpfs --human-readable --output=source,fstype,size,used,avail,pcent,itotal,iused,iavail,ipcent"
+# Mon alias personnel eza (propre et efficace)
+alias l='eza -h --group-directories-first --no-permissions --no-user'
+alias ll='eza -lh --group-directories-first --no-permissions --no-user'
 
 # Informations sur les fichiers
 alias getperms="stat -c '%A %a %U %G'"                    # Affiche permissions, proprietaire et groupe
