@@ -29,8 +29,7 @@ if command -v eza >/dev/null 2>&1; then
 
     # 4. Tri par date (les fichiers les plus récents en haut de liste)
     # --sort=modified : trie par date de modification
-    # --reverse : inverse pour avoir le plus récent en premier
-    alias lll='eza -lh --sort=modified --reverse --git'
+    alias lll='eza -lh --sort=modified --git'
     alias llll='lll'
 
     # 5. Vue en arborescence (remplace avantageusement votre ancien script 'lr')
