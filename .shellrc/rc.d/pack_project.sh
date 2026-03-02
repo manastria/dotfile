@@ -29,7 +29,7 @@ pack_project() {
         # PHP / Composer
         "vendor"
         # Divers
-        ".DS_Store" "Thumbs.db" ".idea" ".vscode"
+        ".DS_Store" "Thumbs.db"
     )
 
     # Construire les arguments --exclude
