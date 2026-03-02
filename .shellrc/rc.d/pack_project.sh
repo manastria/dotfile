@@ -53,7 +53,7 @@ pack_project() {
 
     if [[ $? -eq 0 ]]; then
         local SIZE
-        SIZE=$(du -sh "$ARCHIVE" | cut -f1)
+        SIZE=$(command du -sh "$ARCHIVE" | cut -f1)
         echo "✅ Archive créée : ${ARCHIVE} (${SIZE})"
     else
         echo "❌ Erreur lors de la création de l'archive."
