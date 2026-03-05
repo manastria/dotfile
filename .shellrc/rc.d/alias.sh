@@ -100,6 +100,9 @@ alias gitscriptexec="find . -regextype posix-egrep -regex \".*\.(sh|zsh)$\" | xa
 
 alias ipb='ip -c -br a'                                                # Adresses IP (format court, colore)
 alias nm-con-status='nmcli -f NAME,TYPE,DEVICE,STATE con show'         # Etat des connexions NetworkManager
+alias mdns-start='avahi-publish-address -R prof.local $(hostname -I | awk "{print \$1}") &>/dev/null & echo "✅ prof.local actif (PID $!)"'
+alias mdns-stop='kill $(pgrep -f "avahi-publish.*prof.local") 2>/dev/null && echo "🛑 prof.local révoqué" || echo "rien à arrêter"'
+
 
 ################################################################################
 # +--------------------------------------------------------------------------+ #
