@@ -27,31 +27,31 @@ zenv simple -t
 
 ### Alias prédéfinis
 
-| Alias | Profil | tmux | Usage typique |
-|---|---|---|---|
-| `zsh-daily` | `simple` | oui | Travail quotidien : prompt p10k lean + tmux |
-| `zsh-remote` | `ssh` | oui | Connexions SSH : 8 couleurs + tmux |
-| `zsh-writer` | `writer` | oui | Documentation : prompt épuré + tmux |
-| `zsh-minimal` | `base` | non | Debug/test rapide : sans oh-my-zsh |
+| Alias         | Profil   | tmux | Usage typique                               |
+| ------------- | -------- | ---- | ------------------------------------------- |
+| `zsh-daily`   | `simple` | oui  | Travail quotidien : prompt p10k lean + tmux |
+| `zsh-remote`  | `ssh`    | oui  | Connexions SSH : 8 couleurs + tmux          |
+| `zsh-writer`  | `writer` | oui  | Documentation : prompt épuré + tmux         |
+| `zsh-minimal` | `base`   | non  | Debug/test rapide : sans oh-my-zsh          |
 
 ### Profils disponibles
 
 **Profils spéciaux** (sans powerlevel10k) :
 
-| Profil | Description |
-|---|---|
+| Profil | Description                                                                |
+| ------ | -------------------------------------------------------------------------- |
 | `base` | Configuration minimale, sans oh-my-zsh. Charge `~/.zsh/config/zshrc.base`. |
-| `omz` | oh-my-zsh avec le thème par défaut, sans powerlevel10k. |
+| `omz`  | oh-my-zsh avec le thème par défaut, sans powerlevel10k.                    |
 
 **Profils powerlevel10k** (auto-découverts depuis `~/.zsh/powerlevel10k/`) :
 
-| Profil | Fichier p10k | Description |
-|---|---|---|
-| `simple` | `p10k.zsh.simple` | Prompt lean, adapté au quotidien |
-| `powerline` | `p10k.zsh.powerline` | Prompt powerline classique |
-| `writer` | `p10k.zsh.writer` | Prompt épuré pour la rédaction |
-| `ssh` | `p10k.zsh.ssh` | Optimisé pour les sessions SSH (8 couleurs) |
-| `full` | `p10k.zsh.full` | Configuration complète avec tous les segments |
+| Profil      | Fichier p10k         | Description                                   |
+| ----------- | -------------------- | --------------------------------------------- |
+| `simple`    | `p10k.zsh.simple`    | Prompt lean, adapté au quotidien              |
+| `powerline` | `p10k.zsh.powerline` | Prompt powerline classique                    |
+| `writer`    | `p10k.zsh.writer`    | Prompt épuré pour la rédaction                |
+| `ssh`       | `p10k.zsh.ssh`       | Optimisé pour les sessions SSH (8 couleurs)   |
+| `full`      | `p10k.zsh.full`      | Configuration complète avec tous les segments |
 
 ## Connexion SSH distante
 
@@ -87,11 +87,11 @@ zssh
 
 ### Différence avec `zsh-remote`
 
-| | `zsh-remote` | `zssh` |
-|---|---|---|
-| Cible | Machine **locale** | Machine **distante** (via SSH) |
-| Commande | `zenv ssh --tmux` | `ssh -t … tmux new-session -A -s main` |
-| Rattachement tmux | Non (nouvelle session) | Oui (`-A` : attache si existante) |
+|                   | `zsh-remote`           | `zssh`                                 |
+| ----------------- | ---------------------- | -------------------------------------- |
+| Cible             | Machine **locale**     | Machine **distante** (via SSH)         |
+| Commande          | `zenv ssh --tmux`      | `ssh -t … tmux new-session -A -s main` |
+| Rattachement tmux | Non (nouvelle session) | Oui (`-A` : attache si existante)      |
 
 ## Maintenance
 
@@ -157,13 +157,13 @@ bash/zsh
 
 ### Fichiers impliqués
 
-| Fichier | Rôle |
-|---|---|
-| `.zshrc` | Point d'entrée. Lit `ZSH_PROFILE` et charge la configuration correspondante. |
-| `.shellrc/rc.d/zenv.sh` | Fonction `zenv` et alias sémantiques. Chargé par bash et zsh. |
-| `.zsh/powerlevel10k/p10k.zsh.<profil>` | Configuration powerlevel10k pour chaque profil. |
-| `.zsh/activate.zsh` | Activation d'oh-my-zsh. |
-| `.zsh/config/zshrc.base` | Configuration minimale zsh (profil `base`). |
+| Fichier                                | Rôle                                                                         |
+| -------------------------------------- | ---------------------------------------------------------------------------- |
+| `.zshrc`                               | Point d'entrée. Lit `ZSH_PROFILE` et charge la configuration correspondante. |
+| `.shellrc/rc.d/zenv.sh`                | Fonction `zenv` et alias sémantiques. Chargé par bash et zsh.                |
+| `.zsh/powerlevel10k/p10k.zsh.<profil>` | Configuration powerlevel10k pour chaque profil.                              |
+| `.zsh/activate.zsh`                    | Activation d'oh-my-zsh.                                                      |
+| `.zsh/config/zshrc.base`               | Configuration minimale zsh (profil `base`).                                  |
 
 ### Convention de nommage
 
