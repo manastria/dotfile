@@ -47,6 +47,17 @@ Submodules (defined in `.gitmodules`) are all zsh-related: oh-my-zsh, powerlevel
 
 `.gitconfig` includes `.gitconfig_alias` (extensive alias library) and `.gitconfig.local` (user identity). Notable settings: no fast-forward merges (`merge.ff = no`), pull with ff-only (`pull.ff = only`), default branch is `master`.
 
+## Documentation des scripts
+
+Chaque script situé dans `bin/` ou `.local/bin/` est documenté par un fichier Markdown correspondant dans le répertoire `docs/`.
+
+Ordre des sections dans un fichier de documentation :
+
+1. **Section utilisateur** — mode d'emploi : description fonctionnelle, prérequis, syntaxe, exemples d'utilisation, variables d'environnement, codes de retour.
+2. **Section développeur** — informations techniques : architecture interne, dépendances, points d'extension, notes de maintenance.
+
+Lors de la création ou modification d'un script, mettre à jour (ou créer) le fichier de documentation associé dans `docs/`.
+
 ## Code Conventions
 
 - EditorConfig: 4 spaces indentation, UTF-8. Shell files (`.sh`, `.zsh`) must have LF line endings and a final newline.
