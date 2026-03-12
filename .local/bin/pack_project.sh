@@ -10,6 +10,7 @@ DEST="${2:-$(dirname "$(realpath "$SRC")")}"
 PROJECT_NAME=$(basename "$(realpath "$SRC")")
 TIMESTAMP=$(date +%Y%m%d_%H%M)
 ARCHIVE="${DEST}/${PROJECT_NAME}_${TIMESTAMP}.tar.zst"
+ZSTD_LEVEL="${PACK_ZSTD_LEVEL:-19}"
 
 EXCLUDES=(
     # Python
@@ -38,7 +39,7 @@ echo ""
 tar \
     --create \
     --file="$ARCHIVE" \
-    --use-compress-program="zstd -T0 -19 --long" \
+    --use-compress-program="zstd -T0 -${ZSTD_LEVEL} --long" \
     "${EXCLUDE_ARGS[@]}" \
     -C "$(dirname "$(realpath "$SRC")")" \
     "./${PROJECT_NAME}"

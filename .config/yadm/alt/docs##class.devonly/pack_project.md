@@ -163,9 +163,23 @@ realpath    →  coreutils (GNU) ou équivalent
 
 ---
 
+### Variables d'environnement
+
+| Variable         | Défaut | Description                                       |
+| ---------------- | ------ | ------------------------------------------------- |
+| `PACK_ZSTD_LEVEL` | `19`  | Niveau de compression zstd (1 = rapide, 19 = max) |
+
+Exemple :
+
+```bash
+PACK_ZSTD_LEVEL=3 pack_project ~/projets/mon-app
+```
+
+---
+
 ### Points d'extension
 
-**Ajouter une exclusion**  
+**Ajouter une exclusion**
 Étendre le tableau `EXCLUDES` dans le script :
 
 ```bash
@@ -174,14 +188,6 @@ EXCLUDES=(
     # Ruby
     ".bundle" "vendor/bundle"
 )
-```
-
-**Niveau de compression configurable**  
-Exposer une variable d'environnement :
-
-```bash
-ZSTD_LEVEL="${PACK_ZSTD_LEVEL:-19}"
---use-compress-program="zstd -T0 -${ZSTD_LEVEL} --long"
 ```
 
 **Exclusions personnalisées par projet**  
