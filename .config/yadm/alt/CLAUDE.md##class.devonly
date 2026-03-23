@@ -10,7 +10,7 @@ A **yadm-managed dotfiles** repository (github.com/manastria/dotfile) for Linux 
 
 This repo uses **yadm** (Yet Another Dotfiles Manager), a git wrapper that manages dotfiles in-place from `$HOME`. Operate with `yadm` commands (yadm add, yadm commit, yadm push) rather than raw git when deploying. For development/editing in this checked-out copy, standard git works fine.
 
-Submodules (defined in `.gitmodules`) are all zsh-related: oh-my-zsh, powerlevel10k, zsh-autosuggestions, zsh-completions, zsh-syntax-highlighting, zsh-vi-mode, zsh-dircolors-solarized. Update them with `yadm submodule update --init --recursive` or the `bin/yadm_check_submodules.sh` script.
+Submodules (defined in `.gitmodules`) are all zsh-related: oh-my-zsh, powerlevel10k, zsh-autosuggestions, zsh-completions, zsh-syntax-highlighting, zsh-vi-mode, zsh-dircolors-solarized. Update them with `yadm submodule update --init --recursive` or the `bin/yadm-check-submodules.sh` script.
 
 ## Architecture
 
@@ -34,7 +34,7 @@ Submodules (defined in `.gitmodules`) are all zsh-related: oh-my-zsh, powerlevel
 - **`.shellrc/rc.d/`** - POSIX shell scripts shared by bash and zsh (`.sh` extension)
 - **`.shellrc/bashrc.d/`** - Bash-only scripts (`.bash` extension)
 - **`.shellrc/zshrc.d/`** - Zsh-only scripts (`.zsh` extension)
-- **`bin/`** - Utility scripts: package installation (`install_paquets.sh`), software installers (starship, docker, atuin, vscode, etc.), system management
+- **`bin/`** - Utility scripts: package installation (`install-paquets.sh`), software installers (starship, docker, atuin, vscode, etc.), system management
 - **`src/`** - Third-party tools (git-subrepo)
 - **`.config/yadm/alt/`** - Yadm alternate files with `##os.None` suffix, symlinked to `$HOME` (`.editorconfig`, `.vscode`, `.gitignore`)
 
