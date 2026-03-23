@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# install-gitkraken.sh — Installation de GitKraken sur Debian/Ubuntu
+# Méthode : snap (recommandé) ou .deb
+set -euo pipefail
+
+# Vérification : système 64 bits
+if [ "$(uname -m)" != "x86_64" ]; then
+    echo "Erreur : GitKraken ne supporte que les systèmes x86_64." >&2
+    exit 1
+fi
+
+# --- Méthode snap (recommandée : mises à jour automatiques) ---
+install_snap() {
+    if ! command -v snap &>/dev/null; then
+        echo "==> Installation de snapd..."
+        sudo apt update -y
+        sudo apt install -y snapd
+        # Sur Debian, le socket snap peut nécessiter un redémarrage
+        # ou l'activation manuelle du service
+        sudo systemctl enable --now snapd.socket
+        echo "    snapd installé. Si la commande snap échoue,"
+        echo "    redémarrez la session ou le système puis relancez."
+    fi
+    echo "==> Installation de GitKraken via snap..."
+    sudo snap install gitkraken --classic
+    echo "==> GitKraken installé. Lancez-le avec : gitkraken &"
+}
+
+# --- Méthode .deb (alternative) ---
+install_deb() {
+    local DEB_URL="https://release.gitkraken.com/linux/gitkraken-amd64.deb"
+    local TMP_DEB="/tmp/gitkraken-amd64.deb"
+    echo "==> Téléchargement de GitKraken (.deb)..."
+    wget -O "$TMP_DEB" "$DEB_URL"
+    echo "==> Installation (apt gère les dépendances)..."
+    sudo apt install -y "$TMP_DEB"
+    rm -f "$TMP_DEB"
+    echo "==> GitKraken installé. Lancez-le avec : gitkraken &"
+    echo ""
+    echo "⚠  Rappel : sans repo APT, les mises à jour sont manuelles."
+    echo "   Relancez ce script pour mettre à jour."
+}
+
+# --- Choix ---
+echo "Comment voulez-vous installer GitKraken ?"
+echo "  1) snap  (recommandé — mises à jour automatiques)"
+echo "  2) .deb  (manuel — pas de mises à jour automatiques)"
+read -rp "Votre choix [1/2] : " choix
+
+case "$choix" in
+    1) install_snap ;;
+    2) install_deb ;;
+    *) echo "Choix invalide." >&2; exit 1 ;;
+esac
