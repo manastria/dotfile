@@ -708,41 +708,41 @@ if __name__ == "__main__":
 # Tests manuels (commandes reproductibles)
 # 1) Cas fichier sensible .gitignore (hardlink/copie, pas de warning git)
 #    printf "test\n" > .gitignore
-#    python3 bin/yadm_alt_link.py .gitignore
+#    python3 .local/bin/yadm-alt-link.py .gitignore
 #    file .gitignore
 #    git add .gitignore  # aucun warning "Trop de niveaux de liens symboliques"
 #
 # 2) Cas fichier normal (symlink attendu)
 #    printf "ok\n" > foo.txt
-#    python3 bin/yadm_alt_link.py foo.txt
+#    python3 .local/bin/yadm-alt-link.py foo.txt
 #    ls -l foo.txt  # doit indiquer un lien symbolique vers .config/yadm/alt/...
 #
 # 3) Cas dossier (symlink/junction attendu) + exclusion + detection fichiers suivis
 #    mkdir -p some/dir
 #    printf "data\n" > some/dir/a.txt
 #    git add some/dir/a.txt && git commit -m "test: add tracked file"
-#    python3 bin/yadm_alt_link.py some/dir
+#    python3 .local/bin/yadm-alt-link.py some/dir
 #    ls -l some/dir  # lien vers .config/yadm/alt/...##class.devonly
 #    # attendu: avertissement listant some/dir/a.txt
 #
 # 4) Cas deja versionne (fichier exclu dans l'index)
 #    printf "track\n" > tracked.txt
 #    git add tracked.txt && git commit -m "test: tracked file"
-#    python3 bin/yadm_alt_link.py --fix-tracked-excluded tracked.txt
+#    python3 .local/bin/yadm-alt-link.py --fix-tracked-excluded tracked.txt
 #    git ls-files -- tracked.txt  # ne doit rien afficher
 #
 # 5) Migration automatique ##os.None → ##class.devonly
 #    # Placer un fichier avec l'ancien suffixe dans .config/yadm/alt/
-#    python3 bin/yadm_alt_link.py  # doit migrer et réparer les symlinks
+#    python3 .local/bin/yadm-alt-link.py  # doit migrer et réparer les symlinks
 #    ls .config/yadm/alt/  # doit montrer ##class.devonly
 #
 # 6) Détection de divergence (--sync)
 #    echo "test" >> .gitignore
-#    python3 bin/yadm_alt_link.py --sync  # doit signaler la divergence
+#    python3 .local/bin/yadm-alt-link.py --sync  # doit signaler la divergence
 #
 # 7) Doublons dans les cibles
-#    python3 bin/yadm_alt_link.py .editorconfig .editorconfig  # doit signaler le doublon
+#    python3 .local/bin/yadm-alt-link.py .editorconfig .editorconfig  # doit signaler le doublon
 #
 # 8) Cas répertoire (ex: docs/)
 #    mkdir -p docs && echo "readme" > docs/index.md
-#    python3 bin/yadm_alt_link.py docs/  # le / final est normalisé
+#    python3 .local/bin/yadm-alt-link.py docs/  # le / final est normalisé

@@ -21,7 +21,7 @@ Cela créera une copie locale des fichiers de configuration sur votre système.
 Installer les paquets couramment utilisés :
 
 ```bash
-bin/install-paquets.sh
+.local/bin/install-paquets.sh
 ```
 
 ## Mise à jour des fichiers de configuration
@@ -47,7 +47,7 @@ yadm reset --hard
 Starship est un prompt shell rapide et personnalisable qui affiche des informations pertinentes tout en restant minimal et élégant.
 
 ```bash
-bin/install-starship.sh
+.local/bin/install-starship.sh
 ```
 
 ## Gestion des sous modules
@@ -62,10 +62,10 @@ yadm submodule update --init --recursive
 
 Cette commande initialisera et téléchargera tous les submodules configurés dans le dépôt.
 
-Un script existe dans le répertoire `bin` du dépôt pour mettre à jour les sous modules :
+Un script existe dans le répertoire `.local/bin` du dépôt pour mettre à jour les sous modules :
 
 ```bash
-yadm-check-submodules.sh
+.local/bin/yadm-check-submodules.sh
 ```
 
 ### Vérifier l’état des sous-modules

@@ -58,9 +58,9 @@ else
 fi
 
 # Sous-modules/plugins via ton script perso, s'il existe et est exécutable
-if [ -x "$HOME/bin/yadm-check-submodules.sh" ]; then
+if [ -x "$HOME/.local/bin/yadm-check-submodules.sh" ]; then
   echo "[install] yadm-check-submodules.sh…"
-  "$HOME/bin/yadm-check-submodules.sh" || true
+  "$HOME/.local/bin/yadm-check-submodules.sh" || true
 fi
 
 echo "[install] HEAD: $("$YADM_BIN" rev-parse --short HEAD 2>/dev/null || echo n/a)"
