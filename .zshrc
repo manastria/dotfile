@@ -53,3 +53,12 @@ fi
 
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+
+# Chargement des scripts spécifiques à WSL (à la fin pour écraser la config Linux)
+if [[ -n "${WSL_DISTRO_NAME}" ]] || grep -qi microsoft /proc/version 2>/dev/null; then
+  if [ -d "$HOME/.shellrc/wsl.d" ]; then
+    for file in "$HOME"/.shellrc/wsl.d/*.sh; do
+      [ -f "$file" ] && source "$file"
+    done
+  fi
+fi
