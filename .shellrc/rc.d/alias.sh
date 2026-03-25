@@ -7,7 +7,7 @@
 ################################################################################
 
 # Navigation et affichage
-alias ls="ls --color=auto --classify --tabsize=0 --group-directories-first -v"
+alias ls="ls -N --color=auto --classify --tabsize=0 --group-directories-first -v"
 alias df="df -x tmpfs -x devtmpfs --human-readable --output=source,fstype,size,used,avail,pcent,itotal,iused,iavail,ipcent"
 
 # --- Configuration des Alias de fichiers ---
