@@ -22,4 +22,5 @@ if [ -d "$HOME/.local/bin" ] ; then
 fi
 
 # Forcer le tri par code ASCII (priorité aux caractères spéciaux comme _)
+export LC_CTYPE=fr_FR.UTF-8
 export LC_COLLATE=C
