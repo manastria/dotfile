@@ -15,7 +15,7 @@ format = '[$user]($style) '
 
 [directory]
 style = "cyan"
-format = 'in [$path]($style)[$read_only]($read_only_style) '
+format = '󰝰 [$path]($style)[$read_only]($read_only_style) '
 
 [git_branch]
 symbol = "🌱 "
@@ -26,5 +26,5 @@ error_symbol = '[✗](bold red) '
 
 [hostname]
 ssh_only = false
-format = 'on [$hostname](bold red) '
+format = '󰌢 [$hostname](bold red) '
 disabled = false
