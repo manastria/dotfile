@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(git mv:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(bash -n /home/jpdemory/projets/dotfile/.local/bin/install-veracrypt.sh)"
     ]
   }
 }
