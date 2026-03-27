@@ -1,6 +1,6 @@
-# Navigation interactive — fasd + fzf
+# Navigation interactive — zoxide + fzf
 
-Ce document décrit le système de navigation rapide dans le shell, combinant **fasd** (historique pondéré des fichiers et répertoires visités) et **fzf** (sélecteur interactif flou).
+Ce document décrit le système de navigation rapide dans le shell, combinant **zoxide** (historique pondéré des répertoires visités) et **fzf** (sélecteur interactif flou).
 
 ---
 
@@ -8,9 +8,9 @@ Ce document décrit le système de navigation rapide dans le shell, combinant **
 
 ### Description
 
-fasd et fzf transforment la navigation shell en deux axes complémentaires :
+zoxide et fzf transforment la navigation shell en deux axes complémentaires :
 
-- **fasd** mémorise chaque fichier et répertoire visité et les classe par fréquence d'usage.
+- **zoxide** mémorise chaque répertoire visité et les classe par fréquence d'usage (algorithme *frecency* : fréquence + récence).
 - **fzf** affiche une liste filtrable en temps réel, avec prévisualisation.
 
 Combinés, ils permettent de rejoindre un répertoire visité il y a deux semaines en tapant deux lettres.
@@ -20,22 +20,22 @@ Combinés, ils permettent de rejoindre un répertoire visité il y a deux semain
 ### Installation
 
 ```bash
-~/.local/bin/install-fzf.sh   # télécharge le binaire depuis GitHub Releases
-sudo apt install fasd          # via install-paquets.sh
+~/.local/bin/install-fzf.sh      # binaire fzf depuis GitHub Releases
+~/.local/bin/install-zoxide.sh   # binaire zoxide depuis GitHub Releases
 ```
 
 Vérification :
 
 ```bash
-fzf --version    # >= 0.48 requis pour l'intégration shell intégrée
-fasd --version
+fzf --version      # >= 0.48 requis
+zoxide --version   # >= 0.9 recommandé
 ```
 
 ---
 
 ### Désactivation sur machine lente
 
-Créer ce fichier vide pour court-circuiter le chargement de fasd et fzf :
+Créer ce fichier vide pour court-circuiter le chargement de zoxide et fzf :
 
 ```bash
 mkdir -p ~/.config && touch ~/.config/no_advanced_nav
@@ -74,23 +74,37 @@ Ces touches sont disponibles à l'intérieur de tout sélecteur fzf.
 
 ---
 
-### Fonctions de navigation fasd + fzf
+### Navigation avec zoxide
 
-#### `z` — changer de répertoire
-
-```bash
-z                  # liste tous les répertoires visités → sélection interactive
-z pro              # filtre sur "pro" → sélection interactive dans les résultats
-```
-
-`z` remplace l'alias natif de fasd pour imposer le sélecteur fzf.
-
-#### `v` — ouvrir un fichier récent
+#### `z` — saut rapide
 
 ```bash
-v                  # liste tous les fichiers récents → sélection → ouvre dans $EDITOR
-v rapport          # filtre sur "rapport" → sélection → ouvre dans $EDITOR
+z pro              # saute vers le répertoire fréquent contenant "pro"
+z doc conf         # filtre sur plusieurs termes
+z -                # retourne au répertoire précédent
 ```
+
+zoxide choisit automatiquement le répertoire le plus probable. S'il se trompe, utiliser `zi`.
+
+#### `zi` — sélection interactive
+
+```bash
+zi                 # liste tous les répertoires connus → sélection fzf
+zi pro             # pré-filtre sur "pro" → sélection fzf
+```
+
+`zi` ouvre le sélecteur fzf avec les répertoires classés par score de fréquence.
+
+---
+
+### Fonction `v` — ouvrir un fichier
+
+```bash
+v                  # recherche floue dans le répertoire courant → ouvre dans $EDITOR
+v rapport          # pré-filtre sur "rapport" → sélection → ouvre dans $EDITOR
+```
+
+La recherche descend récursivement depuis le répertoire courant, y compris les dossiers cachés.
 
 ---
 
@@ -105,8 +119,6 @@ kill -9 **[Tab]        # recherche floue de processus (PID)
 ssh **[Tab]            # recherche floue dans ~/.ssh/config
 export **[Tab]         # recherche floue dans les variables d'environnement
 ```
-
-Le séparateur `**` déclenche le mode complétion fzf. La frappe filtre la liste en temps réel.
 
 ---
 
@@ -127,11 +139,12 @@ Ces fonctions sont disponibles en zsh via autoload.
 ### Architecture générale
 
 ```
-fasd  ──► historique pondéré (fichiers + répertoires visités)
-fzf   ──► sélecteur interactif (filtrage flou + prévisualisation)
+zoxide ──► historique pondéré (répertoires visités, algo frecency)
+fzf    ──► sélecteur interactif (filtrage flou + prévisualisation)
   │
-  ├─ seul     : Ctrl+R, Ctrl+T, Alt+C, complétion **[Tab]
-  └─ + fasd   : fonctions z et v (navigation pondérée par fréquence)
+  ├─ seul      : Ctrl+R, Ctrl+T, Alt+C, complétion **[Tab]
+  ├─ + zoxide  : z (saut auto), zi (sélection interactive)
+  └─ + fd      : v (recherche de fichiers dans le répertoire courant)
 ```
 
 ---
@@ -142,11 +155,15 @@ fzf   ──► sélecteur interactif (filtrage flou + prévisualisation)
 Shell démarré
     │
     ├─ bash  ──► .bashrc  ──► rc.d/*.sh  ──► 05-navigation.sh
-    │                     └─► .fzf.bash  (PATH + intégration shell)
+    │                                          ├─ source .fzf.bash
+    │                                          ├─ eval "$(zoxide init bash)"
+    │                                          └─ function v()
     │
     └─ zsh   ──► .zshrc   ──► rc.d/*.sh  ──► 05-navigation.sh
                           └─► zshrc.d/   ──► 04_fzf.zsh
-                          └─► .fzf.zsh   (PATH + intégration shell)
+                                             ├─ source .fzf.zsh
+                                             ├─ eval "$(zoxide init zsh)"
+                                             └─ function v()
 ```
 
 ---
@@ -155,7 +172,7 @@ Shell démarré
 
 | Fichier | Shell | Rôle |
 | ------- | ----- | ---- |
-| `.shellrc/rc.d/05-navigation.sh` | bash + zsh | Point d'entrée principal : sentinel, vérification des binaires, chargement fasd, fonctions `z` et `v` |
+| `.shellrc/rc.d/05-navigation.sh` | bash + zsh | Point d'entrée : sentinel, vérification des binaires, init zoxide, fonction `v` |
 | `.shellrc/zshrc.d/04_fzf.zsh` | zsh | Variables d'environnement fzf : commande par défaut, prévisualisation, raccourcis clavier |
 | `.fzf.bash` | bash | Intégration shell fzf (`eval "$(fzf --bash)"`) |
 | `.fzf.zsh` | zsh | Intégration shell fzf (`eval "$(fzf --zsh)"`) |
@@ -163,6 +180,7 @@ Shell démarré
 | `.zsh/autoload/fuzzy/vf` | zsh | Autoload : recherche globale de fichier + ouverture vim |
 | `.zsh/autoload/fuzzy/c` | zsh | Autoload : navigation par marque-pages SQLite |
 | `.local/bin/install-fzf.sh` | — | Installation du binaire fzf depuis GitHub Releases |
+| `.local/bin/install-zoxide.sh` | — | Installation du binaire zoxide depuis GitHub Releases |
 
 ---
 
@@ -179,29 +197,33 @@ fi
 **Vérification des binaires** — sortie silencieuse si l'un est absent :
 
 ```bash
-if ! command -v fzf >/dev/null 2>&1 || ! command -v fasd >/dev/null 2>&1; then
+if ! command -v fzf >/dev/null 2>&1 || ! command -v zoxide >/dev/null 2>&1; then
     return
 fi
 ```
 
-**Chargement de l'intégration shell fzf** selon le shell courant :
+**Intégration shell fzf** selon le shell courant (sourcing de `.fzf.bash` ou `.fzf.zsh`).
+
+**Initialisation zoxide** (pose les commandes `z` et `zi`) :
 
 ```bash
-[ -n "$BASH_VERSION" ] && [ -f ~/.fzf.bash ] && source ~/.fzf.bash
-[ -n "$ZSH_VERSION"  ] && [ -f ~/.fzf.zsh  ] && source ~/.fzf.zsh
+[ -n "$BASH_VERSION" ] && eval "$(zoxide init bash)"
+[ -n "$ZSH_VERSION"  ] && eval "$(zoxide init zsh)"
 ```
 
-**Initialisation fasd** (pose les alias natifs `a`, `s`, `d`, `f`, `sd`, `sf`) :
+**Fonction `v`** — recherche fzf + fd dans le répertoire courant :
 
 ```bash
-eval "$(fasd --init auto)"
+v() {
+    local file
+    file="$(fdfind -H --type f . | fzf --height 40% --reverse --query="${*:-}" --select-1 --exit-0)"
+    [ -n "$file" ] && ${EDITOR:-vim} "$file"
+}
 ```
-
-**Fonctions `z` et `v`** — surchargent les alias fasd natifs pour injecter fzf.
 
 ---
 
-### Variables d'environnement fzf (04_fzf.zsh)
+### Variables d'environnement fzf (`04_fzf.zsh`)
 
 | Variable | Valeur | Effet |
 | -------- | ------ | ----- |
@@ -211,23 +233,16 @@ eval "$(fasd --init auto)"
 | `FZF_ALT_C_OPTS` | `--preview 'tree -C {}'` | Prévisualisation arborescente au survol |
 | `FZF_PREVIEW_ARGS` | `batcat --style=numbers …` | Prévisualisation de fichiers avec coloration syntaxique |
 
-Les raccourcis sont construits via le tableau `FZF_BINDARGS` converti en chaîne CSV avant d'être passé à `--bind`.
-
 ---
 
-### Intégration shell fzf (.fzf.bash / .fzf.zsh)
+### Intégration shell fzf (`.fzf.bash` / `.fzf.zsh`)
 
 Depuis fzf **0.48**, l'intégration shell (complétion `**[Tab]` + raccourcis `Ctrl+R/T`, `Alt+C`) est intégrée au binaire :
 
 ```bash
-# bash
-eval "$(fzf --bash)"
-
-# zsh
-eval "$(fzf --zsh)"
+eval "$(fzf --bash)"   # bash
+eval "$(fzf --zsh)"    # zsh
 ```
-
-Ces deux fichiers remplacent l'ancienne approche basée sur le sous-module git `.fzf/` qui fournissait les scripts `shell/key-bindings.zsh` et `shell/completion.zsh`.
 
 ---
 
@@ -236,10 +251,10 @@ Ces deux fichiers remplacent l'ancienne approche basée sur le sous-module git `
 | Outil | Rôle | Optionnel |
 | ----- | ---- | --------- |
 | `fzf` ≥ 0.48 | Sélecteur interactif | Non |
-| `fasd` | Historique pondéré | Non (désactive `z` et `v`) |
-| `fdfind` (`fd`) | Recherche de fichiers rapide | Oui — fallback sur `find` |
-| `batcat` (`bat`) | Prévisualisation avec coloration | Oui — fallback sur `cat` |
-| `tree` | Prévisualisation d'arborescence (`Alt+C`) | Oui |
+| `zoxide` ≥ 0.9 | Historique pondéré des répertoires | Non (désactive `z`, `zi` et `v`) |
+| `fdfind` (`fd`) | Source pour `v` et `FZF_DEFAULT_COMMAND` | Oui — `v` devient inopérante sans lui |
+| `batcat` (`bat`) | Prévisualisation avec coloration | Oui |
+| `tree` | Prévisualisation arborescente (`Alt+C`) | Oui |
 | `xsel` | Copie presse-papiers (`Ctrl+Y`) | Oui |
 | `sqlite3` | Marque-pages pour la fonction `c` | Oui (zsh uniquement) |
 
@@ -247,6 +262,8 @@ Ces deux fichiers remplacent l'ancienne approche basée sur le sous-module git `
 
 ### Notes de maintenance
 
-- `fasd` n'est plus maintenu depuis 2017 mais reste fonctionnel. Alternative active : `zoxide` (`z` compatible, écrit en Rust).
-- La version minimale de fzf est **0.48** pour que `fzf --bash` / `fzf --zsh` fonctionnent. En dessous, l'intégration shell est silencieusement ignorée (guard `command -v fzf`).
-- Relancer `~/.local/bin/install-fzf.sh` pour mettre à jour fzf vers la dernière version.
+- zoxide maintient sa base de données dans `~/.local/share/zoxide/db.zo`. La supprimer repart d'un historique vide.
+- Relancer `~/.local/bin/install-zoxide.sh` pour mettre à jour vers la dernière version.
+- Relancer `~/.local/bin/install-fzf.sh` pour mettre à jour fzf.
+- La version minimale de fzf est **0.48** pour que `fzf --bash` / `fzf --zsh` fonctionnent. En dessous, l'intégration shell est silencieusement ignorée.
+- `zi` requiert fzf installé et accessible dans le `PATH` — zoxide le détecte automatiquement.

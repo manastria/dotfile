@@ -64,7 +64,6 @@ packages=(
     curl
     direnv
     eza
-    fasd
     fd-find
     gh
     git
