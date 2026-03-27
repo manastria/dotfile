@@ -22,23 +22,29 @@ set -euo pipefail
 ts="$(date +%Y%m%d-%H%M%S)"
 backup_tar="/root/netplan-backup-$ts.tar.gz"
 
-# 1) Sauvegarde complète du répertoire netplan avant toute modification.
-echo "[1/5] Sauvegarde de /etc/netplan -> $backup_tar"
+# 1) Répare netplan avant toute utilisation.
+#    Corrige l'erreur "ModuleNotFoundError: No module named 'netplan_cli.cli.core'"
+#    qui apparaît sur certaines machines après une mise à jour partielle.
+echo "[1/6] Réparation de netplan et python3-netplan"
+apt-get install --reinstall -y netplan.io python3-netplan
+
+# 2) Sauvegarde complète du répertoire netplan avant toute modification.
+echo "[2/6] Sauvegarde de /etc/netplan -> $backup_tar"
 tar -czf "$backup_tar" -C /etc netplan
 
-# 2) Crée un fichier minimal qui force NetworkManager
+# 3) Crée un fichier minimal qui force NetworkManager
 #    Ce fichier devient la source de vérité pour netplan.
-echo "[2/5] Écriture /etc/netplan/01-network-manager-all.yaml"
+echo "[3/6] Écriture /etc/netplan/01-network-manager-all.yaml"
 cat > /etc/netplan/01-network-manager-all.yaml <<'YAML'
 network:
   version: 2
   renderer: NetworkManager
 YAML
 
-# 3) Optionnel : on ne supprime pas tout à l'aveugle.
+# 4) Optionnel : on ne supprime pas tout à l'aveugle.
 #    On renomme les anciens fichiers pour pouvoir revenir en arrière.
 #    Le suffixe horodaté évite d'écraser des sauvegardes précédentes.
-echo "[3/5] Mise de côté des anciens YAML (sans suppression définitive)"
+echo "[4/6] Mise de côté des anciens YAML (sans suppression définitive)"
 shopt -s nullglob
 for f in /etc/netplan/*.yaml; do
   [[ "$f" == "/etc/netplan/01-network-manager-all.yaml" ]] && continue
@@ -46,14 +52,14 @@ for f in /etc/netplan/*.yaml; do
 done
 shopt -u nullglob
 
-# 4) Évite la double gestion : désactive networkd si présent
+# 5) Évite la double gestion : désactive networkd si présent
 #    L'échec est ignoré si le service n'existe pas.
-echo "[4/5] Désactivation de systemd-networkd (si présent)"
+echo "[5/6] Désactivation de systemd-networkd (si présent)"
 systemctl disable --now systemd-networkd.service systemd-networkd.socket 2>/dev/null || true
 
-# 5) Applique prudemment
+# 6) Applique prudemment
 #    netplan try permet un rollback automatique en cas de perte réseau.
-echo "[5/5] Application netplan"
+echo "[6/6] Application netplan"
 if netplan help 2>/dev/null | grep -q '\btry\b'; then
   # rollback automatique si perte réseau (utile si tu es en SSH)
   netplan try
