@@ -3,6 +3,12 @@
     "git.ignoreSubmodules": true,
     "git.detectSubmodules": false,
     "files.exclude": {
-        "**/.zsh/oh-my-zsh": true
+        "**/.zsh/oh-my-zsh": true,
+        "**/.zsh/custom/themes/powerlevel10k": true,
+        "**/.zsh/custom/plugins/zsh-autosuggestions": true,
+        "**/.zsh/custom/plugins/zsh-completions": true,
+        "**/.zsh/custom/plugins/zsh-syntax-highlighting": true,
+        "**/.zsh/custom/plugins/zsh-vi-mode": true,
+        "**/.zsh/custom/plugins/zsh-dircolors-solarized": true
     }
 }

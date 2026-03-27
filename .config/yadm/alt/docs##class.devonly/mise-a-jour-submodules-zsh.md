@@ -129,6 +129,37 @@ exec $SHELL
 
 ---
 
+### F. Libérer de l'espace (désactiver sans supprimer)
+
+`git submodule deinit` vide le répertoire de travail du submodule sans le retirer de `.gitmodules`. Le submodule reste déclaré — un `git submodule update --init` suffit à le restaurer.
+
+#### Désactiver un submodule
+
+```bash
+cd ~/projets/dotfile
+git submodule deinit .zsh/oh-my-zsh
+```
+
+Le répertoire `.zsh/oh-my-zsh/` devient vide. `git submodule status` affiche un préfixe `-`.
+
+#### Désactiver tous les submodules en une fois
+
+```bash
+cd ~/projets/dotfile
+git submodule deinit --all
+```
+
+#### Restaurer après désactivation
+
+```bash
+cd ~/projets/dotfile
+git submodule update --init --recursive
+```
+
+> `deinit` ne modifie pas `.gitmodules` ni l'index git — aucun commit n'est nécessaire.
+
+---
+
 ## Pièges à éviter
 
 ### `omz update` ne met pas à jour le dépôt dotfiles
