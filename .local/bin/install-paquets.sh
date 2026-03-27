@@ -66,7 +66,6 @@ packages=(
     eza
     fasd
     fd-find
-    fzf
     gh
     git
     git-lfs

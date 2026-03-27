@@ -1,13 +1,3 @@
-# Setup fzf
-# ---------
-if [[ ! "$PATH" == */${HOME}/.fzf/bin* ]]; then
-  export PATH="${PATH:+${PATH}:}/${HOME}/.fzf/bin"
-fi
-
-# Auto-completion
-# ---------------
-[[ $- == *i* ]] && source "/${HOME}/.fzf/shell/completion.bash" 2> /dev/null
-
-# Key bindings
-# ------------
-source "/${HOME}/.fzf/shell/key-bindings.bash"
+# Intégration shell fzf (complétion + raccourcis clavier)
+# Requiert fzf >= 0.48 — installer via ~/.local/bin/install-fzf.sh
+command -v fzf >/dev/null 2>&1 && eval "$(fzf --bash)"
