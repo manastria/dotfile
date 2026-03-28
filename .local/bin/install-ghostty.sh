@@ -143,9 +143,6 @@ setup_config() {
 font-family = FiraMono Nerd Font
 font-size = 11
 
-# Thème
-theme = dark
-
 # Comportement
 shell-integration = detect
 copy-on-select = true
