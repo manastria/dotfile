@@ -9,7 +9,7 @@ case ":$PATH:" in
 esac
 
 # Si pyenv est disponible, on l'initialise proprement
-if command -v pyenv >/dev/null 2>&1; then
+if [ -x "$PYENV_ROOT/bin/pyenv" ]; then
   # Initialise les shims, hooks, etc. (à garder dans ~/.bashrc)
   eval "$(pyenv init -)"
 
