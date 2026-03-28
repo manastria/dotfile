@@ -11,7 +11,7 @@ set -euo pipefail
 # -----------------------------------------------------------------------------
 readonly PPA="ppa:mkasberg/ghostty-ubuntu"
 readonly PACKAGE="ghostty"
-readonly MIN_UBUNTU="25.10"
+readonly MIN_UBUNTU="24.10"
 
 # -----------------------------------------------------------------------------
 # Couleurs
