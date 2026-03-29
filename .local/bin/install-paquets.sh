@@ -71,6 +71,7 @@ packages=(
     haveged
     htop
     jq
+    libnss3-tools
     lnav
     lsd
     mlocate
