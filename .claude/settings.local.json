@@ -13,7 +13,8 @@
       "Bash(bash -n /home/jpdemory/projets/dotfile/.shellrc/rc.d/05-navigation.sh)",
       "Bash(bash -n /home/jpdemory/projets/dotfile/.local/bin/switch-to-networkmanager.sh)",
       "Bash(git -C /home/jpdemory/projets/dotfile submodule status .zsh/oh-my-zsh)",
-      "Bash(git -C /home/jpdemory/projets/dotfile submodule status)"
+      "Bash(git -C /home/jpdemory/projets/dotfile submodule status)",
+      "Bash(echo $PATH)"
     ]
   }
 }

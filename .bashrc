@@ -30,6 +30,9 @@ xterm*|rxvt*)
 esac
 
 
+# Ajout du répertoire pour le répertoire bin perso
+export PATH=$PATH:${HOME}/bin:${HOME}/.local/bin
+
 # load all files from .shell/bashrc.d directory
 if [ -d "$HOME"/.shellrc/bashrc.d ]; then
   for file in "$HOME"/.shellrc/bashrc.d/*.bash; do
@@ -110,9 +113,6 @@ if ! shopt -oq posix; then
     . /etc/bash_completion
   fi
 fi
-
-# Ajout du répertoire pour le répertoire bin perso
-export PATH=$PATH:${HOME}/bin:${HOME}/.local/bin
 
 # Ajout du répertoire pour 'sl'
 export PATH=$PATH:/usr/games
