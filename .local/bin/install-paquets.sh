@@ -93,6 +93,7 @@ packages=(
     wget
     zip
     zsh
+    zstd
 )
 packages+=(
     build-essential
