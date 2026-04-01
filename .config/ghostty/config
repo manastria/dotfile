@@ -1,0 +1,44 @@
+# ~/.config/ghostty/config
+
+# === Shell integration ===
+shell-integration = detect
+copy-on-select = true
+
+# === Font ===
+font-family = JetBrains Mono
+font-size = 11
+
+# === Souris ===
+mouse-shift-capture = true
+cursor-click-to-move = true
+
+# === Désactiver le split natif (tmux gère tout) ===
+keybind = ctrl+shift+enter=unbind
+keybind = ctrl+shift+o=unbind
+keybind = ctrl+shift+e=unbind
+
+# === Désactiver les onglets natifs (tmux gère tout) ===
+keybind = ctrl+shift+t=unbind
+keybind = ctrl+shift+w=unbind
+keybind = super+t=unbind
+keybind = super+w=unbind
+keybind = ctrl+tab=unbind
+keybind = ctrl+shift+tab=unbind
+keybind = super+1=unbind
+keybind = super+2=unbind
+keybind = super+3=unbind
+keybind = super+4=unbind
+keybind = super+5=unbind
+keybind = super+6=unbind
+keybind = super+7=unbind
+keybind = super+8=unbind
+keybind = super+9=unbind
+
+# === Scrollback ===
+scrollback-limit = 10000
+
+# === Apparence ===
+window-padding-x = 4
+window-padding-y = 4
+window-decoration = server
+background-opacity = 0.95
