@@ -132,4 +132,12 @@ config.selection_word_boundary = ' \t\n{}[]()"\',;:'
 -- Pas de scroll natif WezTerm si tmux gère le scrollback
 config.enable_scroll_bar = false
 
+
+---------------------------------------
+-- SECTION 10 : 
+---------------------------------------
+config.enable_csi_u_key_encoding = true
+{ key = 'UpArrow',   mods = 'CTRL|SHIFT', action = wezterm.action.ScrollToPrompt(-1) },
+{ key = 'DownArrow', mods = 'CTRL|SHIFT', action = wezterm.action.ScrollToPrompt(1)  },
+
 return config
