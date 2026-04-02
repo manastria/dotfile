@@ -3,7 +3,7 @@
 # === Shell integration ===
 shell-integration = detect
 copy-on-select = true
-shell = /bin/zsh
+command = /bin/zsh
 
 # === Font ===
 font-family = JetBrains Mono
