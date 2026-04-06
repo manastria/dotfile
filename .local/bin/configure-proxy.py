@@ -140,7 +140,12 @@ def is_root() -> bool:
     return os.geteuid() == 0
 
 def ensure_root():
-    """Relance le script avec sudo si nécessaire (et chauffe le cache sudo)."""
+    """Élévation des privilèges (Tier 1 : auto-relaunch sans -E).
+
+    Équivalent Python de : exec sudo "$(readlink -f "$0")" "$@"
+    os.execvp remplace le processus courant ; sudo démarre sans héritage
+    d'environnement (pas d'équivalent -E), ce qui est le comportement voulu.
+    """
     if is_root():
         return
     if not shutil.which("sudo"):

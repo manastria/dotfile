@@ -49,7 +49,7 @@ else
     # Installer yadm si nécessaire
     if ! command -v yadm &>/dev/null; then
         echo -e "${YELLOW}Installation de yadm...${NC}"
-        sudo -E apt update -qq && sudo -E apt install -y yadm
+        sudo apt update -qq && sudo apt install -y yadm
         echo -e "${GREEN}✓ yadm installé${NC}"
     else
         echo -e "${GREEN}✓ yadm déjà installé${NC}"

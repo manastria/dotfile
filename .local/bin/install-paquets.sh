@@ -13,11 +13,9 @@ BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # Pas de couleur
 
-# --- Vérification des privilèges ---
-# Le script doit être lancé avec des privilèges root (sudo)
+# --- Élévation des privilèges (Tier 1 : auto-relaunch sans -E) ---
 if [ "$(id -u)" -ne 0 ]; then
-    echo -e "${RED}Erreur : Ce script doit être exécuté avec les privilèges root (utilisez sudo).${NC}"
-    exit 1
+    exec sudo "$(readlink -f "$0")" "$@"
 fi
 
 # --- Exécution principale ---

@@ -12,9 +12,9 @@
 
 [[ -n "${BASH_VERSION:-}" ]] || { echo "Ce script doit être exécuté avec bash." >&2; exit 1; }
 
-# Relancer le script avec sudo si besoin
+# --- Élévation des privilèges (Tier 1 : auto-relaunch sans -E) ---
 if [ "$EUID" -ne 0 ]; then
-    exec sudo -E bash "$(readlink -f "$0")" "$@"
+    exec sudo "$(readlink -f "$0")" "$@"
 fi
 
 set -euo pipefail

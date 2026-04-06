@@ -38,14 +38,9 @@ else
   exit 1
 fi
 
-# --- Sudo/elevation ---
+# --- Élévation des privilèges (Tier 1 : auto-relaunch sans -E) ---
 if [[ "$EUID" -ne 0 ]]; then
-  if command -v sudo >/dev/null 2>&1; then
-    exec sudo -E bash "$0" "$@"
-  else
-    echo "Exécutez en root ou installez sudo." >&2
-    exit 1
-  fi
+    exec sudo "$(readlink -f "$0")" "$@"
 fi
 
 # --- Utilitaires requis ---
