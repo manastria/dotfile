@@ -47,9 +47,24 @@ umount_entry() {
     did_something=1
   fi
 
-  if [[ -e "/dev/mapper/${mapper}" ]]; then
-    info "Fermeture LUKS /dev/mapper/${mapper}..."
-    sudo cryptsetup close "$mapper"
+  # Vérifie aussi si le conteneur est ouvert sous un autre nom
+  local active_mapper="$mapper"
+  if [[ ! -e "/dev/mapper/${mapper}" ]]; then
+    local device="/dev/disk/by-uuid/${uuid}"
+    if [[ -e "$device" ]]; then
+      local phys_dev existing_mapper
+      phys_dev="$(readlink -f "$device")"
+      existing_mapper="$(lsblk -rno NAME,TYPE "$phys_dev" 2>/dev/null | awk '$2=="crypt"{print $1; exit}')"
+      if [[ -n "$existing_mapper" ]]; then
+        warn "${mapper} — ouvert sous le nom '${existing_mapper}', fermeture du mapper existant"
+        active_mapper="$existing_mapper"
+      fi
+    fi
+  fi
+
+  if [[ -e "/dev/mapper/${active_mapper}" ]]; then
+    info "Fermeture LUKS /dev/mapper/${active_mapper}..."
+    sudo cryptsetup close "$active_mapper"
     did_something=1
   fi
 
@@ -66,7 +81,7 @@ umount_entry() {
 info "Lecture de ${CONFIG_FILE}"
 echo ""
 
-while IFS= read -r line; do
+while IFS= read -r line <&3 || [[ -n "$line" ]]; do
   [[ "$line" =~ ^[[:space:]]*# ]] && continue
   [[ -z "${line// }" ]] && continue
 
@@ -82,7 +97,7 @@ while IFS= read -r line; do
 
   umount_entry "$uuid" "$mapper" "$mountpoint"
 
-done < "$CONFIG_FILE"
+done 3< "$CONFIG_FILE"
 
 # ── Résumé ────────────────────────────────────────────────────────────────────
 echo ""
