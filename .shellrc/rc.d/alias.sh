@@ -9,6 +9,7 @@
 # Navigation et affichage
 alias ls='ls -N --show-control-chars --color=auto --classify --group-directories-first'
 alias df="df -x tmpfs -x devtmpfs --human-readable --output=source,fstype,size,used,avail,pcent,itotal,iused,iavail,ipcent"
+alias lsblkf='lsblk -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT,UUID,LABEL'
 
 # --- Configuration des Alias de fichiers ---
 
