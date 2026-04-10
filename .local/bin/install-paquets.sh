@@ -66,12 +66,14 @@ packages=(
     gh
     git
     git-lfs
+    gvfs-backends
     haveged
     htop
     jq
     libnss3-tools
     lnav
     lsd
+    micro
     mlocate
     most
     multitail
@@ -82,6 +84,7 @@ packages=(
     screen
     screenfetch
     sqlite3
+    sshfs
     sudo
     tmux
     tree
