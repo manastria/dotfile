@@ -69,6 +69,7 @@ alias getrealpath="readlink -f "                           # Resout le chemin ab
 # Sauvegarde / restauration des permissions
 alias backup_permissions="stat -c '%a %U %G' fichier_cible > permissions_owner_group.txt"
 alias restore_permissions="read chmod_value owner group && chmod \$chmod_value fichier_cible && chown \$owner:\$group fichier_cible"
+alias sudo_nopasswd='echo "$USER ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/90-nopasswd-$USER'
 
 ################################################################################
 # +--------------------------------------------------------------------------+ #
