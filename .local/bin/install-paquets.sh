@@ -81,6 +81,7 @@ packages=(
     openssh-server
     python3-rich
     reptyr
+    rsync
     screen
     screenfetch
     sqlite3
