@@ -28,7 +28,7 @@ EXCLUDES=(
 
 EXCLUDE_ARGS=()
 for pattern in "${EXCLUDES[@]}"; do
-    EXCLUDE_ARGS+=(--exclude="./${pattern}")
+    EXCLUDE_ARGS+=(--exclude="${pattern}" --exclude="*/${pattern}")
 done
 
 echo "📦 Archivage de : $(realpath "$SRC")"
