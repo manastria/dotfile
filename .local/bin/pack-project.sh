@@ -15,7 +15,7 @@ ZSTD_LEVEL="${PACK_ZSTD_LEVEL:-19}"
 EXCLUDES=(
     # Python
     ".venv" "venv" "env" ".env" "__pycache__" ".mypy_cache"
-    ".pytest_cache" "*.pyc" "*.pyo" ".tox" "dist" "build" "*.egg-info"
+    ".pytest_cache" "*.pyc" "*.pyo" ".tox" "dist" "build" "*.egg-info" ".ruff_cache"
     # Node.js
     "node_modules" ".npm" ".yarn" ".pnp"
     # Java / Kotlin / Scala
