@@ -118,12 +118,12 @@ zstyle ':completion:*:kill:*' force-list always
 zstyle ':completion:*:*:kill:*:processes' list-colors "=(#b) #([0-9]#)*=29=34"
 zstyle ':completion:*:*:killall:*' menu yes select
 zstyle ':completion:*:killall:*' force-list always
-users=(jvoisin root)           # because I don't care about others
-zstyle ':completion:*' users $users
+#users=(jvoisin root)           # because I don't care about others
+#zstyle ':completion:*' users $users
 
 #generic completion with --help
-compdef _gnu_generic gcc
-compdef _gnu_generic gdb
+#compdef _gnu_generic gcc
+#compdef _gnu_generic gdb
 
 ##
 # Directories

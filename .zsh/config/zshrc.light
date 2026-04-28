@@ -18,6 +18,18 @@ zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}'
 zstyle ':completion:*' cache-path "${HOME}/.zsh/cache"
 zstyle ':completion::complete:*' use-cache on
 
+# 1. Activer le regroupement des éléments par type
+zstyle ':completion:*' group-name ''
+
+# 2. Définir le format d'affichage des en-têtes de groupe
+# %d est remplacé dynamiquement par la description du groupe
+zstyle ':completion:*:descriptions' format '%F{yellow}-- %d --%f'
+
+zstyle ':completion:*:options' description 'yes'
+zstyle ':completion:*:options' auto-description '%d'
+
+zstyle ':completion:*' list-separator '-->'
+
 # --- Options essentielles ---
 setopt auto_cd
 setopt autopushd pushdminus pushdsilent pushdignoredups
