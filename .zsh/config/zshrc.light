@@ -2,8 +2,12 @@
 # Profil "light" : sans oh-my-zsh, sans powerlevel10k
 # Prompt : pure | Plugins : zsh-autosuggestions + zsh-syntax-highlighting
 
+PLUGIN_DIR="$HOME/.zsh/custom/plugins"
+
 # --- Prompt Pure ---
-fpath+="${HOME}/.zsh/custom/plugins/pure"
+# On ajoute le dossier de Pure au fpath de ZSH
+fpath+=$PLUGIN_DIR/pure
+
 autoload -U promptinit; promptinit
 prompt pure
 
@@ -34,9 +38,10 @@ autoload -U edit-command-line
 zle -N edit-command-line
 bindkey '\C-x\C-e' edit-command-line
 
-# --- Plugins légers ---
-source "${HOME}/.zsh/custom/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh"
-source "${HOME}/.zsh/custom/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
+# --- Chargement des Plugins ---
+source "$PLUGIN_DIR/zsh-autosuggestions/zsh-autosuggestions.zsh"
+source "$PLUGIN_DIR/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
+
 
 # --- Zoxide ---
 if command -v zoxide >/dev/null 2>&1; then
