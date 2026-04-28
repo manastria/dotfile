@@ -26,3 +26,6 @@
 	path = .zsh/oh-my-zsh
 	url = https://github.com/ohmyzsh/ohmyzsh.git
     shallow = true
+[submodule ".zsh/custom/plugins/pure"]
+	path = .zsh/custom/plugins/pure
+	url = https://github.com/sindresorhus/pure.git

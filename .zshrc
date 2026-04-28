@@ -1,5 +1,9 @@
 # -*- mode: shell-script -*-
 
+# Activation automatique du mode léger si le fichier sentinel existe
+if [[ -f "${HOME}/.zsh-light" && -z "${ZSH_PROFILE}" ]]; then
+    ZSH_PROFILE="light"
+fi
 ZSH_PROFILE="${ZSH_PROFILE:-base}"
 
 #export TERM=xterm-256color
@@ -14,6 +18,9 @@ fi
 
 
 case $ZSH_PROFILE in
+  light)
+    source "${HOME}/.zsh/config/zshrc.light"
+    ;;
   base)
     source "${HOME}/.zsh/config/zshrc.base"
     ;;

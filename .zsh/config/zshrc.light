@@ -1,0 +1,51 @@
+# -*- mode: shell-script -*-
+# Profil "light" : sans oh-my-zsh, sans powerlevel10k
+# Prompt : pure | Plugins : zsh-autosuggestions + zsh-syntax-highlighting
+
+# --- Prompt Pure ---
+fpath+="${HOME}/.zsh/custom/plugins/pure"
+autoload -U promptinit; promptinit
+prompt pure
+
+# --- Completion ---
+autoload -U compinit && compinit
+zstyle ':completion:*' menu select
+zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}'
+zstyle ':completion:*' cache-path "${HOME}/.zsh/cache"
+zstyle ':completion::complete:*' use-cache on
+
+# --- Options essentielles ---
+setopt auto_cd
+setopt autopushd pushdminus pushdsilent pushdignoredups
+setopt extended_glob glob_dots
+setopt correct
+setopt complete_in_word always_to_end
+unsetopt beep hist_beep list_beep
+
+# --- Keybindings (emacs) ---
+bindkey -e
+bindkey '\e[1;5C' forward-word            # Ctrl+Droite
+bindkey '\e[1;5D' backward-word           # Ctrl+Gauche
+bindkey '\e[2~'   overwrite-mode          # Inser
+bindkey '\e[3~'   delete-char             # Suppr
+bindkey '\e[5~'   history-search-backward # PgUp
+bindkey '\e[6~'   history-search-forward  # PgDn
+autoload -U edit-command-line
+zle -N edit-command-line
+bindkey '\C-x\C-e' edit-command-line
+
+# --- Plugins légers ---
+source "${HOME}/.zsh/custom/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh"
+source "${HOME}/.zsh/custom/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
+
+# --- Zoxide ---
+if command -v zoxide >/dev/null 2>&1; then
+    eval "$(zoxide init zsh)"
+fi
+
+# --- Titre de fenêtre (compatible iTerm2/WezTerm) ---
+_light_precmd_title() {
+    echo -n "\x1b]1337;CurrentDir=$(pwd)\x07"
+    print -Pn "\e]0;%m: %~\a"
+}
+precmd_functions+=(_light_precmd_title)
