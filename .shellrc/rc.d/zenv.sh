@@ -28,6 +28,7 @@ zenv() {
     if [ -z "$profil" ]; then
         echo "Profils disponibles :"
         echo "  base    - Configuration minimale (sans oh-my-zsh)"
+        echo "  light   - Pure prompt + autosuggestions + syntax-highlighting (sans oh-my-zsh)"
         echo "  omz     - oh-my-zsh sans powerlevel10k"
         for f in "${HOME}"/.zsh/powerlevel10k/p10k.zsh.*; do
             if [ -f "$f" ]; then
@@ -40,7 +41,7 @@ zenv() {
     fi
 
     # Vérifier que le profil existe (sauf base et omz)
-    if [ "$profil" != "base" ] && [ "$profil" != "omz" ]; then
+    if [ "$profil" != "base" ] && [ "$profil" != "light" ] && [ "$profil" != "omz" ]; then
         local pfile="${HOME}/.zsh/powerlevel10k/p10k.zsh.${profil}"
         if [ ! -f "$pfile" ]; then
             echo "Erreur : profil '${profil}' introuvable (${pfile})" >&2
