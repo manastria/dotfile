@@ -158,5 +158,11 @@ if [[ -n "${WSL_DISTRO_NAME}" ]] || grep -qi microsoft /proc/version 2>/dev/null
   fi
 fi
 
+# Lancer zsh automatiquement s'il est disponible et que le fichier sentinel ~/.zsh-force existe
+if [ -x /bin/zsh ] && [ -f "$HOME/.zsh-force" ]; then
+    export SHELL=/bin/zsh
+    exec /bin/zsh -l
+fi
+
 # Retourne toujours un code de sortie 0
 return 0 2>/dev/null || true
