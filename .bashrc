@@ -14,6 +14,12 @@ if [[ $- != *i* ]] ; then
   return
 fi
 
+# Lancer zsh automatiquement s'il est disponible et que le fichier sentinel ~/.zsh-force existe
+if [ -x /bin/zsh ] && [ -f "$HOME/.zsh-force" ]; then
+    export SHELL=/bin/zsh
+    exec /bin/zsh -l
+fi
+
 # Source global definitions
 if [ -f /etc/bashrc ]; then
 	 . /etc/bashrc
@@ -156,12 +162,6 @@ if [[ -n "${WSL_DISTRO_NAME}" ]] || grep -qi microsoft /proc/version 2>/dev/null
       [ -f "$file" ] && source "$file"
     done
   fi
-fi
-
-# Lancer zsh automatiquement s'il est disponible et que le fichier sentinel ~/.zsh-force existe
-if [ -x /bin/zsh ] && [ -f "$HOME/.zsh-force" ]; then
-    export SHELL=/bin/zsh
-    exec /bin/zsh -l
 fi
 
 # Retourne toujours un code de sortie 0
