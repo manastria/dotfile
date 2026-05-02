@@ -5,11 +5,9 @@
 PLUGIN_DIR="$HOME/.zsh/custom/plugins"
 
 # --- Prompt Pure ---
-# On ajoute le dossier de Pure au fpath de ZSH
-fpath+=$PLUGIN_DIR/pure
-
-autoload -U promptinit; promptinit
-prompt pure
+# fpath requis pour que pure trouve async.zsh via ${0:A:h}
+fpath+="$PLUGIN_DIR/pure"
+source "$PLUGIN_DIR/pure/pure.zsh"
 
 # --- Completion ---
 autoload -U compinit && compinit
