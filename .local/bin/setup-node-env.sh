@@ -179,7 +179,8 @@ if $DRY_RUN; then
 else
   echo "✔ Environnement Node.js configuré."
   echo
-  printf "  node    : %s\n" "$(node -v 2>/dev/null || echo 'non trouvé')"
+  NODE_BIN="$(npm config get prefix 2>/dev/null)/bin/node"
+  printf "  node    : %s\n" "$($NODE_BIN -v 2>/dev/null || echo 'non trouvé')"
   printf "  npm     : %s\n" "$(npm -v  2>/dev/null || echo 'non trouvé')"
   printf "  prefix  : %s\n" "$NPM_PREFIX"
   echo
