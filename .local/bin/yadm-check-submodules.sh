@@ -1,20 +1,32 @@
 #!/bin/bash
+set -e
 
-echo "Vérification de l'état des submodules..."
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+RESET='\033[0m'
 
-# La commande magique :
-# - `yadm submodule status --recursive` : vérifie l'état de tous les submodules, même imbriqués.
-# - `grep -q '^[-+]'` : cherche silencieusement (`-q`) les lignes qui commencent (`^`) par un `-` ou un `+`.
-#   grep renvoie un code de sortie 0 (succès) s'il trouve une correspondance, et 1 (échec) sinon.
+info()    { echo -e "${CYAN}[INFO]${RESET}      $*"; }
+success() { echo -e "${GREEN}[OK]${RESET}        $*"; }
+warn()    { echo -e "${YELLOW}[ATTENTION]${RESET} $*"; }
+error()   { echo -e "${RED}[ERREUR]${RESET}    $*" >&2; }
+die()     { error "$*"; exit 1; }
 
-if yadm submodule status --recursive | grep -q '^[-+]'; then
-    echo "⚠️  Mise à jour des submodules requise."
-    echo "Lancement du téléchargement et de la mise à jour..."
-    
-    # La commande de mise à jour (qui, elle, a besoin d'internet)
-    yadm submodule update --init --recursive
-    
-    echo "✅  Submodules synchronisés."
+# yadm utilise un dépôt bare : git-submodule requiert --git-dir et --work-tree explicites
+YADM_REPO="${YADM_REPO:-$HOME/.local/share/yadm/repo.git}"
+YADM_GIT="git --git-dir=$YADM_REPO --work-tree=$HOME"
+
+[ -d "$YADM_REPO" ] || die "Dépôt yadm introuvable : $YADM_REPO"
+
+info "Vérification de l'état des submodules..."
+
+if $YADM_GIT submodule status --recursive | grep -q '^[-+]'; then
+    warn "Mise à jour des submodules requise."
+    info "Téléchargement et mise à jour en cours..."
+    $YADM_GIT submodule update --init --recursive
+    success "Submodules synchronisés."
 else
-    echo "✅  Tous les submodules sont déjà à jour."
+    success "Tous les submodules sont déjà à jour."
 fi
