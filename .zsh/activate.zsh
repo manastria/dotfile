@@ -13,9 +13,6 @@ fi
 
 
 plugins=(
-# ansible
-# python
-#git-extras
 colored-man-pages
 colorize
 command-not-found
@@ -32,10 +29,7 @@ z
 safe-paste
 zsh-autosuggestions
 zsh-completions
-zsh-dircolors-solarized
 zsh-syntax-highlighting
-#zsh-vi-mode
-atuin
 )
 
 
