@@ -5,6 +5,7 @@ if [[ -f "${HOME}/.zsh-light" && -z "${ZSH_PROFILE}" ]]; then
     ZSH_PROFILE="light"
 fi
 ZSH_PROFILE="${ZSH_PROFILE:-base}"
+export ZSH_PROFILE
 
 #export TERM=xterm-256color
 
