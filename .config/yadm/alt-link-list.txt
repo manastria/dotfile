@@ -4,3 +4,4 @@
 docs
 CLAUDE.md
 README.md
+.claude
