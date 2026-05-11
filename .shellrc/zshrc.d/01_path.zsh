@@ -33,6 +33,7 @@ rationalize-path () {
 
 mkdir -p ${HOME}/bin
 path=(
+  ${HOME}/.local/bin
   ${HOME}/bin
   /usr/local/bin
   /usr/local/sbin
