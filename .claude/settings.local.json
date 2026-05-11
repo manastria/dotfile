@@ -15,7 +15,10 @@
       "Bash(git -C /home/jpdemory/projets/dotfile submodule status .zsh/oh-my-zsh)",
       "Bash(git -C /home/jpdemory/projets/dotfile submodule status)",
       "Bash(echo $PATH)",
-      "Bash(git submodule:*)"
+      "Bash(git submodule:*)",
+      "Bash(git update-index *)",
+      "Bash(git rm *)",
+      "Bash(git add *)"
     ]
   }
 }

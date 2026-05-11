@@ -53,11 +53,6 @@ source "$PLUGIN_DIR/zsh-autosuggestions/zsh-autosuggestions.zsh"
 source "$PLUGIN_DIR/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
 
 
-# --- Zoxide ---
-if command -v zoxide >/dev/null 2>&1; then
-    eval "$(zoxide init zsh)"
-fi
-
 # --- Titre de fenêtre (compatible iTerm2/WezTerm) ---
 _light_precmd_title() {
     echo -n "\x1b]1337;CurrentDir=$(pwd)\x07"
