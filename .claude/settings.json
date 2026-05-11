@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /home/jpdemory/projets/dotfile log --oneline -10)"
+    ]
+  }
+}
