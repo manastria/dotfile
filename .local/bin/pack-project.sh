@@ -43,7 +43,6 @@ EXCLUDES=(
 )
 
 # Les patterns sans '/' matchent le basename à n'importe quelle profondeur dans GNU tar.
-# Pas besoin de doublonner avec "*/pattern".
 EXCLUDE_ARGS=()
 for pattern in "${EXCLUDES[@]}"; do
     EXCLUDE_ARGS+=(--exclude="${pattern}")
@@ -65,24 +64,17 @@ else
 fi
 echo ""
 
-# Pré-scan rapide sans compression pour compter les fichiers
-info "Analyse du répertoire source..."
-FILE_COUNT=$(tar -c -f /dev/null -v \
-    "${EXCLUDE_ARGS[@]}" \
-    -C "$(dirname "$SRC_REAL")" "./${PROJECT_NAME}" 2>&1 | wc -l)
-info "${BOLD}${FILE_COUNT}${RESET} fichiers à archiver"
-echo ""
-
 # Archivage avec progression
 info "Compression en cours..."
 if command -v pv &>/dev/null; then
-    tar --create "${EXCLUDE_ARGS[@]}" \
+    tar --create --ignore-failed-read "${EXCLUDE_ARGS[@]}" \
         -C "$(dirname "$SRC_REAL")" "./${PROJECT_NAME}" \
         | pv -N "Pack" \
         | zstd -T0 -${ZSTD_LEVEL} --long > "$ARCHIVE"
 else
-    warn "Installez 'pv' (apt install pv) pour une barre de progression détaillée."
+    warn "Installez 'pv' (apt install pv) pour une barre de progression."
     tar --create \
+        --ignore-failed-read \
         --file="$ARCHIVE" \
         --use-compress-program="zstd -T0 -${ZSTD_LEVEL} --long" \
         --checkpoint=500 \
@@ -93,7 +85,6 @@ else
     echo ""
 fi
 
-# Succès : désactiver le trap d'erreur avant de quitter proprement
 trap - ERR INT TERM
 
 SIZE=$(du -sh "$ARCHIVE" | cut -f1)
