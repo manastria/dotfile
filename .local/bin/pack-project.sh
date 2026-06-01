@@ -5,12 +5,28 @@
 #   pack_project /chemin/projet     → archive le projet spécifié
 #   pack_project /chemin/projet /destination
 
+set -eo pipefail
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+RESET='\033[0m'
+
+info()    { echo -e "${CYAN}[INFO]${RESET}      $*"; }
+success() { echo -e "${GREEN}[OK]${RESET}        $*"; }
+warn()    { echo -e "${YELLOW}[ATTENTION]${RESET} $*"; }
+error()   { echo -e "${RED}[ERREUR]${RESET}    $*" >&2; }
+die()     { error "$*"; exit 1; }
+
 SRC="${1:-.}"
 DEST="${2:-$(dirname "$(realpath "$SRC")")}"
-PROJECT_NAME=$(basename "$(realpath "$SRC")")
+SRC_REAL=$(realpath "$SRC")
+PROJECT_NAME=$(basename "$SRC_REAL")
 TIMESTAMP=$(date +%Y%m%d_%H%M)
 ARCHIVE="${DEST}/${PROJECT_NAME}_${TIMESTAMP}.tar.zst"
-ZSTD_LEVEL="${PACK_ZSTD_LEVEL:-19}"
+ZSTD_LEVEL="${PACK_ZSTD_LEVEL:-3}"
 
 EXCLUDES=(
     # Python
@@ -26,28 +42,59 @@ EXCLUDES=(
     ".DS_Store" "Thumbs.db"
 )
 
+# Les patterns sans '/' matchent le basename à n'importe quelle profondeur dans GNU tar.
+# Pas besoin de doublonner avec "*/pattern".
 EXCLUDE_ARGS=()
 for pattern in "${EXCLUDES[@]}"; do
-    EXCLUDE_ARGS+=(--exclude="${pattern}" --exclude="*/${pattern}")
+    EXCLUDE_ARGS+=(--exclude="${pattern}")
 done
 
-echo "📦 Archivage de : $(realpath "$SRC")"
-echo "   → ${ARCHIVE}"
-echo "   Exclusions : ${EXCLUDES[*]}"
+cleanup() {
+    rm -f "$ARCHIVE"
+    error "Interruption ou erreur — archive incomplète supprimée."
+    exit 1
+}
+trap cleanup ERR INT TERM
+
+info "Source      : $SRC_REAL"
+info "Archive     : $ARCHIVE"
+if [[ "$ZSTD_LEVEL" -ge 15 ]]; then
+    warn "Niveau zstd ${BOLD}${ZSTD_LEVEL}${RESET} — très lent. Utilisez PACK_ZSTD_LEVEL=3 à 9 pour un usage quotidien."
+else
+    info "Compression : zstd niveau ${BOLD}${ZSTD_LEVEL}${RESET}  (PACK_ZSTD_LEVEL pour modifier)"
+fi
 echo ""
 
-tar \
-    --create \
-    --file="$ARCHIVE" \
-    --use-compress-program="zstd -T0 -${ZSTD_LEVEL} --long" \
+# Pré-scan rapide sans compression pour compter les fichiers
+info "Analyse du répertoire source..."
+FILE_COUNT=$(tar -c -f /dev/null -v \
     "${EXCLUDE_ARGS[@]}" \
-    -C "$(dirname "$(realpath "$SRC")")" \
-    "./${PROJECT_NAME}"
+    -C "$(dirname "$SRC_REAL")" "./${PROJECT_NAME}" 2>&1 | wc -l)
+info "${BOLD}${FILE_COUNT}${RESET} fichiers à archiver"
+echo ""
 
-if [[ $? -eq 0 ]]; then
-    SIZE=$(\du -s -h "$ARCHIVE" | cut -f1)
-    echo "✅ Archive créée : ${ARCHIVE} (${SIZE})"
+# Archivage avec progression
+info "Compression en cours..."
+if command -v pv &>/dev/null; then
+    tar --create "${EXCLUDE_ARGS[@]}" \
+        -C "$(dirname "$SRC_REAL")" "./${PROJECT_NAME}" \
+        | pv -N "Pack" \
+        | zstd -T0 -${ZSTD_LEVEL} --long > "$ARCHIVE"
 else
-    echo "❌ Erreur lors de la création de l'archive."
-    exit 1
+    warn "Installez 'pv' (apt install pv) pour une barre de progression détaillée."
+    tar --create \
+        --file="$ARCHIVE" \
+        --use-compress-program="zstd -T0 -${ZSTD_LEVEL} --long" \
+        --checkpoint=500 \
+        --checkpoint-action='ttyout=    → bloc %d\r' \
+        "${EXCLUDE_ARGS[@]}" \
+        -C "$(dirname "$SRC_REAL")" \
+        "./${PROJECT_NAME}"
+    echo ""
 fi
+
+# Succès : désactiver le trap d'erreur avant de quitter proprement
+trap - ERR INT TERM
+
+SIZE=$(du -sh "$ARCHIVE" | cut -f1)
+success "Archive : ${BOLD}${ARCHIVE}${RESET} (${SIZE})"
