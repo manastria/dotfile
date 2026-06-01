@@ -11,10 +11,8 @@ GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 NC='\033[0m' # Pas de couleur
 
-# Vérifier si le script est exécuté avec sudo
-if [ "$EUID" -ne 0 ]; then
-  echo -e "${RED}Ce script doit être exécuté avec sudo.${NC}"
-  exit 1
+if [ "$(id -u)" -ne 0 ]; then
+    exec sudo "$(readlink -f "$0")" "$@"
 fi
 
 # Étape 0 : Nettoyage préventif des conflits (AJOUTÉ)

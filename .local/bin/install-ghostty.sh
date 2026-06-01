@@ -168,6 +168,11 @@ main() {
     check_root
     check_ubuntu
     check_already_installed
+
+    # Préchauffage : demande le mot de passe une seule fois en début de script
+    info "Des droits administrateur sont nécessaires pour certaines étapes."
+    sudo -v
+
     install_dependencies
     add_ppa
     update_and_install

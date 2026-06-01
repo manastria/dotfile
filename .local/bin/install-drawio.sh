@@ -6,9 +6,8 @@
 set -euo pipefail
 
 # ─── Vérifications ───────────────────────────────────────────────
-if [[ $EUID -ne 0 ]]; then
-    echo "❌ Ce script doit être lancé avec sudo."
-    exit 1
+if [ "$(id -u)" -ne 0 ]; then
+    exec sudo "$(readlink -f "$0")" "$@"
 fi
 
 for cmd in curl jq dpkg apt-get; do

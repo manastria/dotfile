@@ -33,9 +33,8 @@ if ! command -v apt-get >/dev/null 2>&1; then
   exit 1
 fi
 
-if [[ $EUID -ne 0 ]]; then
-  echo "Merci d'exécuter en root (ex : sudo $0 ...)" >&2
-  exit 1
+if [ "$(id -u)" -ne 0 ]; then
+    exec sudo "$(readlink -f "$0")" "$@"
 fi
 
 export DEBIAN_FRONTEND=noninteractive

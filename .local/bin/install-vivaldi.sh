@@ -4,8 +4,7 @@
 # Nécessite sudo
 
 if [ "$(id -u)" -ne 0 ]; then
-  echo "Ce script doit être exécuté en tant que root." >&2
-  exit 1
+    exec sudo "$(readlink -f "$0")" "$@"
 fi
 
 # 1. Nettoyage des anciennes configurations conflictuelles

@@ -1,3 +1,8 @@
-#!/bin/sh
+#!/bin/bash
+set -e
 
-sudo -v ; curl https://rclone.org/install.sh | sudo bash
+if [ "$(id -u)" -ne 0 ]; then
+    exec sudo "$(readlink -f "$0")" "$@"
+fi
+
+curl https://rclone.org/install.sh | bash

@@ -5,11 +5,8 @@
 # -o pipefail: Fait échouer un pipeline si l'une de ses commandes échoue.
 set -euo pipefail
 
-# --- Vérification des privilèges ---
-# Le script doit être lancé avec des privilèges root (sudo)
 if [ "$(id -u)" -ne 0 ]; then
-  echo "Veuillez lancer ce script avec sudo : sudo $0" >&2
-  exit 1
+    exec sudo "$(readlink -f "$0")" "$@"
 fi
 
 # --- Installation de software-properties-common ---

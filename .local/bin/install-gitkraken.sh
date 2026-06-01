@@ -4,6 +4,10 @@
 #            .deb depuis GitHub Releases pour le CLI (gk)
 set -euo pipefail
 
+if [ "$(id -u)" -ne 0 ]; then
+    exec sudo "$(readlink -f "$0")" "$@"
+fi
+
 # Vérification : système 64 bits
 if [ "$(uname -m)" != "x86_64" ]; then
     echo "Erreur : GitKraken ne supporte que les systèmes x86_64." >&2
@@ -14,16 +18,16 @@ fi
 install_snap() {
     if ! command -v snap &>/dev/null; then
         echo "==> Installation de snapd..."
-        sudo apt update -y
-        sudo apt install -y snapd
+        apt update -y
+        apt install -y snapd
         # Sur Debian, le socket snap peut nécessiter un redémarrage
         # ou l'activation manuelle du service
-        sudo systemctl enable --now snapd.socket
+        systemctl enable --now snapd.socket
         echo "    snapd installé. Si la commande snap échoue,"
         echo "    redémarrez la session ou le système puis relancez."
     fi
     echo "==> Installation de GitKraken via snap..."
-    sudo snap install gitkraken --classic
+    snap install gitkraken --classic
     echo "==> GitKraken installé. Lancez-le avec : gitkraken &"
 }
 
@@ -34,7 +38,7 @@ install_deb() {
     echo "==> Téléchargement de GitKraken (.deb)..."
     wget -O "$TMP_DEB" "$DEB_URL"
     echo "==> Installation (apt gère les dépendances)..."
-    sudo apt install -y "$TMP_DEB"
+    apt install -y "$TMP_DEB"
     rm -f "$TMP_DEB"
     echo "==> GitKraken installé. Lancez-le avec : gitkraken &"
     echo ""
@@ -58,7 +62,7 @@ install_gk_cli() {
     echo "==> Téléchargement de gk CLI..."
     curl -fsSL -o "$TMP_DEB" "$LATEST_URL"
     echo "==> Installation (apt gère les dépendances)..."
-    sudo apt install -y "$TMP_DEB"
+    apt install -y "$TMP_DEB"
     rm -f "$TMP_DEB"
     echo "==> GitKraken CLI installé. Vérifiez avec : gk --version"
     echo ""

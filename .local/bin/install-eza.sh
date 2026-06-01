@@ -13,9 +13,8 @@ success() { echo -e "${GREEN}[OK]${NC} $1"; }
 warn() { echo -e "${YELLOW}[ATTENTION]${NC} $1"; }
 error() { echo -e "${RED}[ERREUR]${NC} $1"; exit 1; }
 
-# --- Vérification des privilèges ---
-if [ "$EUID" -ne 0 ]; then
-    error "Ce script doit être exécuté en tant que root (ou via sudo)."
+if [ "$(id -u)" -ne 0 ]; then
+    exec sudo "$(readlink -f "$0")" "$@"
 fi
 
 info "Début de l'installation « omnipotente » de eza..."

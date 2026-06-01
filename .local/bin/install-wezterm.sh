@@ -5,9 +5,8 @@
 
 set -euo pipefail
 
-if [[ "$EUID" -ne 0 ]]; then
-  echo "Ce script doit être lancé avec sudo." >&2
-  exit 1
+if [ "$(id -u)" -ne 0 ]; then
+    exec sudo "$(readlink -f "$0")" "$@"
 fi
 
 echo "==> Ajout de la clé GPG WezTerm…"

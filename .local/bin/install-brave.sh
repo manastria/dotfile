@@ -1,5 +1,8 @@
-#!/bin/sh
+#!/bin/bash
+set -e
 
-# Install Brave browser on Linux
-# This script uses the official Brave installation script
-sudo -v ; curl -fsS https://dl.brave.com/install.sh | sudo sh
+if [ "$(id -u)" -ne 0 ]; then
+    exec sudo "$(readlink -f "$0")" "$@"
+fi
+
+curl -fsS https://dl.brave.com/install.sh | sh
