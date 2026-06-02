@@ -50,7 +50,9 @@ Submodules (defined in `.gitmodules`) are all zsh-related: oh-my-zsh, powerlevel
 ## Code Conventions
 
 - EditorConfig: 4 spaces indentation, UTF-8. Shell files (`.sh`, `.zsh`) must have LF line endings and a final newline.
-- Shell scripts use `#!/bin/bash` with `set -e`. Comments and UI messages are in **French**.
+- **POSIX-shared scripts** (`.shellrc/rc.d/*.sh`): use `#!/bin/bash` with `set -e`.
+- **Installer scripts** (`.local/bin/install-*.sh`): use `#!/usr/bin/env bash` with `set -euo pipefail`. The stricter flags catch unbound variables (`-u`) and pipe failures (`-o pipefail`) that `set -e` alone misses.
+- Comments and UI messages are in **French**.
 - Alias definitions go in `.shellrc/rc.d/alias.sh` (shared), `.shellrc/bashrc.d/10_alias.bash` (bash-only), or `.shellrc/zshrc.d/02_alias.zsh` (zsh-only). Functions belong in the corresponding `.shellrc/` subdirectory, not in alias files.
 - Git aliases go in `.gitconfig_alias`.
 
@@ -150,3 +152,156 @@ Le script a-t-il besoin de sudo ?
 - `exec sudo -E "$0" "$@"` — propagates user environment to root (security risk).
 - `if [ "$EUID" -ne 0 ]; then echo "Lancez avec sudo"; exit 1; fi` — forces the user to type the full path since `~/.local/bin` is not in sudo's `secure_path`.
 - Asking for the password multiple times within the same script (use `sudo -v` warmup instead).
+
+## Shell Script Structure
+
+Organize installer scripts with section dividers and a `main()` entry point. This is the canonical layout:
+
+```bash
+#!/usr/bin/env bash
+# install-foo.sh — Description courte
+# Usage : bash install-foo.sh [--option]
+set -euo pipefail
+
+# -----------------------------------------------------------------------------
+# Constantes
+# -----------------------------------------------------------------------------
+readonly PACKAGE="foo"
+
+# -----------------------------------------------------------------------------
+# Couleurs et fonctions de log
+# -----------------------------------------------------------------------------
+# [canonical color variables and log functions here]
+
+# -----------------------------------------------------------------------------
+# Vérifications préalables
+# -----------------------------------------------------------------------------
+check_root() { ... }
+
+# -----------------------------------------------------------------------------
+# Installation
+# -----------------------------------------------------------------------------
+install_foo() { ... }
+
+# -----------------------------------------------------------------------------
+# Point d'entrée
+# -----------------------------------------------------------------------------
+main() {
+    echo -e "\n${BOLD}=== Installation de Foo ===${RESET}\n"
+    check_root
+    install_foo
+}
+
+main "$@"
+```
+
+Use `readonly` for all top-level constants. Group functions by responsibility. Put `main "$@"` as the last line.
+
+### Argument parsing
+
+For scripts that accept options, use a `while`-based parser that supports flags with values:
+
+```bash
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --option) VALUE="${2:-}"; shift 2 ;;
+    --flag)   FLAG="yes"; shift ;;
+    -h|--help) sed -n '2,5p' "$0"; exit 0 ;;
+    *) die "Option inconnue : $1" ;;
+  esac
+done
+```
+
+`sed -n '2,5p' "$0"` prints the script's header comment block as help text — only works if the header is written as comments on lines 2–N.
+
+## Common Installer Script Patterns
+
+### Idempotency
+
+Scripts must be safely re-runnable. Check state before each step:
+
+```bash
+# Package already installed?
+if dpkg -s "$PACKAGE" &>/dev/null; then
+    local version
+    version=$(dpkg -s "$PACKAGE" | awk '/^Version:/ { print $2 }')
+    warn "Déjà installé (version $version)."
+    read -r -p "$(echo -e "${YELLOW}Réinstaller ?${RESET} [o/N] ")" answer
+    [[ ! "$answer" =~ ^[oOyY]$ ]] && { info "Annulé."; exit 0; }
+fi
+
+# Binary already on PATH?
+if command -v foo &>/dev/null; then
+    info "foo déjà présent : $(command -v foo)"
+fi
+
+# File/key already exists?
+if [ ! -f "$KEY_FILE" ]; then
+    # download and install key
+fi
+```
+
+### Temporary directory with automatic cleanup
+
+Always pair `mktemp` with a `trap` so the directory is removed on exit, error, or signal:
+
+```bash
+TMP_DIR="$(mktemp -d)"
+trap 'rm -rf "$TMP_DIR"' EXIT
+```
+
+### Architecture detection
+
+```bash
+ARCH="$(uname -m)"
+case "$ARCH" in
+    x86_64)  ARCH_TAG="linux_amd64" ;;
+    aarch64) ARCH_TAG="linux_arm64" ;;
+    armv7l)  ARCH_TAG="linux_armv7" ;;
+    *) die "Architecture non supportée : ${ARCH}" ;;
+esac
+```
+
+### GitHub releases — fetch latest version
+
+```bash
+LATEST=$(curl -fsSL https://api.github.com/repos/OWNER/REPO/releases/latest \
+    | grep '"tag_name"' \
+    | sed 's/.*"v\?\([^"]*\)".*/\1/')
+```
+
+Then build the download URL:
+
+```bash
+TARBALL="tool-${LATEST}-${ARCH_TAG}.tar.gz"
+URL="https://github.com/OWNER/REPO/releases/download/v${LATEST}/${TARBALL}"
+curl -fsSL -o "${TMP_DIR}/${TARBALL}" "$URL"
+tar -xzf "${TMP_DIR}/${TARBALL}" -C "$TMP_DIR"
+install -m 0755 "${TMP_DIR}/tool" "${INSTALL_DIR}/tool"
+```
+
+### APT non-interactive mode (Tier 1 scripts only)
+
+Set before any `apt` calls to suppress interactive prompts:
+
+```bash
+export DEBIAN_FRONTEND=noninteractive
+```
+
+Only set in Tier 1 scripts (running as root). In Tier 2, `sudo apt-get install -y` is sufficient.
+
+### Post-install verification
+
+Always verify the binary is reachable after installation:
+
+```bash
+verify_install() {
+    if command -v foo &>/dev/null; then
+        local version
+        version=$(foo --version 2>/dev/null | head -1 || echo "inconnue")
+        success "Installé avec succès : ${BOLD}$version${RESET}"
+    else
+        die "Introuvable dans le PATH après installation."
+    fi
+}
+```

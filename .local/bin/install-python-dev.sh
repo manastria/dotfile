@@ -1,269 +1,278 @@
 #!/usr/bin/env bash
+# install-python-dev.sh — Environnement de développement Python (pyenv + pipx + poetry)
+# Cible  : Debian / Ubuntu et variantes APT
+# Usage  : ./install-python-dev.sh
+#
+# Installe et configure :
+#   - pyenv            : gestionnaire de versions Python (~/.pyenv)
+#   - pyenv-virtualenv : plugin virtualenvs pour pyenv
+#   - pipx             : gestionnaire d'outils Python isolés (~/.local/venvs/pipx)
+#   - poetry           : gestionnaire de projets et dépendances (via pipx)
+#
+# Idempotent : peut être relancé pour mettre à jour.
+# Intégration shell : ~/.shellrc/rc.d/20-python-dev.sh (sans toucher .bashrc/.zshrc)
+
 set -euo pipefail
 
 # -----------------------------------------------------------------------------
-# install-python-dev.sh
-#
-# Installe un environnement de développement Python "passe-partout" sur :
-#   - Debian / Ubuntu / Xubuntu (toutes variantes basées sur APT)
-#
-# Objectifs :
-#   - pyenv (compilation de versions de Python dans ~/.pyenv)
-#   - pipx (installé dans un venv dédié pour éviter les blocages PEP 668)
-#   - poetry (installé/maintenu via pipx)
-#   - configuration shell via ~/.shellrc/rc.d (sans modifier ~/.bashrc ou ~/.zshrc)
-#   - config globale poetry : virtualenvs.in-project = true
-#
-# Usage :
-#   chmod +x install-python-dev.sh
-#   ./install-python-dev.sh
-#
-# Après exécution :
-#   - Ouvre un nouveau terminal (ou source le fichier rc créé)
-#   - Exemple :
-#       pyenv install 3.12.7
-#       pyenv global 3.12.7
-#
-# Notes maintenance :
-#   - Ce script est conçu pour être relancé : il met à jour pyenv/plugins,
-#     réinstalle/upgrade pipx et poetry si besoin, et réécrit le fichier rc.
+# Constantes
 # -----------------------------------------------------------------------------
+readonly PYENV_ROOT="${HOME}/.pyenv"
+readonly PYENV_VENV_PLUGIN="${PYENV_ROOT}/plugins/pyenv-virtualenv"
+readonly PIPX_VENV="${HOME}/.local/venvs/pipx"
+readonly PIPX_BIN_DIR="${HOME}/.local/bin"
+readonly PIPX_HOME_DIR="${HOME}/.local/pipx"
+readonly RC_DIR="${HOME}/.shellrc/rc.d"
+readonly RC_FILE="${RC_DIR}/20-python-dev.sh"
 
-log() { printf "\n[%s] %s\n" "$(date +'%F %T')" "$*"; }
+# Exposition anticipée pour que pyenv et pipx soient trouvables dès leur installation,
+# sans attendre le rechargement du shell.
+export PYENV_ROOT
+export PIPX_HOME="${PIPX_HOME_DIR}"
+export PIPX_BIN_DIR
+export PATH="${PIPX_BIN_DIR}:${PYENV_ROOT}/bin:${PATH}"
 
 # -----------------------------------------------------------------------------
-# Sudo / root handling
+# Couleurs et fonctions de log
 # -----------------------------------------------------------------------------
-if [ "$(id -u)" -eq 0 ]; then
-  SUDO=""
-else
-  if command -v sudo >/dev/null 2>&1; then
-    SUDO="sudo"
-  else
-    echo "Erreur: 'sudo' est requis (ou exécute le script en root)."
-    exit 1
-  fi
-fi
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+RESET='\033[0m'
 
-export DEBIAN_FRONTEND=noninteractive
-
-# -----------------------------------------------------------------------------
-# OS detection (info only)
-# -----------------------------------------------------------------------------
-OS_NAME="unknown"
-OS_VER="unknown"
-if [ -r /etc/os-release ]; then
-  # shellcheck disable=SC1091
-  . /etc/os-release
-  OS_NAME="${NAME:-unknown}"
-  OS_VER="${VERSION_ID:-unknown}"
-fi
-log "Detected: ${OS_NAME} ${OS_VER}"
+info()    { echo -e "${CYAN}[INFO]${RESET}      $*"; }
+success() { echo -e "${GREEN}[OK]${RESET}        $*"; }
+warn()    { echo -e "${YELLOW}[ATTENTION]${RESET} $*"; }
+error()   { echo -e "${RED}[ERREUR]${RESET}    $*" >&2; }
+die()     { error "$*"; exit 1; }
 
 # -----------------------------------------------------------------------------
-# Helper: install uniquement les paquets disponibles (utile Debian vs Ubuntu)
+# Vérifications préalables
 # -----------------------------------------------------------------------------
-apt_install_available() {
-  local -a wanted=("$@")
-  local -a available=()
-
-  for pkg in "${wanted[@]}"; do
-    if apt-cache show "$pkg" >/dev/null 2>&1; then
-      available+=("$pkg")
+check_root() {
+    if [ "$(id -u)" -eq 0 ]; then
+        die "Ce script ne doit pas être lancé en root. Relancez sans sudo."
     fi
-  done
+}
 
-  if [ "${#available[@]}" -gt 0 ]; then
-    $SUDO apt-get install -y "${available[@]}"
-  fi
+check_os() {
+    command -v apt-get >/dev/null 2>&1 \
+        || die "Ce script requiert un système basé sur APT (Debian / Ubuntu)."
+
+    local distro
+    distro=$(. /etc/os-release && echo "${ID:-unknown}")
+    case "$distro" in
+        debian|ubuntu|linuxmint|pop|raspbian) ;;
+        *) die "Distribution non supportée : $distro. Ce script cible Debian / Ubuntu." ;;
+    esac
+
+    info "Système : $(. /etc/os-release && echo "${PRETTY_NAME:-$distro}")"
 }
 
 # -----------------------------------------------------------------------------
-# 1) Update APT
+# Helper APT : filtre silencieusement les paquets absents des dépôts
 # -----------------------------------------------------------------------------
-log "1) apt update"
-$SUDO apt-get update -y
-
-# -----------------------------------------------------------------------------
-# 2) Base packages (Python système minimal + outils)
-#   - python3-venv est indispensable (pipx venv dédié + éventuels venvs)
-#   - python3-pip est utile mais pas strictement nécessaire ici
-# -----------------------------------------------------------------------------
-log "2) Base packages (python3 + venv, git, curl...)"
-apt_install_available \
-  ca-certificates curl git \
-  build-essential make \
-  python3 python3-venv
-
-# Optionnel mais pratique
-apt_install_available python3-pip
+apt_install() {
+    local -a to_install=()
+    for pkg in "$@"; do
+        if apt-cache show "$pkg" >/dev/null 2>&1; then
+            to_install+=("$pkg")
+        else
+            warn "Paquet ignoré (indisponible sur cette distro) : ${pkg}"
+        fi
+    done
+    [ "${#to_install[@]}" -gt 0 ] && sudo apt-get install -y "${to_install[@]}"
+}
 
 # -----------------------------------------------------------------------------
-# 3) Dépendances build pour compiler Python via pyenv
-#   - Liste volontairement large, filtrée selon la distro
+# Étape 1 : paquets système de base
 # -----------------------------------------------------------------------------
-log "3) Build dependencies for pyenv (compilation de Python)"
-apt_install_available \
-  libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev \
-  libffi-dev liblzma-dev \
-  libgdbm-dev libnss3-dev \
-  xz-utils tk-dev \
-  libncursesw5-dev libncurses5-dev \
-  wget llvm
+install_base_packages() {
+    info "Mise à jour des sources APT..."
+    sudo apt-get update -q
 
-# -----------------------------------------------------------------------------
-# 4) pyenv (core) dans ~/.pyenv
-# -----------------------------------------------------------------------------
-PYENV_ROOT="${HOME}/.pyenv"
+    info "Installation des paquets de base..."
+    apt_install \
+        ca-certificates curl git \
+        build-essential make \
+        python3 python3-venv python3-pip
 
-log "4) Install/Update pyenv in ${PYENV_ROOT}"
-if [ ! -d "$PYENV_ROOT" ]; then
-  git clone https://github.com/pyenv/pyenv.git "$PYENV_ROOT"
-else
-  git -C "$PYENV_ROOT" pull --ff-only || true
-fi
+    success "Paquets de base prêts."
+}
 
 # -----------------------------------------------------------------------------
-# 5) pyenv-virtualenv (plugin optionnel mais utile)
+# Étape 2 : dépendances de compilation pour pyenv
+#   Liste volontairement large, filtrée par apt_install selon la distro.
 # -----------------------------------------------------------------------------
-log "5) Install/Update pyenv-virtualenv plugin"
-if [ ! -d "${PYENV_ROOT}/plugins/pyenv-virtualenv" ]; then
-  git clone https://github.com/pyenv/pyenv-virtualenv.git "${PYENV_ROOT}/plugins/pyenv-virtualenv"
-else
-  git -C "${PYENV_ROOT}/plugins/pyenv-virtualenv" pull --ff-only || true
-fi
+install_build_deps() {
+    info "Installation des dépendances de compilation pour pyenv..."
+    apt_install \
+        libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev \
+        libffi-dev liblzma-dev libgdbm-dev libnss3-dev \
+        xz-utils tk-dev wget llvm \
+        libncursesw5-dev libncurses5-dev
 
-# -----------------------------------------------------------------------------
-# 6) pipx dans un venv dédié
-#   Pourquoi ?
-#   - Sur Debian/Ubuntu récents, l'installation pip "dans le Python système"
-#     peut être bloquée (PEP 668 / externally-managed).
-#   - pipx dans son propre venv est stable, reproductible et portable.
-# -----------------------------------------------------------------------------
-log "6) Install/Update pipx in a dedicated venv (robuste Debian/Ubuntu récents)"
-
-PIPX_VENV="${HOME}/.local/venvs/pipx"
-PIPX_VENV_DIR="$(dirname "$PIPX_VENV")"
-
-mkdir -p "$PIPX_VENV_DIR" "${HOME}/.local/bin"
-
-if [ ! -d "$PIPX_VENV" ]; then
-  python3 -m venv "$PIPX_VENV"
-fi
-
-# Upgrade pip + pipx dans ce venv
-"$PIPX_VENV/bin/python" -m pip install -U pip >/dev/null
-"$PIPX_VENV/bin/python" -m pip install -U pipx >/dev/null
-
-# Expose pipx via ~/.local/bin (répertoire "user bin" standard)
-ln -sf "$PIPX_VENV/bin/pipx" "${HOME}/.local/bin/pipx"
-
-# Variables d'environnement pipx (emplacements "standard")
-export PATH="${HOME}/.local/bin:${PATH}"
-export PIPX_HOME="${HOME}/.local/pipx"
-export PIPX_BIN_DIR="${HOME}/.local/bin"
-
-# Optionnel: initialise pipx (ne casse rien si déjà ok)
-# (peut tenter d'éditer des rc classiques : on ignore les effets)
-pipx ensurepath >/dev/null 2>&1 || true
+    success "Dépendances de compilation prêtes."
+}
 
 # -----------------------------------------------------------------------------
-# 7) Poetry via pipx (install / upgrade)
-#   - Si poetry est déjà présent mais pas géré par pipx : on avertit.
-#   - Si poetry est géré par pipx : upgrade.
+# Étape 3 : pyenv
 # -----------------------------------------------------------------------------
-log "7) Install / upgrade Poetry via pipx"
-
-if command -v poetry >/dev/null 2>&1; then
-  if pipx list 2>/dev/null | grep -qE 'package poetry\b'; then
-    pipx upgrade poetry
-    log "Poetry (pipx): $(poetry --version)"
-  else
-    log "Poetry est déjà présent mais ne semble pas installé via pipx."
-    log "Conseil: désinstaller l'autre Poetry puis relancer ce script (ou: pipx install poetry)."
-    log "Poetry actuel: $(poetry --version)"
-  fi
-else
-  pipx install poetry
-  log "Poetry installé: $(poetry --version)"
-fi
+install_pyenv() {
+    if [ ! -d "$PYENV_ROOT" ]; then
+        info "Clonage de pyenv dans ${PYENV_ROOT}..."
+        git clone https://github.com/pyenv/pyenv.git "$PYENV_ROOT"
+        success "pyenv installé."
+    else
+        info "Mise à jour de pyenv..."
+        git -C "$PYENV_ROOT" pull --ff-only 2>/dev/null \
+            || warn "Mise à jour de pyenv ignorée (vérifiez l'état du dépôt)."
+        success "pyenv à jour : $(pyenv --version)."
+    fi
+}
 
 # -----------------------------------------------------------------------------
-# 7bis) Config globale Poetry
-#   - virtualenvs.in-project = true (créera .venv dans chaque projet)
-#   - On ne dépend pas du shell rc : on appelle poetry directement ici.
+# Étape 4 : plugin pyenv-virtualenv
 # -----------------------------------------------------------------------------
-log "7bis) Configure Poetry globally: virtualenvs.in-project = true"
-if command -v poetry >/dev/null 2>&1; then
-  poetry config virtualenvs.in-project true
-else
-  log "Poetry non disponible => config globale ignorée (ne devrait pas arriver)."
-fi
+install_pyenv_virtualenv() {
+    if [ ! -d "$PYENV_VENV_PLUGIN" ]; then
+        info "Clonage du plugin pyenv-virtualenv..."
+        git clone https://github.com/pyenv/pyenv-virtualenv.git "$PYENV_VENV_PLUGIN"
+        success "pyenv-virtualenv installé."
+    else
+        info "Mise à jour du plugin pyenv-virtualenv..."
+        git -C "$PYENV_VENV_PLUGIN" pull --ff-only 2>/dev/null \
+            || warn "Mise à jour de pyenv-virtualenv ignorée."
+        success "pyenv-virtualenv à jour."
+    fi
+}
 
 # -----------------------------------------------------------------------------
-# 8) Shell configuration via ~/.shellrc/rc.d
-#   - Ton .bashrc/.zshrc charge déjà *.sh depuis ~/.shellrc/rc.d
-#   - On dépose un fichier unique, réécrit à chaque exécution (idempotent)
+# Étape 5 : pipx dans un venv dédié
+#   Stratégie : venv isolé dans ~/.local/venvs/pipx, lien symb vers ~/.local/bin.
+#   Contourne PEP 668 (« externally managed environment ») des Debian/Ubuntu récents.
 # -----------------------------------------------------------------------------
-log "8) Shell configuration via ~/.shellrc/rc.d (sans modifier .bashrc/.zshrc)"
+install_pipx() {
+    command -v python3 >/dev/null 2>&1 \
+        || die "python3 introuvable après installation. Vérifiez les paquets APT."
 
-RC_DIR="${HOME}/.shellrc/rc.d"
-RC_FILE="${RC_DIR}/20-python-dev.sh"
-mkdir -p "$RC_DIR"
+    mkdir -p "$(dirname "$PIPX_VENV")" "$PIPX_BIN_DIR"
 
-cat > "$RC_FILE" <<'EOF'
-# python-dev: pyenv + pipx + poetry
-# Fichier chargé via ~/.shellrc/rc.d/*.sh
-#
-# Objectif :
-#   - Rendre disponibles pyenv/pipx/poetry dans bash et zsh
-#   - Ne dépendre ni de ~/.bashrc ni de ~/.zshrc (déjà gérés ailleurs)
+    if [ ! -d "$PIPX_VENV" ]; then
+        info "Création du venv dédié pipx : ${PIPX_VENV}..."
+        python3 -m venv "$PIPX_VENV"
+    fi
 
-# pipx (binaries) + autres outils user
+    info "Mise à jour de pip et pipx dans le venv..."
+    "$PIPX_VENV/bin/python" -m pip install -U pip  >/dev/null
+    "$PIPX_VENV/bin/python" -m pip install -U pipx >/dev/null
+
+    ln -sf "$PIPX_VENV/bin/pipx" "${PIPX_BIN_DIR}/pipx"
+
+    success "pipx installé : $(pipx --version)."
+}
+
+# -----------------------------------------------------------------------------
+# Étape 6 : poetry via pipx
+# -----------------------------------------------------------------------------
+install_poetry() {
+    if pipx list 2>/dev/null | grep -qE 'package poetry\b'; then
+        info "Mise à jour de Poetry via pipx..."
+        pipx upgrade poetry >/dev/null
+        success "Poetry mis à jour : $(poetry --version)."
+    elif command -v poetry >/dev/null 2>&1; then
+        warn "Poetry est présent mais n'est pas géré par pipx."
+        warn "Pour le migrer : désinstallez l'installation existante puis relancez ce script."
+        warn "  ou lancez manuellement : pipx install poetry"
+        return
+    else
+        info "Installation de Poetry via pipx..."
+        pipx install poetry >/dev/null
+        success "Poetry installé : $(poetry --version)."
+    fi
+
+    info "Configuration Poetry : virtualenvs.in-project = true..."
+    poetry config virtualenvs.in-project true
+    success "Poetry configuré."
+}
+
+# -----------------------------------------------------------------------------
+# Étape 7 : fichier d'intégration shell
+#   Chargé automatiquement par ~/.bashrc et ~/.zshrc via ~/.shellrc/rc.d/*.sh
+#   Réécrit à chaque exécution → idempotent.
+# -----------------------------------------------------------------------------
+write_shell_rc() {
+    mkdir -p "$RC_DIR"
+
+    cat > "$RC_FILE" <<'SHELLRC'
+# 20-python-dev.sh — pyenv + pipx + poetry
+# Chargé automatiquement via ~/.shellrc/rc.d/*.sh
+
 export PATH="$HOME/.local/bin:$PATH"
 export PIPX_HOME="$HOME/.local/pipx"
 export PIPX_BIN_DIR="$HOME/.local/bin"
 
-# pyenv
 export PYENV_ROOT="$HOME/.pyenv"
 export PATH="$PYENV_ROOT/bin:$PATH"
 
 if command -v pyenv >/dev/null 2>&1; then
-  # Init adapté au shell (bash/zsh)
-  if [ -n "${ZSH_VERSION-}" ]; then
-    eval "$(pyenv init - zsh)"
-    eval "$(pyenv virtualenv-init - zsh)"
-  else
-    eval "$(pyenv init -)"
-    eval "$(pyenv virtualenv-init -)"
-  fi
+    if [ -n "${ZSH_VERSION-}" ]; then
+        eval "$(pyenv init - zsh)"
+        eval "$(pyenv virtualenv-init - zsh)"
+    else
+        eval "$(pyenv init -)"
+        eval "$(pyenv virtualenv-init -)"
+    fi
 fi
-EOF
+SHELLRC
 
-chmod 0644 "$RC_FILE"
-log "Wrote: $RC_FILE"
+    chmod 0644 "$RC_FILE"
+    success "Fichier rc écrit : ${RC_FILE}."
+}
 
 # -----------------------------------------------------------------------------
-# Fin / récap
+# Point d'entrée
 # -----------------------------------------------------------------------------
-cat <<'EOF'
+main() {
+    echo -e "\n${BOLD}=== Installation Python : pyenv + pipx + poetry ===${RESET}\n"
 
-Terminé.
+    check_root
+    check_os
 
-À faire maintenant :
-  1) Ouvre un nouveau terminal (ou source le fichier):
-       source ~/.shellrc/rc.d/20-python-dev.sh
+    # Tier 2 : préchauffage sudo + keepalive.
+    # Le keepalive est nécessaire car la compilation de Python via pyenv peut dépasser 5 min.
+    info "Droits administrateur requis pour les paquets système."
+    sudo -v
+    ( while true; do sudo -n true; sleep 50; done ) &
+    _SUDO_KEEPALIVE=$!
+    trap 'kill "${_SUDO_KEEPALIVE}" 2>/dev/null' EXIT INT TERM
 
-  2) Vérifie:
-       pyenv --version
-       pipx --version
-       poetry --version
+    export DEBIAN_FRONTEND=noninteractive
 
-Exemple d'installation Python avec pyenv :
-  pyenv install 3.12.7
-  pyenv global 3.12.7
+    install_base_packages
+    install_build_deps
+    install_pyenv
+    install_pyenv_virtualenv
+    install_pipx
+    install_poetry
+    write_shell_rc
 
-Poetry (global) est configuré avec:
-  poetry config virtualenvs.in-project true
+    echo -e "\n${GREEN}${BOLD}Installation terminée.${RESET}\n"
+    echo -e "  pyenv     : ${PYENV_ROOT}"
+    echo -e "  pipx      : ${PIPX_BIN_DIR}/pipx"
+    echo -e "  poetry    : ${PIPX_BIN_DIR}/poetry"
+    echo -e "  rc shell  : ${RC_FILE}\n"
+    echo -e "${BOLD}Prochaines étapes :${RESET}"
+    echo -e "  1) Ouvrez un nouveau terminal, ou sourcez le fichier rc :"
+    echo -e "       ${CYAN}source ${RC_FILE}${RESET}"
+    echo -e "  2) Vérifiez les versions :"
+    echo -e "       ${CYAN}pyenv --version && pipx --version && poetry --version${RESET}"
+    echo -e "  3) Installez une version de Python avec pyenv :"
+    echo -e "       ${CYAN}pyenv install --list | grep '^\s*3\.'${RESET}"
+    echo -e "       ${CYAN}pyenv install 3.12.x   # remplacez par la version souhaitée${RESET}"
+    echo -e "       ${CYAN}pyenv global  3.12.x${RESET}\n"
+}
 
-EOF
+main "$@"
