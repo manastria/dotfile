@@ -93,7 +93,6 @@ packages_communs=(
     sudo
     tmux
     tree
-    unrar
     unzip
     vim
     wget
@@ -110,6 +109,7 @@ packages_ubuntu=(
 
 # Disponibles sous Debian ≤ 12 (bookworm), supprimés ou remplacés dans Debian 13+
 packages_debian_12=(
+    unrar
     haveged   # Remplacé par l'entropie noyau dans Debian 13+
     mlocate   # Remplacé par plocate dans Debian 13+
 )
