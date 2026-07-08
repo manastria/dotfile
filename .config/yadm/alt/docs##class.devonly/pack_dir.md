@@ -20,6 +20,8 @@ En usage courant sans option, `pack-dir.sh [dossier]` se comporte comme `pack_pr
 | `tar`      | Création de l'archive             | `tar --version`    |
 | `zstd`     | Compression (codec par défaut)    | `zstd --version`   |
 | `realpath` | Résolution du dossier de sortie   | `realpath --version` |
+| `pv`       | Optionnel, barre de progression pendant la compression | `pv --version` (`apt install pv`) |
+| `xz` / `gzip` / `bzip2` | Optionnel, requis uniquement si `-c` sélectionne ce codec | `xz --version`, etc. |
 | `zip`      | Optionnel, requis seulement avec `-z` | `zip --version` |
 
 ---
@@ -73,11 +75,19 @@ pack-dir.sh [dossier] [options]
 ./pack-dir.sh ./TP -E
 ```
 
-**Exemple de sortie :**
+**Exemple de sortie** (avec `pv` installé, comme `pack_project`) :
 
 ```
-OK -> /home/user/projets/TP_20260708_2302.tar.zst
+[INFO]      Source      : /home/user/projets/TP
+[INFO]      Archive     : /home/user/projets/TP_20260708_2302.tar.zst
+[INFO]      Codec       : zst
+
+[INFO]      Compression en cours...
+Pack: 4.21MiB 0:00:00 [ 187MiB/s] [                              <=>            ]
+[OK]        Archive : /home/user/projets/TP_20260708_2302.tar.zst (4,2M)
 ```
+
+Sans `pv` installé, un message `[ATTENTION]` invite à l'installer et une progression par points de contrôle (`→ bloc N`) s'affiche à la place de la barre `pv`.
 
 ---
 
@@ -142,7 +152,10 @@ Exemple : `TP_20260708_2302.tar.zst` (ou `TP.tar.zst` avec `-T`).
 2. Parsing des options      →  getopts ":b:c:Tzo:I:Eh"
 3. Résolution des chemins   →  src_real=realpath(src) ; outdir par défaut = dirname(src_real)
 4. Construction des exclusions →  tableau EXCLUDES + fichier -I → tar_exclude_args / zip_exclude_args
-5. Appel tar (et zip si -z) →  écrit dans $outdir
+5. Choix du codec           →  compress_cmd (xz -T0 -c / gzip -c / bzip2 -c / zstd -T0 -c --long)
+6. Creation de l'archive    →  tar --create | pv -N "Pack" | "${compress_cmd[@]}" > $tar_out
+                                (ou, sans pv, tar --use-compress-program="${compress_cmd[*]}" avec checkpoints)
+7. Zip optionnel (-z)       →  zip -rq9 vers $outdir, avec son propre trap de nettoyage
 ```
 
 ### Détail des choix techniques
@@ -159,16 +172,23 @@ La version précédente du script avait un flag `-t` pour *ajouter* le timestamp
 **Double jeu d'exclusions (tar + zip)**
 `tar` sait lire un fichier d'exclusions nativement (`--exclude-from`), mais `zip` non : le fichier `-I` est donc aussi relu ligne par ligne en bash pour construire les arguments `-x` du zip.
 
+**Pipeline `pv`, aligné sur `pack_project`**
+Comme `pack_project`, la création de l'archive tar passe par un pipeline `tar --create | pv -N "Pack" | <compresseur> > $tar_out` quand `pv` est disponible, plutôt que de laisser `tar` invoquer directement le compresseur (`-J`/`-z`/`-j`/`--zstd`). Cela permet à `pv` de mesurer le flux brut produit par `tar` et d'afficher une barre de progression, quel que soit le codec choisi via `-c`. `compress_cmd` est un tableau (`xz -T0 -c`, `gzip -c`, `bzip2 -c`, ou `zstd -T0 -c --long`) construit dans le `case "$codec"`, réutilisé tel quel dans le pipeline et, joint en une chaîne (`"${compress_cmd[*]}"`), passé à `tar --use-compress-program` dans le repli sans `pv` (avec `--checkpoint`/`--checkpoint-action` pour simuler une progression par points).
+
+**Fonctions de log et traps de nettoyage**
+Le script utilise désormais les fonctions `info`/`success`/`warn`/`error`/`die` standard du dépôt (voir `CLAUDE.md`, section « Shell Script Color and Logging Conventions »), identiques à celles de `pack_project`. Chaque étape de création de fichier (`cleanup_tar` pour le tar, `cleanup_zip` pour le zip) pose un `trap ... ERR INT TERM` qui supprime le fichier de sortie s'il est interrompu ou échoue en cours d'écriture, puis retire le trap (`trap - ERR INT TERM`) une fois l'étape terminée — même logique que le `cleanup`/`trap cleanup ERR INT TERM` de `pack_project`.
+
 ---
 
 ### Dépendances externes
 
 ```
-bash        →  tableaux indexés (EXCLUDES, tar_exclude_args, zip_exclude_args)
-tar         →  --exclude, --exclude-from, codecs -J/-z/-j/--zstd
-zstd        →  utilisé via `tar --zstd` (codec par défaut)
-realpath    →  résolution du dossier de sortie par défaut
-zip         →  optionnel, uniquement si -z est utilisé
+bash              →  tableaux indexés (EXCLUDES, tar_exclude_args, zip_exclude_args, compress_cmd)
+tar               →  --exclude, --exclude-from, --use-compress-program, --checkpoint
+pv                →  optionnel, barre de progression sur le flux tar avant compression
+xz/gzip/bzip2/zstd →  invoqués en pipeline (compress_cmd), un seul requis selon -c
+realpath          →  résolution du dossier de sortie et de la source par défaut
+zip               →  optionnel, uniquement si -z est utilisé
 ```
 
 ---
@@ -185,5 +205,6 @@ zip         →  optionnel, uniquement si -z est utilisé
 
 ### Notes de maintenance
 
-- **Cohérence avec `pack_project`** : les défauts (dossier courant si non précisé, codec `zst`, timestamp `_YYYYMMDD_HHMM`, dossier de sortie parent) sont volontairement identiques à [`pack_project`](pack_project.md) pour que `pack-dir.sh [dossier]` sans option produise le même résultat. Toute évolution des défauts de l'un devrait être répercutée sur l'autre.
+- **Cohérence avec `pack_project`** : les défauts (dossier courant si non précisé, codec `zst`, timestamp `_YYYYMMDD_HHMM`, dossier de sortie parent, barre de progression `pv`, style de sortie écran, traps de nettoyage) sont volontairement identiques à [`pack_project`](pack_project.md) pour que `pack-dir.sh [dossier]` sans option produise le même résultat et le même affichage. Toute évolution des défauts ou du style de sortie de l'un devrait être répercutée sur l'autre.
 - **Liste `EXCLUDES` volontairement allégée** : elle ne couvre plus que les cas génériques (VCS autres que git, artefacts Python/Node, IDE, build). `.git` n'y figure plus, contrairement à d'anciennes versions du script — se référer directement au tableau `EXCLUDES` dans le script pour la liste exacte et à jour.
+- **Pas de niveau de compression réglable** : contrairement à `pack_project` (`PACK_ZSTD_LEVEL`), `pack-dir.sh` n'expose pas de niveau de compression par variable d'environnement ; chaque codec utilise le niveau par défaut de son compresseur.

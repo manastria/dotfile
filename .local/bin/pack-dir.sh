@@ -1,6 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+RESET='\033[0m'
+
+info()    { echo -e "${CYAN}[INFO]${RESET}      $*"; }
+success() { echo -e "${GREEN}[OK]${RESET}        $*"; }
+warn()    { echo -e "${YELLOW}[ATTENTION]${RESET} $*"; }
+error()   { echo -e "${RED}[ERREUR]${RESET}    $*" >&2; }
+die()     { error "$*"; exit 1; }
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -78,14 +91,13 @@ while getopts ":b:c:Tzo:I:Eh" opt; do
     I) ignore_file="$OPTARG" ;;
     E) disable_excludes=true ;;
     h) usage; exit 0 ;;
-    :) echo "Option -$OPTARG requiert un argument." >&2; usage; exit 1 ;;
-    \?) echo "Option inconnue: -$OPTARG" >&2; usage; exit 1 ;;
+    :) error "Option -$OPTARG requiert un argument."; usage; exit 1 ;;
+    \?) error "Option inconnue: -$OPTARG"; usage; exit 1 ;;
   esac
 done
 
 if [[ ! -d "$src" ]]; then
-  echo "Erreur: '$src' n'est pas un dossier." >&2
-  exit 1
+  die "'$src' n'est pas un dossier."
 fi
 
 src_real="$(realpath "$src")"
@@ -134,7 +146,7 @@ if ! $disable_excludes; then
 
   if [[ -n "$ignore_file" ]]; then
     if [[ ! -f "$ignore_file" ]]; then
-      echo "Erreur: fichier d'exclusions introuvable: $ignore_file" >&2
+      error "Fichier d'exclusions introuvable: $ignore_file"
       exit 4
     fi
 
@@ -150,27 +162,75 @@ if ! $disable_excludes; then
 fi
 
 case "$codec" in
-  xz)  tar_ext="tar.xz";  tar_cmd=(tar -cJf) ;;
-  gz)  tar_ext="tar.gz";  tar_cmd=(tar -czf) ;;
-  bz2) tar_ext="tar.bz2"; tar_cmd=(tar -cjf) ;;
-  zst) tar_ext="tar.zst"; tar_cmd=(tar --zstd -cf) ;;
+  xz)  tar_ext="tar.xz";  compress_cmd=(xz -T0 -c) ;;
+  gz)  tar_ext="tar.gz";  compress_cmd=(gzip -c) ;;
+  bz2) tar_ext="tar.bz2"; compress_cmd=(bzip2 -c) ;;
+  zst) tar_ext="tar.zst"; compress_cmd=(zstd -T0 -c --long) ;;
   *)
-    echo "Erreur: codec invalide '$codec' (attendu: xz|gz|bz2|zst)." >&2
+    error "Codec invalide '$codec' (attendu: xz|gz|bz2|zst)."
     exit 2
     ;;
 esac
 
 tar_out="${outdir%/}/${base}${suffix}.${tar_ext}"
-"${tar_cmd[@]}" "$tar_out" "${tar_exclude_args[@]}" -C "$parent" "$name"
-echo "OK -> $tar_out"
+
+info "Source      : $src_real"
+info "Archive     : $tar_out"
+info "Codec       : ${BOLD}${codec}${RESET}"
+echo ""
+
+cleanup_tar() {
+  rm -f "$tar_out"
+  error "Interruption ou erreur — archive incomplète supprimée."
+  exit 1
+}
+trap cleanup_tar ERR INT TERM
+
+info "Compression en cours..."
+if command -v pv >/dev/null 2>&1; then
+  tar --create --ignore-failed-read "${tar_exclude_args[@]}" \
+      -C "$parent" "$name" \
+    | pv -N "Pack" \
+    | "${compress_cmd[@]}" > "$tar_out"
+else
+  warn "Installez 'pv' (apt install pv) pour une barre de progression."
+  tar --create \
+      --ignore-failed-read \
+      --file="$tar_out" \
+      --use-compress-program="${compress_cmd[*]}" \
+      --checkpoint=500 \
+      --checkpoint-action='ttyout=    → bloc %d\r' \
+      "${tar_exclude_args[@]}" \
+      -C "$parent" \
+      "$name"
+  echo ""
+fi
+
+trap - ERR INT TERM
+
+tar_size=$(du -sh "$tar_out" | cut -f1)
+success "Archive : ${BOLD}${tar_out}${RESET} (${tar_size})"
 
 if $make_zip; then
   if ! command -v zip >/dev/null 2>&1; then
-    echo "Erreur: 'zip' n'est pas installe (ex: sudo apt install zip)." >&2
+    error "'zip' n'est pas installé (ex: sudo apt install zip)."
     exit 3
   fi
 
   zip_out="${outdir%/}/${base}${suffix}.zip"
+
+  cleanup_zip() {
+    rm -f "$zip_out"
+    error "Interruption ou erreur — zip incomplet supprimé."
+    exit 1
+  }
+  trap cleanup_zip ERR INT TERM
+
+  info "Zip en cours...   : $zip_out"
   (cd "$parent" && zip -rq9 "$zip_out" "$name" "${zip_exclude_args[@]}")
-  echo "OK -> $zip_out"
+
+  trap - ERR INT TERM
+
+  zip_size=$(du -sh "$zip_out" | cut -f1)
+  success "Zip     : ${BOLD}${zip_out}${RESET} (${zip_size})"
 fi
