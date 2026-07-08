@@ -6,24 +6,27 @@ usage() {
 Usage:
   pack-dir.sh <dossier> [options]
 
+Par defaut (aligne sur pack-project.sh):
+  codec zst, date+heure ajoutee, sortie dans le dossier parent de la source.
+
 Options:
   -b <nom_base>        Nom de base (defaut: nom du dossier)
-  -c <xz|gz|bz2|zst>   Codec tar (defaut: xz)
-  -t                  Ajoute date+heure: _YYYY-MM-DD_HHMMSS
+  -c <xz|gz|bz2|zst>   Codec tar (defaut: zst)
+  -T                  Pas de date+heure dans le nom (par defaut, elle est ajoutee: _YYYYMMDD_HHMM)
   -z                  Genere aussi un .zip (en plus du tar compresse)
-  -o <dir_sortie>      Repertoire de sortie (defaut: .)
+  -o <dir_sortie>      Repertoire de sortie (defaut: dossier parent de la source)
   -I <fichier>         Fichier d'exclusions (une regle par ligne, optionnel)
   -E                  Desactive les exclusions (inclut tout, ignore -I)
   -h                  Aide
 
 Exemples:
   ./pack-dir.sh ./TP
-  ./pack-dir.sh ./TP -t
-  ./pack-dir.sh ./TP -t -z
-  ./pack-dir.sh ./TP -c gz -t -o ./out
-  ./pack-dir.sh ./TP -b elec-ccf -t -z
-  ./pack-dir.sh ./TP -t -I .packignore
-  ./pack-dir.sh ./TP -t -E          # inclut .git, node_modules, etc.
+  ./pack-dir.sh ./TP -z
+  ./pack-dir.sh ./TP -c gz -o ./out
+  ./pack-dir.sh ./TP -b elec-ccf -z
+  ./pack-dir.sh ./TP -T             # pas de date+heure dans le nom
+  ./pack-dir.sh ./TP -I .packignore
+  ./pack-dir.sh ./TP -E             # inclut .git, node_modules, etc.
 
 Notes:
   - Le dossier source peut etre relatif ou absolu.
@@ -53,18 +56,18 @@ src="${1%/}"
 shift
 
 base=""
-codec="xz"
-add_ts=false
+codec="zst"
+add_ts=true
 make_zip=false
-outdir="."
+outdir=""
 ignore_file=""
 disable_excludes=false
 
-while getopts ":b:c:tzo:I:Eh" opt; do
+while getopts ":b:c:Tzo:I:Eh" opt; do
   case "$opt" in
     b) base="$OPTARG" ;;
     c) codec="$OPTARG" ;;
-    t) add_ts=true ;;
+    T) add_ts=false ;;
     z) make_zip=true ;;
     o) outdir="$OPTARG" ;;
     I) ignore_file="$OPTARG" ;;
@@ -80,6 +83,7 @@ if [[ ! -d "$src" ]]; then
   exit 1
 fi
 
+outdir="${outdir:-$(dirname "$(realpath "$src")")}"
 mkdir -p "$outdir"
 
 default_base="$(basename "$src")"
@@ -87,7 +91,7 @@ base="${base:-$default_base}"
 
 suffix=""
 if $add_ts; then
-  suffix="_$(date +%F_%H%M%S)"
+  suffix="_$(date +%Y%m%d_%H%M)"
 fi
 
 parent="$(dirname "$src")"
