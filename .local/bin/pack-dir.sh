@@ -99,7 +99,7 @@ name="$(basename "$src")"
 
 # Exclusions "dev" (liste par defaut)
 EXCLUDES=(
-  ".git" ".git/**" ".svn" ".hg"
+  ".svn" ".hg"
   ".DS_Store" "Thumbs.db"
 
   "node_modules" "node_modules/**"
