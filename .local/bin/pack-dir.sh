@@ -4,10 +4,11 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  pack-dir.sh <dossier> [options]
+  pack-dir.sh [dossier] [options]
 
 Par defaut (aligne sur pack-project.sh):
-  codec zst, date+heure ajoutee, sortie dans le dossier parent de la source.
+  dossier courant si non precise, codec zst, date+heure ajoutee,
+  sortie dans le dossier parent de la source.
 
 Options:
   -b <nom_base>        Nom de base (defaut: nom du dossier)
@@ -20,6 +21,7 @@ Options:
   -h                  Aide
 
 Exemples:
+  ./pack-dir.sh                     # archive le dossier courant
   ./pack-dir.sh ./TP
   ./pack-dir.sh ./TP -z
   ./pack-dir.sh ./TP -c gz -o ./out
@@ -29,7 +31,7 @@ Exemples:
   ./pack-dir.sh ./TP -E             # inclut .git, node_modules, etc.
 
 Notes:
-  - Le dossier source peut etre relatif ou absolu.
+  - Le dossier source est optionnel (defaut: dossier courant), et peut etre relatif ou absolu.
   - Les exclusions par defaut sont des patterns "glob" (tar/zip).
   - Avec -I, chaque ligne est un pattern (lignes vides et commentaires ignores).
   - -E force l'inclusion de tout et ignore -I.
@@ -46,14 +48,17 @@ Le fichier .packignore:
 EOF
 }
 
-# 1er argument: dossier source
-if [[ "${1:-}" == "" || "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+# 1er argument optionnel: dossier source (defaut: dossier courant, comme pack-project.sh)
+if [[ "${1:-}" == "--help" ]]; then
   usage
   exit 0
 fi
 
-src="${1%/}"
-shift
+src="."
+if [[ $# -gt 0 && "$1" != -* ]]; then
+  src="${1%/}"
+  shift
+fi
 
 base=""
 codec="zst"
@@ -83,10 +88,12 @@ if [[ ! -d "$src" ]]; then
   exit 1
 fi
 
-outdir="${outdir:-$(dirname "$(realpath "$src")")}"
+src_real="$(realpath "$src")"
+
+outdir="${outdir:-$(dirname "$src_real")}"
 mkdir -p "$outdir"
 
-default_base="$(basename "$src")"
+default_base="$(basename "$src_real")"
 base="${base:-$default_base}"
 
 suffix=""
@@ -94,8 +101,8 @@ if $add_ts; then
   suffix="_$(date +%Y%m%d_%H%M)"
 fi
 
-parent="$(dirname "$src")"
-name="$(basename "$src")"
+parent="$(dirname "$src_real")"
+name="$(basename "$src_real")"
 
 # Exclusions "dev" (liste par defaut)
 EXCLUDES=(

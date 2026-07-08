@@ -6,9 +6,9 @@
 
 ### Description
 
-`pack-dir.sh` crée une archive compressée d'un dossier quelconque. C'est la version « couteau suisse » de [`pack_project`](pack_project.md) : mêmes réglages par défaut (codec `zst`, date+heure dans le nom, dépôt dans le dossier parent de la source), mais avec des options en ligne de commande pour tout personnaliser — codec, nom de sortie, dossier de destination, génération d'un `.zip` en plus, fichier d'exclusions personnalisé, ou désactivation totale des exclusions.
+`pack-dir.sh` crée une archive compressée d'un dossier quelconque. C'est la version « couteau suisse » de [`pack_project`](pack_project.md) : mêmes réglages par défaut (dossier courant si non précisé, codec `zst`, date+heure dans le nom, dépôt dans le dossier parent de la source), mais avec des options en ligne de commande pour tout personnaliser — codec, nom de sortie, dossier de destination, génération d'un `.zip` en plus, fichier d'exclusions personnalisé, ou désactivation totale des exclusions.
 
-En usage courant sans option, `pack-dir.sh <dossier>` se comporte comme `pack_project <dossier>`. Utiliser `pack-dir.sh` plutôt que `pack_project` quand on a besoin d'une de ces options spécifiques (typiquement `-z` pour un `.zip`, ou `-E` pour tout inclure sans exclusion).
+En usage courant sans option, `pack-dir.sh [dossier]` se comporte comme `pack_project [dossier]` : le dossier est optionnel et vaut le dossier courant par défaut. Utiliser `pack-dir.sh` plutôt que `pack_project` quand on a besoin d'une de ces options spécifiques (typiquement `-z` pour un `.zip`, ou `-E` pour tout inclure sans exclusion).
 
 ---
 
@@ -27,8 +27,10 @@ En usage courant sans option, `pack-dir.sh <dossier>` se comporte comme `pack_pr
 ### Syntaxe
 
 ```
-pack-dir.sh <dossier> [options]
+pack-dir.sh [dossier] [options]
 ```
+
+`dossier` est optionnel : s'il est omis (ou si le premier argument est une option), la source est le dossier courant (`.`), comme pour `pack_project`.
 
 | Option              | Argument         | Défaut                              | Description                                                    |
 | ------------------- | ---------------- | ------------------------------------ | ---------------------------------------------------------------- |
@@ -46,6 +48,9 @@ pack-dir.sh <dossier> [options]
 ### Exemples d'utilisation
 
 ```bash
+# Archive le dossier courant (equivalent de `pack_project` sans argument)
+./pack-dir.sh
+
 # Équivalent de pack_project : zst, timestamp, sortie dans le dossier parent
 ./pack-dir.sh ./TP
 
@@ -79,7 +84,7 @@ OK -> /home/user/projets/TP_20260708_2302.tar.zst
 ### Répertoires et fichiers exclus par défaut
 
 ```
-.git .git/** .svn .hg
+.svn .hg
 .DS_Store Thumbs.db
 node_modules node_modules/**
 __pycache__ **/__pycache__ *.pyc *.pyo
@@ -89,7 +94,7 @@ __pycache__ **/__pycache__ *.pyc *.pyo
 dist build *.egg-info
 ```
 
-> Contrairement à `pack_project`, `.git` est **exclu** par défaut ici. Utiliser `-E` pour le conserver (avec tout le reste), ou un fichier `-I` pour affiner.
+> `.git` n'est **pas** exclu par défaut (liste volontairement allégée par rapport aux versions précédentes du script) : il est inclus dans l'archive, comme avec `pack_project`. Utiliser un fichier `-I` pour l'exclure au besoin, ou `-E` pour désactiver toutes les exclusions.
 
 Le fichier passé via `-I` accepte un pattern par ligne (glob tar/zip), lignes vides et commentaires (`#`) ignorés :
 
@@ -133,16 +138,20 @@ Exemple : `TP_20260708_2302.tar.zst` (ou `TP.tar.zst` avec `-T`).
 ### Architecture interne
 
 ```
-1. Parsing des options   →  getopts ":b:c:Tzo:I:Eh"
-2. Résolution des chemins →  outdir par défaut = dirname(realpath(source))
-3. Construction des exclusions →  tableau EXCLUDES + fichier -I → tar_exclude_args / zip_exclude_args
-4. Appel tar (et zip si -z) →  écrit dans $outdir
+1. Dossier source optionnel →  si absent (ou 1er argument = une option), src="."
+2. Parsing des options      →  getopts ":b:c:Tzo:I:Eh"
+3. Résolution des chemins   →  src_real=realpath(src) ; outdir par défaut = dirname(src_real)
+4. Construction des exclusions →  tableau EXCLUDES + fichier -I → tar_exclude_args / zip_exclude_args
+5. Appel tar (et zip si -z) →  écrit dans $outdir
 ```
 
 ### Détail des choix techniques
 
-**`outdir` résolu après le parsing**
-`outdir=""` est la valeur initiale ; ce n'est qu'après validation de l'existence du dossier source que `outdir="${outdir:-$(dirname "$(realpath "$src")")}"` calcule le défaut, pour rester alignable avec `pack_project` (dossier parent de la source) sans forcer `realpath` sur une source potentiellement invalide.
+**Dossier source optionnel**
+`src="."` est la valeur par défaut. Le premier argument positionnel n'est consommé comme dossier source que s'il ne commence pas par `-` (`"$1" != -*`) : ainsi `pack-dir.sh -z` archive le dossier courant avec `-z`, sans avoir à écrire `pack-dir.sh . -z`. `--help` est intercepté avant ce test car `getopts` ne gère pas les options longues ; `-h` seul est géré normalement par `getopts`.
+
+**`src_real` et `outdir` résolus après le parsing**
+`outdir=""` est la valeur initiale ; ce n'est qu'après validation de l'existence du dossier source que `src_real="$(realpath "$src")"` puis `outdir="${outdir:-$(dirname "$src_real")}"` calculent le défaut. Résoudre `src` via `realpath` avant de calculer `default_base`, `parent` et `name` évite un nommage incorrect (`.` au lieu du vrai nom du dossier) quand la source est `.` ou un chemin relatif comme `../foo/`, exactement comme le fait `pack_project` avec `SRC_REAL`/`PROJECT_NAME`.
 
 **`-T` plutôt qu'un flag d'activation**
 La version précédente du script avait un flag `-t` pour *ajouter* le timestamp (désactivé par défaut). Depuis l'alignement des défauts sur `pack_project`, le timestamp est actif par défaut : `-T` (majuscule) fait l'inverse et le désactive.
@@ -176,5 +185,5 @@ zip         →  optionnel, uniquement si -z est utilisé
 
 ### Notes de maintenance
 
-- **Cohérence avec `pack_project`** : les défauts (codec `zst`, timestamp `_YYYYMMDD_HHMM`, dossier de sortie parent) sont volontairement identiques à [`pack_project`](pack_project.md) pour que `pack-dir.sh <dossier>` sans option produise le même résultat. Toute évolution des défauts de l'un devrait être répercutée sur l'autre.
-- **`.git` exclu par défaut** ici, contrairement à `pack_project` qui le conserve intentionnellement — c'est la différence de comportement à garder en tête au moment de choisir entre les deux scripts.
+- **Cohérence avec `pack_project`** : les défauts (dossier courant si non précisé, codec `zst`, timestamp `_YYYYMMDD_HHMM`, dossier de sortie parent) sont volontairement identiques à [`pack_project`](pack_project.md) pour que `pack-dir.sh [dossier]` sans option produise le même résultat. Toute évolution des défauts de l'un devrait être répercutée sur l'autre.
+- **Liste `EXCLUDES` volontairement allégée** : elle ne couvre plus que les cas génériques (VCS autres que git, artefacts Python/Node, IDE, build). `.git` n'y figure plus, contrairement à d'anciennes versions du script — se référer directement au tableau `EXCLUDES` dans le script pour la liste exacte et à jour.
