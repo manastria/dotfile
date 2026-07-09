@@ -1,2 +1,5 @@
 .gitconfig.local
 .bash_aliases
+.npm/
+.npmrc
+.zcompdump*

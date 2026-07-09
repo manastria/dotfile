@@ -1,8 +1,14 @@
 # -*- mode: shell-script -*-
 
-# Activation automatique du mode léger si le fichier sentinel existe
-if [[ -f "${HOME}/.zsh-light" && -z "${ZSH_PROFILE}" ]]; then
-    ZSH_PROFILE="light"
+# Sélection du profil : ZSH_PROFILE (env) prioritaire, puis le sentinel
+# ~/.zsh-profile (écrit par set-default-shell.sh), puis rétrocompatibilité
+# avec l'ancien sentinel ~/.zsh-light, puis "base" par défaut.
+if [[ -z "${ZSH_PROFILE}" ]]; then
+    if [[ -f "${HOME}/.zsh-profile" ]]; then
+        ZSH_PROFILE="$(<"${HOME}/.zsh-profile")"
+    elif [[ -f "${HOME}/.zsh-light" ]]; then
+        ZSH_PROFILE="light"
+    fi
 fi
 ZSH_PROFILE="${ZSH_PROFILE:-base}"
 export ZSH_PROFILE
@@ -26,6 +32,10 @@ case $ZSH_PROFILE in
     source "${HOME}/.zsh/config/zshrc.base"
     ;;
   omz)
+    source "${HOME}/.zsh/activate.zsh"
+    ;;
+  omz-ascii)
+    ZSH_THEME="omz-ascii"
     source "${HOME}/.zsh/activate.zsh"
     ;;
   *)

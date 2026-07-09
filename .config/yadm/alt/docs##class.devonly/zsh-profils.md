@@ -38,10 +38,17 @@ zenv simple -t
 
 **Profils spéciaux** (sans powerlevel10k) :
 
-| Profil | Description                                                                |
-| ------ | -------------------------------------------------------------------------- |
-| `base` | Configuration minimale, sans oh-my-zsh. Charge `~/.zsh/config/zshrc.base`. |
-| `omz`  | oh-my-zsh avec le thème par défaut, sans powerlevel10k.                    |
+| Profil       | Description                                                                |
+| ------------ | --------------------------------------------------------------------------- |
+| `base`       | Configuration minimale, sans oh-my-zsh. Charge `~/.zsh/config/zshrc.base`. |
+| `light`      | Prompt Pure, sans oh-my-zsh. Charge `~/.zsh/config/zshrc.light`.           |
+| `omz`        | oh-my-zsh avec le thème par défaut (`agnoster`), sans powerlevel10k.       |
+| `omz-ascii`  | oh-my-zsh avec le thème `omz-ascii` : même rendu que `base`, mais avec oh-my-zsh actif (plugins git, autosuggestions, syntax-highlighting…). Sans icône Unicode ni police powerline — adapté à une console Linux (TTY, `Ctrl+Alt+F1`). |
+
+Les profils `base`, `light` et `omz-ascii` peuvent aussi être sélectionnés de
+façon persistante (sans passer par `ZSH_PROFILE`) via le menu
+[`set-default-shell.sh`](set-default-shell.md), qui écrit le profil choisi
+dans le sentinel `~/.zsh-profile`.
 
 **Profils powerlevel10k** (auto-découverts depuis `~/.zsh/powerlevel10k/`) :
 
@@ -149,21 +156,26 @@ bash/zsh
   └─ zenv <profil> [--tmux]
        └─ TERM=xterm-256color ZSH_PROFILE=<profil> [tmux | zsh -i]
             └─ .zshrc
-                 ├─ base  → .zsh/config/zshrc.base
-                 ├─ omz   → .zsh/activate.zsh
-                 └─ *     → .zsh/activate.zsh (thème p10k)
-                           + .zsh/powerlevel10k/p10k.zsh.<profil>
+                 ├─ base       → .zsh/config/zshrc.base
+                 ├─ light      → .zsh/config/zshrc.light
+                 ├─ omz        → .zsh/activate.zsh (thème agnoster)
+                 ├─ omz-ascii  → .zsh/activate.zsh (thème omz-ascii)
+                 └─ *          → .zsh/activate.zsh (thème p10k)
+                                + .zsh/powerlevel10k/p10k.zsh.<profil>
 ```
 
 ### Fichiers impliqués
 
 | Fichier                                | Rôle                                                                         |
 | -------------------------------------- | ---------------------------------------------------------------------------- |
-| `.zshrc`                               | Point d'entrée. Lit `ZSH_PROFILE` et charge la configuration correspondante. |
+| `.zshrc`                               | Point d'entrée. Lit `ZSH_PROFILE` (ou le sentinel `~/.zsh-profile`) et charge la configuration correspondante. |
 | `.shellrc/rc.d/zenv.sh`                | Fonction `zenv` et alias sémantiques. Chargé par bash et zsh.                |
 | `.zsh/powerlevel10k/p10k.zsh.<profil>` | Configuration powerlevel10k pour chaque profil.                              |
 | `.zsh/activate.zsh`                    | Activation d'oh-my-zsh.                                                      |
+| `.zsh/custom/themes/omz-ascii.zsh-theme` | Thème oh-my-zsh ASCII/ANSI (profil `omz-ascii`).                          |
 | `.zsh/config/zshrc.base`               | Configuration minimale zsh (profil `base`).                                  |
+| `.zsh/config/zshrc.light`              | Prompt Pure (profil `light`).                                                |
+| `~/.local/bin/set-default-shell.sh`    | Menu de sélection persistante du profil zsh (écrit `~/.zsh-profile`). Voir [set-default-shell.md](set-default-shell.md). |
 
 ### Convention de nommage
 
@@ -172,5 +184,5 @@ La valeur de `ZSH_PROFILE` correspond exactement au suffixe du fichier p10k :
 - `ZSH_PROFILE=simple` charge `.zsh/powerlevel10k/p10k.zsh.simple`
 - `ZSH_PROFILE=powerline` charge `.zsh/powerlevel10k/p10k.zsh.powerline`
 
-Les profils `base` et `omz` sont des cas spéciaux traités explicitement dans
-`.zshrc` avant la branche par défaut.
+Les profils `base`, `light`, `omz` et `omz-ascii` sont des cas spéciaux traités
+explicitement dans `.zshrc` avant la branche par défaut.

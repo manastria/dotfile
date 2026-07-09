@@ -28,7 +28,8 @@ if [ "$(id -u)" -eq 0 ]; then
 fi
 
 ZSH_FORCE="${HOME}/.zsh-force"
-ZSH_LIGHT="${HOME}/.zsh-light"
+ZSH_PROFILE_FILE="${HOME}/.zsh-profile"
+ZSH_LIGHT_LEGACY="${HOME}/.zsh-light"
 
 # Récupère le shell par défaut de l'utilisateur courant
 _current_shell() {
@@ -40,6 +41,18 @@ _current_shell() {
 # Vrai si le compte est géré par SSSD/LDAP (absent de /etc/passwd)
 _is_sssd_user() {
     ! grep -q "^${USER}:" /etc/passwd 2>/dev/null
+}
+
+# Profil zsh actif : contenu de ~/.zsh-profile, sinon rétrocompatibilité
+# avec l'ancien sentinel ~/.zsh-light, sinon "base" par défaut.
+_current_zsh_profile() {
+    if [ -f "${ZSH_PROFILE_FILE}" ]; then
+        cat "${ZSH_PROFILE_FILE}"
+    elif [ -f "${ZSH_LIGHT_LEGACY}" ]; then
+        echo "light"
+    else
+        echo "base"
+    fi
 }
 
 # Tente de changer le shell via chsh ; retourne 0 si réussi
@@ -112,35 +125,32 @@ _configure_zsh_profile() {
     echo ""
     echo -e "  ${BOLD}Profil zsh${RESET}"
     echo "  ─────────────────────────────────────────────"
-    echo "  • light  : prompt Pure + plugins essentiels"
-    echo "             (recommandé sans oh-my-zsh)"
-    echo "  • base   : zsh minimal sans plugins"
+    echo "  • light     : prompt Pure + plugins essentiels"
+    echo "                (recommandé sans oh-my-zsh)"
+    echo "  • base      : zsh minimal sans plugins"
+    echo "  • omz-ascii : oh-my-zsh (plugins complets) avec un"
+    echo "                prompt ASCII/ANSI sans icônes Unicode"
+    echo "                (recommandé en console Linux, Ctrl+Alt+F1)"
     echo "  ─────────────────────────────────────────────"
-    local current_profile
-    if [ -f "${ZSH_LIGHT}" ]; then
-        current_profile="${BOLD}light${RESET}"
-    else
-        current_profile="${BOLD}base${RESET}"
-    fi
-    echo -e "  Profil actif : ${current_profile}"
+    echo -e "  Profil actif : ${BOLD}$(_current_zsh_profile)${RESET}"
     echo ""
-    echo "  1) Activer le profil light  (crée ~/.zsh-light)"
-    echo "  2) Activer le profil base   (supprime ~/.zsh-light)"
+    echo "  1) Activer le profil light"
+    echo "  2) Activer le profil base"
+    echo "  3) Activer le profil omz-ascii"
     echo "  r) Retour"
     echo ""
     read -rp "  Votre choix : " profile_choice
+    local profile_name=""
     case "${profile_choice}" in
-        1)
-            touch "${ZSH_LIGHT}"
-            success "Profil light activé (fichier ~/.zsh-light créé)."
-            ;;
-        2)
-            rm -f "${ZSH_LIGHT}"
-            success "Profil base activé (fichier ~/.zsh-light supprimé)."
-            ;;
+        1) profile_name="light" ;;
+        2) profile_name="base" ;;
+        3) profile_name="omz-ascii" ;;
         r|R) return ;;
-        *) warn "Choix invalide, aucune modification." ;;
+        *) warn "Choix invalide, aucune modification." ; return ;;
     esac
+    rm -f "${ZSH_LIGHT_LEGACY}"
+    echo -n "${profile_name}" > "${ZSH_PROFILE_FILE}"
+    success "Profil ${BOLD}${profile_name}${RESET}${GREEN} activé (fichier ~/.zsh-profile mis à jour)."
 }
 
 # ─── Menu principal ───────────────────────────────────────────────────────────
@@ -155,11 +165,7 @@ _print_status() {
         sentinel_state="inactif"
     fi
 
-    if [ -f "${ZSH_LIGHT}" ]; then
-        profile_state="${CYAN}light${RESET}"
-    else
-        profile_state="base"
-    fi
+    profile_state="${CYAN}$(_current_zsh_profile)${RESET}"
 
     echo ""
     echo -e "${BOLD}═══════════════════════════════════════════${RESET}"
@@ -173,7 +179,7 @@ _print_status() {
     echo ""
     echo "  1) Passer à zsh comme shell par défaut"
     echo "  2) Passer à bash comme shell par défaut"
-    echo "  3) Configurer le profil zsh (light / base)"
+    echo "  3) Configurer le profil zsh (light / base / omz-ascii)"
     echo "  q) Quitter"
     echo ""
 }
