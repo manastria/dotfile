@@ -71,6 +71,9 @@ alias backup_permissions="stat -c '%a %U %G' fichier_cible > permissions_owner_g
 alias restore_permissions="read chmod_value owner group && chmod \$chmod_value fichier_cible && chown \$owner:\$group fichier_cible"
 alias sudo_nopasswd='echo "$USER ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/90-nopasswd-$USER'
 
+# Affiche la structure du projet en excluant les répertoires volumineux
+alias ai-tree="tree -a -I 'node_modules|.git|.next|dist|build|.DS_Store|.venv|venv'"
+
 ################################################################################
 # +--------------------------------------------------------------------------+ #
 # +                                                                          + #
