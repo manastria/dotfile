@@ -1,5 +1,9 @@
 # Désactivation de zoxide & fzf : `mkdir -p ~/.config && touch ~/.config/no_advanced_nav`
 # Debug : NAV_DEBUG=1 zsh -i -c exit  (affiche le diagnostic au démarrage)
+#
+# z <motif>  : mode non-interactif → saute directement vers le meilleur match
+#              (sans motif, équivaut à `cd ~`, pas d'affichage fzf)
+# zi [motif] : mode interactif → ouvre fzf avec la liste des répertoires classés par zoxide
 
 # ------------------------------------------------------------------
 # Configuration zoxide & fzf
