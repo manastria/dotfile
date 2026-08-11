@@ -69,6 +69,7 @@ packages_communs=(
     ccze
     curl
     direnv
+    dos2unix
     eza
     fd-find
     git
