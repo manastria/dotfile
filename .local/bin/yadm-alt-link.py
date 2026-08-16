@@ -86,6 +86,22 @@ class ProcessingStats:
             return f"{self.processed} traité(s), aucune modification"
         return f"{self.processed} traité(s) : " + ", ".join(parts)
 
+# ───────────────────────── dry-run ────────────────────────────────
+
+def dry(check_only: bool, message: str) -> bool:
+    """Signale une action non exécutée en mode --check-only.
+
+    Retourne True si l'appelant doit sauter l'action. Centraliser le test
+    ici garantit un message unique par action : les primitives appelées en
+    aval (create_working_link_or_file, remove_working_path…) ne portent
+    volontairement pas de garde, elles ne sont atteintes que via des appels
+    déjà protégés.
+    """
+    if check_only:
+        print(f"· [dry-run] {message}")
+        return True
+    return False
+
 # ───────────────────────── git helpers ────────────────────────────
 
 def git(*args: str, capture: bool = True) -> subprocess.CompletedProcess:
@@ -171,20 +187,27 @@ def format_rel(path: pathlib.Path, root: pathlib.Path) -> str:
 
 # ───────────────────────── migration ──────────────────────────────
 
-def _fix_symlinks_after_rename(root: pathlib.Path, old_name: str, new_name: str) -> int:
+def _fix_symlinks_after_rename(root: pathlib.Path, old_name: str, new_name: str,
+                               check_only: bool = False) -> int:
     """Répare les symlinks cassés après un renommage de variante.
 
     Parcourt la racine du dépôt à la recherche de symlinks dont la cible
     contient l'ancien nom et les redirige vers le nouveau.
     Retourne le nombre de symlinks réparés.
+
+    En mode --check-only le rename n'a pas eu lieu, donc les symlinks
+    pointent encore vers l'ancien nom : la détection reste valide et seule
+    la réparation est sautée.
     """
     fixed = 0
-    alt_dir = root / ALT_DIR
     for item in root.iterdir():
         if is_link_or_junction(item):
             target = os.readlink(item)
-            if OLD_SUFFIX in str(target):
-                new_target = str(target).replace(OLD_SUFFIX, SUFFIX)
+            if old_name in str(target):
+                new_target = str(target).replace(old_name, new_name)
+                if dry(check_only, f"Réparerait le symlink : {item.name} → {new_target}"):
+                    fixed += 1
+                    continue
                 item.unlink()
                 os.symlink(new_target, item)
                 print(f"  · Symlink réparé : {item.name} → {new_target}")
@@ -192,12 +215,16 @@ def _fix_symlinks_after_rename(root: pathlib.Path, old_name: str, new_name: str)
     return fixed
 
 
-def migrate_old_suffix(root: pathlib.Path, stats: 'ProcessingStats') -> None:
+def migrate_old_suffix(root: pathlib.Path, stats: 'ProcessingStats',
+                       check_only: bool = False) -> None:
     """Migre les fichiers ##os.None vers ##class.devonly dans le répertoire alt/.
 
     - Renomme les fichiers/dossiers avec l'ancien suffixe
     - Répare les symlinks cassés par le renommage
     - Les hardlinks survivent au rename (même inode)
+
+    Appelée avant la boucle principale : sans garde --check-only ici, un
+    simple diagnostic renommerait déjà des fichiers.
     """
     alt_path = root / ALT_DIR
     if not alt_path.exists():
@@ -212,15 +239,19 @@ def migrate_old_suffix(root: pathlib.Path, stats: 'ProcessingStats') -> None:
                 print(f"  WARN: '{new_name}' existe déjà, migration ignorée pour '{item.name}'")
                 stats.warnings += 1
                 continue
-            item.rename(new_path)
+            # Les compteurs reflètent ce qui *serait* fait : le résumé final
+            # reste ainsi lisible en dry-run, la bannière signalant le mode.
+            if not check_only:
+                item.rename(new_path)
             renamed.append((item.name, new_name))
             stats.migrated += 1
 
     if renamed:
-        print(f"\n=== Migration {OLD_SUFFIX} → {SUFFIX} ===")
+        label = " [dry-run]" if check_only else ""
+        print(f"\n=== Migration {OLD_SUFFIX} → {SUFFIX}{label} ===")
         for old, new in renamed:
             print(f"  · {old} → {new}")
-        _fix_symlinks_after_rename(root, OLD_SUFFIX, SUFFIX)
+        _fix_symlinks_after_rename(root, OLD_SUFFIX, SUFFIX, check_only)
 
 
 def should_avoid_symlink(rel: str) -> bool:
@@ -357,16 +388,22 @@ def remove_working_path(work_path: pathlib.Path) -> None:
 
 # ───────────────────────── exclude handling ───────────────────────
 
-def add_to_exclude(exclude: pathlib.Path, rel: str) -> None:
+def add_to_exclude(exclude: pathlib.Path, rel: str, check_only: bool = False) -> None:
     """Ajoute un chemin au fichier .git/info/exclude."""
+    # Le test de présence passe avant toute création : en --check-only, ni le
+    # répertoire ni le fichier ne doivent apparaître. Un exclude inexistant
+    # donne un ensemble vide, donc le comportement normal est inchangé.
+    if exclude.exists():
+        # Utilise un set pour une recherche efficace et éviter les doublons.
+        with exclude.open('r', encoding='utf-8') as f:
+            if rel in {ln.rstrip() for ln in f}:
+                return
+
+    if dry(check_only, f"Ajouterait à info/exclude: {rel}"):
+        return
+
     exclude.parent.mkdir(parents=True, exist_ok=True)
     exclude.touch(exist_ok=True)
-    
-    # Utilise un set pour une recherche efficace et éviter les doublons.
-    with exclude.open('r', encoding='utf-8') as f:
-        if rel in {ln.rstrip() for ln in f}:
-            return
-            
     with exclude.open("a", encoding='utf-8') as f:
         f.write(rel + "\n")
     print(f"· Ajouté à info/exclude: {rel}")
@@ -522,14 +559,18 @@ def ensure_variant_dirs(path: pathlib.Path):
     path.parent.mkdir(parents=True, exist_ok=True)
 
 
-def move_existing_root_variant(path: pathlib.Path, var_path: pathlib.Path):
+def move_existing_root_variant(path: pathlib.Path, var_path: pathlib.Path,
+                               check_only: bool = False):
     """Déplace une variante existante au mauvais endroit vers le répertoire alt/."""
     for suffix in (SUFFIX, OLD_SUFFIX):
         root_variant = path.with_name(path.name + suffix)
         if root_variant.exists() and not var_path.exists():
+            rel_var_path = var_path.relative_to(repo_root())
+            if dry(check_only,
+                   f"Déplacerait la variante existante → {rel_var_path.as_posix()}"):
+                break
             ensure_variant_dirs(var_path)
             root_variant.rename(var_path)
-            rel_var_path = var_path.relative_to(repo_root())
             print(f"· Déplacement de la variante existante → {rel_var_path.as_posix()}")
             break
 
@@ -556,26 +597,32 @@ def process_one(
         print(f"DEBUG: var_path  = '{var_path}'")
 
     # Déplace une variante pré-existante qui serait au mauvais endroit
-    move_existing_root_variant(work_path, var_path)
+    move_existing_root_variant(work_path, var_path, check_only)
 
     relative_var_path = var_path.relative_to(root / ALT_DIR).as_posix()
 
     # Cas 1 : La variante n'existe pas, mais le working-name existe.
     if not var_path.exists() and work_path.exists() and not is_link_or_junction(work_path):
-        ensure_variant_dirs(var_path)
-        work_path.rename(var_path)
-        create_working_link_or_file(var_path, work_path, rel, root)
-        if avoid_symlink:
-            print(f"Déplacé vers la variante: {ALT_DIR.as_posix()}/{relative_var_path}")
-        else:
-            print_link_created(rel, relative_var_path, action="Déplacé & lié")
+        if not dry(check_only,
+                   f"Déplacerait '{rel}' → {ALT_DIR.as_posix()}/{relative_var_path}, "
+                   f"puis créerait le working-name"):
+            ensure_variant_dirs(var_path)
+            work_path.rename(var_path)
+            create_working_link_or_file(var_path, work_path, rel, root)
+            if avoid_symlink:
+                print(f"Déplacé vers la variante: {ALT_DIR.as_posix()}/{relative_var_path}")
+            else:
+                print_link_created(rel, relative_var_path, action="Déplacé & lié")
         stats.moved += 1
 
     # Cas 2 : La variante existe, mais le working-name n'existe pas.
     elif var_path.exists() and not work_path.exists() and not is_link_or_junction(work_path):
-        create_working_link_or_file(var_path, work_path, rel, root)
-        if not avoid_symlink:
-            print_link_created(rel, relative_var_path)
+        if not dry(check_only,
+                   f"Créerait le working-name : {rel} → "
+                   f"{ALT_DIR.as_posix()}/{relative_var_path}"):
+            create_working_link_or_file(var_path, work_path, rel, root)
+            if not avoid_symlink:
+                print_link_created(rel, relative_var_path)
         stats.linked += 1
 
     # Cas 3 : La variante existe et le working-name existe.
@@ -591,10 +638,12 @@ def process_one(
             if sync and avoid_symlink:
                 report_sync_divergence(work_path, var_path, rel, root)
             if force:
-                remove_working_path(work_path)
-                create_working_link_or_file(var_path, work_path, rel, root)
-                if not avoid_symlink:
-                    print_link_created(rel, relative_var_path, action="Remplacé & lié")
+                if not dry(check_only,
+                           f"Supprimerait puis recréerait le working-name : {rel}"):
+                    remove_working_path(work_path)
+                    create_working_link_or_file(var_path, work_path, rel, root)
+                    if not avoid_symlink:
+                        print_link_created(rel, relative_var_path, action="Remplacé & lié")
                 stats.replaced += 1
             else:
                 print("· Utilisez --force pour remplacer le working-name.")
@@ -609,7 +658,7 @@ def process_one(
         print(f"✓ Rien à faire pour {rel}")
         stats.skipped += 1
 
-    add_to_exclude(exclude, rel)
+    add_to_exclude(exclude, rel, check_only)
     remove_from_index(rel, root, fix_tracked, check_only)
 
 # ───────────────────────── main ───────────────────────────────────
@@ -641,7 +690,8 @@ def main():
         parser.add_argument(
             "--check-only",
             action="store_true",
-            help="Diagnostique uniquement, ne modifie rien.",
+            help="Dry-run complet : affiche les actions sans rien modifier "
+                 "(ni fichiers, ni liens, ni info/exclude, ni index git).",
         )
         parser.add_argument(
             "--force",
@@ -660,8 +710,11 @@ def main():
         exclude = exclude_path()
         stats = ProcessingStats()
 
+        if args.check_only:
+            print("=== Mode --check-only : aucune modification ne sera appliquée ===")
+
         # Migration des anciens suffixes ##os.None → ##class.devonly
-        migrate_old_suffix(root, stats)
+        migrate_old_suffix(root, stats, args.check_only)
 
         targets = get_targets(root, args.paths)
         targets = validate_targets(targets, root)
@@ -679,9 +732,16 @@ def main():
             )
 
         # Résumé final
-        print(f"\n=== Résumé : {stats.summary()} ===")
+        # En dry-run les compteurs décrivent ce qui *serait* fait, d'où le
+        # libellé explicite : un « 3 déplacé(s) » sec induirait en erreur.
+        if args.check_only:
+            print(f"\n=== Résumé [dry-run, rien appliqué] : {stats.summary()} ===")
+            if stats.changes_made > 0:
+                print("Relancez sans --check-only pour appliquer ces actions.")
+        else:
+            print(f"\n=== Résumé : {stats.summary()} ===")
 
-        if stats.changes_made > 0:
+        if stats.changes_made > 0 and not args.check_only:
             # Construit la liste des fichiers à ajouter pour le message final
             files_to_add = []
             for t in targets:
