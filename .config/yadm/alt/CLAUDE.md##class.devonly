@@ -56,6 +56,13 @@ Submodules (defined in `.gitmodules`) are all zsh-related: oh-my-zsh, powerlevel
 - Alias definitions go in `.shellrc/rc.d/alias.sh` (shared), `.shellrc/bashrc.d/10_alias.bash` (bash-only), or `.shellrc/zshrc.d/02_alias.zsh` (zsh-only). Functions belong in the corresponding `.shellrc/` subdirectory, not in alias files.
 - Git aliases go in `.gitconfig_alias`.
 
+## Documentation des scripts
+
+Tout script shell/Python doit avoir :
+1. Un bloc d'en-tête façon manpage (NAME/SYNOPSIS/DESCRIPTION/OPTIONS/EXAMPLES)
+2. Des commentaires inline sur les parties non triviales (pas de commentaires évidents type `# incrémente i`)
+3. Pour les scripts avec arguments : aide `-h`/`--help` qui affiche un résumé du SYNOPSIS
+
 ## Shell Script Color and Logging Conventions
 
 Every script in `.local/bin/` that produces user-facing output must use the following color variables and log functions. Do not use raw `echo "INFO: ..."` strings or invent alternative naming.
