@@ -390,23 +390,31 @@ def remove_working_path(work_path: pathlib.Path) -> None:
 
 def add_to_exclude(exclude: pathlib.Path, rel: str, check_only: bool = False) -> None:
     """Ajoute un chemin au fichier .git/info/exclude."""
+    # Motif ancré à la racine du dépôt. Sans le « / » initial, la règle suit la
+    # sémantique gitignore et s'applique à TOUTE profondeur : « docs » masquerait
+    # aussi bien le lien de travail de la racine qu'un futur dossier docs/ ailleurs,
+    # et « README.md » masquerait silencieusement tout README du dépôt.
+    pattern = "/" + rel
     # Le test de présence passe avant toute création : en --check-only, ni le
     # répertoire ni le fichier ne doivent apparaître. Un exclude inexistant
     # donne un ensemble vide, donc le comportement normal est inchangé.
     if exclude.exists():
         # Utilise un set pour une recherche efficace et éviter les doublons.
+        # La forme non ancrée est reconnue pour ne pas dupliquer les lignes
+        # écrites par les versions précédentes du script.
         with exclude.open('r', encoding='utf-8') as f:
-            if rel in {ln.rstrip() for ln in f}:
-                return
+            existing = {ln.rstrip() for ln in f}
+        if pattern in existing or rel in existing:
+            return
 
-    if dry(check_only, f"Ajouterait à info/exclude: {rel}"):
+    if dry(check_only, f"Ajouterait à info/exclude: {pattern}"):
         return
 
     exclude.parent.mkdir(parents=True, exist_ok=True)
     exclude.touch(exist_ok=True)
     with exclude.open("a", encoding='utf-8') as f:
-        f.write(rel + "\n")
-    print(f"· Ajouté à info/exclude: {rel}")
+        f.write(pattern + "\n")
+    print(f"· Ajouté à info/exclude: {pattern}")
 
 # ───────────────────────── index cleanup ──────────────────────────
 

@@ -35,6 +35,7 @@ Submodules (defined in `.gitmodules`) are all zsh-related: oh-my-zsh, powerlevel
 - **`.shellrc/bashrc.d/`** - Bash-only scripts (`.bash` extension)
 - **`.shellrc/zshrc.d/`** - Zsh-only scripts (`.zsh` extension)
 - **`.local/bin/`** - Utility scripts: package installation (`install-paquets.sh`), software installers (starship, docker, atuin, vscode, etc.), system management
+- **`docs/`** - One Markdown page per script in `.local/bin/` (symlink to `.config/yadm/alt/docs##class.devonly/`, see *Documentation des scripts*)
 - **`src/`** - Third-party tools (git-subrepo)
 - **`.config/yadm/alt/`** - Yadm alternate files with `##os.None` suffix, symlinked to `$HOME` (`.editorconfig`, `.vscode`, `.gitignore`)
 
@@ -62,6 +63,34 @@ Tout script shell/Python doit avoir :
 1. Un bloc d'en-tête façon manpage (NAME/SYNOPSIS/DESCRIPTION/OPTIONS/EXAMPLES)
 2. Des commentaires inline sur les parties non triviales (pas de commentaires évidents type `# incrémente i`)
 3. Pour les scripts avec arguments : aide `-h`/`--help` qui affiche un résumé du SYNOPSIS
+4. **Une page de documentation dans `docs/`** (voir ci-dessous)
+
+### Page `docs/<nom-du-script>.md`
+
+Obligatoire pour **tout nouveau script**, et **à mettre à jour à chaque changement de comportement** : options ajoutées ou renommées, valeurs par défaut, codes de retour, prérequis. Un script supprimé implique de supprimer sa page.
+
+- Un fichier Markdown par script, nommé d'après le script **sans son extension** : `pack-bundle.sh` → `docs/pack-bundle.md`.
+- `docs/` est un lien yadm alt vers `.config/yadm/alt/docs##class.devonly/` : écrire dans `docs/` suffit, le fichier est versionné à son emplacement réel.
+- Rédigée en **français**, comme les commentaires et les messages des scripts.
+- **Référencer la page dans l'index `docs/README.md`** (et l'y retirer si le script disparaît). Les liens vers les scripts s'écrivent en relatif depuis `docs/` : `../.local/bin/mon-script.sh`.
+
+Structure imposée, en deux parties (références : `docs/pack-bundle.md`, `docs/pack_dir.md`) :
+
+**Section utilisateur** — ce qu'il faut savoir pour s'en servir :
+- `Description` : à quoi sert le script, et en quoi il diffère des scripts voisins
+- `Prérequis` : tableau outil / rôle / commande de vérification
+- `Syntaxe` : la ligne de commande, puis un tableau option / argument / défaut / description
+- `Exemples d'utilisation` : commandes commentées **et** un exemple de sortie réelle
+- `Codes de retour` : tableau code / signification, aligné sur la section EXIT CODES de l'en-tête
+
+**Section développeur** — ce qu'il faut savoir pour le modifier :
+- `Architecture interne` : enchaînement des fonctions de `main()`
+- `Détail des choix techniques` : le **pourquoi** des décisions non évidentes (pièges d'API, contournements, comportements par défaut choisis)
+- `Dépendances externes` : binaires requis et versions minimales, avec la fonctionnalité qui l'impose
+- `Points d'extension` : modifications prévisibles, avec un extrait de code
+- `Notes de maintenance` : limites connues et pièges pour la prochaine personne qui y touche
+
+La page doit rester cohérente avec l'en-tête manpage du script : l'en-tête est la référence courte (`--help`), la page docs explique le contexte, les cas d'usage et les raisons.
 
 ## Shell Script Color and Logging Conventions
 
