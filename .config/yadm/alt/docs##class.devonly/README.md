@@ -43,6 +43,7 @@ Les conventions de rédaction sont fixées dans [CLAUDE.md](../CLAUDE.md), secti
 | Page | Script | Objet |
 | ---- | ------ | ----- |
 | [install-gitkraken.md](install-gitkraken.md) | [`install-gitkraken.sh`](../.local/bin/install-gitkraken.sh) | GitKraken (GUI) et GitKraken CLI (`gk`) sur Debian/Ubuntu |
+| [install-xmind.md](install-xmind.md) | [`install-xmind.sh`](../.local/bin/install-xmind.sh) | Xmind (`.deb` officiel) sur KUbuntu/XUbuntu : profil AppArmor et trousseau de clés |
 
 ---
 
