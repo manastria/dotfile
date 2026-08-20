@@ -131,7 +131,9 @@ Second lancement, sans nouvelle release :
 ### Après l'installation
 
 - **Rebranchez le récepteur USB** (ou reconnectez le Bluetooth). Les règles udev ne s'appliquent qu'au moment de la connexion : sans rebranchement, le périphérique reste inaccessible et Projecteur ne le voit pas.
-- **Diagnostic** : `projecteur --device-scan` liste les périphériques vus et les droits d'accès ; `projecteur --fullversion` donne la version à joindre à un rapport de bogue.
+- **Diagnostic** : `projecteur -d` (`--device-scan`) liste les périphériques vus et les droits d'accès ; `projecteur --fullversion` donne la version à joindre à un rapport de bogue.
+- **Piloter une instance en cours** : `projecteur -c spot=toggle` allume ou éteint le spot, `projecteur -c settings=show` ouvre les préférences, `projecteur -c quit` quitte. La première commande se prête bien à un raccourci clavier global, et fonctionne sans aucun périphérique connecté.
+- **Présentateur non reconnu** : `projecteur -D vendorId:productId` (par exemple `projecteur -D 04b3:310c`) ajoute un périphérique accepté, sans recompiler.
 - **Mise à jour** : relancer le script. La voie par défaut compare la version publiée à celle installée et ne fait rien si elles coïncident ; `--from-source` fait un `git pull --ff-only` et recompile.
 - **Désinstallation** : `sudo apt remove projecteur`, puis `sudo rm -f /etc/modules-load.d/projecteur.conf` et, le cas échéant, `rm -rf ~/.local/src/Projecteur`.
 
@@ -219,10 +221,88 @@ Il faudrait aussi convertir le numéro de version de la dérivée en son équiva
 
 **Ajout d'une option `--uninstall`.** Elle enchaînerait `sudo apt-get remove -y projecteur`, `sudo rm -f "$MODULES_CONF"`, `sudo udevadm control --reload-rules`, et proposerait d'effacer `--src-dir`.
 
+### Reprise des tests
+
+État au **20 août 2026** : le script a été exécuté jusqu'à l'appel à `sudo`, qui n'a pas pu aboutir faute de terminal interactif. Tout ce qui précède cet appel est vérifié ; la suite ne l'est pas.
+
+La distinction qui compte pour planifier une reprise : **la majorité des tests restants ne demande pas le récepteur Spotlight.** Projecteur démarre et s'utilise sans périphérique — le dépôt amont documente d'ailleurs un mode sans appareil (*device-free use*, [`doc/USER-GUIDE.md`](https://github.com/gbin/Projecteur/blob/legacy/qt5/doc/USER-GUIDE.md)). Seule la chaîne d'accès au matériel exige le boîtier.
+
+#### Tests réalisables sans le récepteur
+
+| # | Test | Commande | Résultat attendu |
+| - | ---- | -------- | ---------------- |
+| 1 | Installation par défaut | `install-projecteur.sh` | `[OK] Paquet projecteur 0.10.0-1 installé`, puis `[OK] Projecteur installé : Projecteur 0.10` |
+| 2 | Binaire en place | `command -v projecteur && projecteur --version` | `/usr/local/bin/projecteur` et `Projecteur 0.10` |
+| 3 | Règles udev posées | `ls -l /lib/udev/rules.d/55-projecteur.rules` | Fichier présent, appartenant à `root` |
+| 4 | `uinput` chargé et persistant | `lsmod \| grep uinput ; ls -l /dev/uinput ; cat /etc/modules-load.d/projecteur.conf` | Module listé, `/dev/uinput` présent, fichier contenant `uinput` |
+| 5 | Persistance réelle | Redémarrer, puis `lsmod \| grep uinput` | Module toujours chargé — c'est le seul test du `modules-load.d` |
+| 6 | Entrée de menu | `ls /usr/local/share/applications/projecteur.desktop` puis chercher « Projecteur » au menu | Fichier présent, application listée |
+| 7 | Lancement sans périphérique | `projecteur &` | L'interface s'ouvre ; aucun périphérique listé, ce qui est normal sans le récepteur |
+| 8 | **Rendu du spot, sans matériel** | Instance lancée, puis `projecteur -c spot=toggle` | Le spot s'affiche à l'écran. Voir l'encadré ci-dessous : c'est le test décisif du rendu sous Wayland |
+| 9 | Réglages | `projecteur -c settings=show` | La fenêtre de préférences s'ouvre (taille, couleur, opacité du spot) |
+| 10 | Idempotence | Relancer `install-projecteur.sh` | `[OK] Projecteur 0.10.0-1 est déjà à jour. Rien à faire.` sans téléchargement |
+| 11 | Réinstallation forcée | `install-projecteur.sh --force` | Réinstalle sans poser de question |
+| 12 | Désinstallation | `sudo apt remove projecteur` | Suppression propre ; `/etc/modules-load.d/projecteur.conf` **subsiste** (voir *Notes de maintenance*) |
+| 13 | Voie compilation | `install-projecteur.sh --from-source` | Installe ~300 Mo de dépendances, compile, produit un `.deb` et l'installe. **Entièrement non testé** |
+| 14 | Dépendances seules | `install-projecteur.sh --deps-only` | S'arrête après l'installation des paquets |
+
+> **Le test 8 est le plus important, et il ne demande aucun matériel.**
+> `-c COMMAND` envoie une commande à une instance déjà lancée : `spot=toggle`
+> allume le spot sans qu'aucun périphérique soit connecté. C'est donc là que se
+> tranche la seule vraie inconnue de cette installation — la branche
+> `legacy/qt5` est une application **X11** tournant via XWayland sous une session
+> Plasma Wayland, et rien ne garantit que son incrustation se superpose
+> correctement aux fenêtres natives Wayland.
+>
+> Promener le spot au-dessus de plusieurs fenêtres, dont au moins une application
+> Wayland native (Konsole, Dolphin), et vérifier qu'il reste visible par-dessus.
+> S'il disparaît ou clignote, ouvrir une session X11 et refaire le test : si le
+> spot s'y comporte correctement, la cause est XWayland et non le paquet. Le
+> remède définitif serait la branche `develop`, native Wayland — non compilable
+> sur Ubuntu 26.04 tant qu'Ubuntu livre Plasma 6.6.
+
+Le test 13 est le plus incertain : configuration CMake, compilation et cible `dist-package` n'ont jamais été exécutées. En cas d'échec, `install-projecteur.sh --from-source --jobs 1` rend les messages du compilateur plus lisibles. Attention, il installe une chaîne de compilation complète : à ne lancer que sur une machine où cela ne dérange pas.
+
+#### Tests exigeant le récepteur Spotlight
+
+| # | Test | Commande | Résultat attendu |
+| - | ---- | -------- | ---------------- |
+| 15 | Détection en USB | Brancher le récepteur **après** l'installation, puis `projecteur -d` | Le Spotlight `046d:c53e` est listé, avec accès en lecture/écriture |
+| 16 | Droits `uaccess` effectifs | `ls -l /dev/hidraw*` récepteur branché | Un nœud accessible à l'utilisateur de la session, sans `sudo` ni ajout de groupe |
+| 17 | Détection en Bluetooth | Appairer le boîtier, puis `projecteur -d` | Le `046d:b503` est listé |
+| 18 | Suivi des mouvements | Lancer Projecteur, maintenir le bouton du Spotlight | Le spot apparaît et suit les mouvements |
+| 19 | Réinjection par `uinput` | Appuyer sur les boutons suivant/précédent pendant une présentation | Les diapositives défilent : preuve que la capture du périphérique **et** la réinjection via `/dev/uinput` fonctionnent |
+
+Le test 15 est le **premier** à faire une fois le boîtier disponible, et le rebranchement **après** installation n'est pas un détail : les règles udev n'attribuent les droits qu'au moment de la connexion du périphérique. Un récepteur resté branché pendant l'installation ne sera pas accessible, ce qui ressemble à s'y méprendre à un bogue.
+
+Le test 19 est le seul à exercer `/dev/uinput`, donc le seul à valider `setup_uinput` et le fichier `modules-load.d` autrement que par la simple présence du module.
+
+#### Revérifier les constats sans rien installer
+
+Les affirmations de cette page sur la compatibilité du paquet de 2023 se recontrôlent sans droits root ni installation :
+
+```bash
+# Le paquet amont est-il toujours accepté par apt ?
+curl -fsSLO https://github.com/gbin/Projecteur/releases/download/v0.10/projecteur-0.10_ubuntu-23.04-x86_64.deb
+apt-get -s install ./projecteur-0.10_ubuntu-23.04-x86_64.deb
+
+# Pourquoi la dépendance libqt5widgets5 est-elle satisfaite ?
+apt-cache showpkg libqt5widgets5 | sed -n '/Reverse Provides/,$p'
+
+# Le binaire tourne-t-il sur ce système ?
+dpkg-deb -x projecteur-0.10_ubuntu-23.04-x86_64.deb /tmp/proj
+ldd /tmp/proj/usr/local/bin/projecteur | grep "not found" || echo "aucune bibliothèque manquante"
+/tmp/proj/usr/local/bin/projecteur --version
+
+# Les listes de dépendances de compilation se résolvent-elles encore ?
+install-projecteur.sh --deps-only   # s'arrête avant sudo si l'une manque
+```
+
 ### Notes de maintenance
 
 - **Ce qui a été vérifié sur Ubuntu 26.04**, sans les droits root : le binaire v0.10 s'exécute (`ldd` sans bibliothèque manquante, `--version` → `Projecteur 0.10`) ; `apt-get -s install` accepte le paquet amont tel quel ; `apt-cache showpkg libqt5widgets5` confirme le `Provides` de `libqt5widgets5t64` ; le choix d'asset est correct sur sept couples distribution/version ; les listes `DEPS_LEGACY` (31 paquets résolus) et `DEPS_DEVELOP` (92 paquets résolus) passent `apt-get -s install` ; le clone de `legacy/qt5` aboutit avec ses tags (`v0.10-8-g812a15d`) ; la cible `dist-package` est bien définie pour `ubuntu::DEB`.
-- **Ce qui n'a pas été exécuté** : les étapes exigeant `sudo` (installation du paquet, `modprobe`, `udevadm`) et **l'intégralité de la voie `--from-source`** — configuration CMake, compilation, cible `dist-package`. La chaîne Qt5 n'était pas installée sur la machine de développement, et c'est précisément ce que le script installe.
+- **Ce qui n'a pas été exécuté** est détaillé en tests numérotés dans *Reprise des tests* ci-dessus : les étapes exigeant `sudo`, toute la voie `--from-source`, et les cinq tests qui demandent le récepteur Spotlight.
+- **La désinstallation est incomplète par construction.** `apt remove projecteur` retire le paquet et ses règles udev, mais pas `/etc/modules-load.d/projecteur.conf`, écrit par le script hors de tout paquet. `uinput` continuera donc d'être chargé au démarrage. C'est sans conséquence — le module est minuscule et utilisé par d'autres logiciels — mais c'est une trace laissée derrière, à supprimer à la main.
 - **La branche `develop` reste non testée.** Sa liste `DEPS_DEVELOP` est déduite des `find_package()` du `CMakeLists` amont, pas d'un fichier officiel — le projet ne documente les noms de paquets que pour Arch Linux (`Justfile`). Les noms existent dans APT ; rien ne prouve qu'ils suffisent à compiler.
 - **`find … -maxdepth 2 -name '*.deb'`** : CPack n'ayant pas de `CPACK_PACKAGE_DIRECTORY` défini en amont, le paquet tombe dans `build/`. Si une version future change cet emplacement, c'est cette ligne qu'il faut ajuster.
 - **Le dépôt amont a changé de mainteneur en 2026** (Jahn Fuchs → Guillaume Binet) et `develop` est une réécriture. Si `legacy/qt5` disparaissait, se rabattre sur le tag `v0.10`, que le script accepte via `--branch v0.10`.
