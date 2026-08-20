@@ -15,7 +15,7 @@ Le script fait trois choses qu'un simple `apt install ./Xmind….deb` ne fait pa
 | Problème | Ce que fait le script |
 | -------- | --------------------- |
 | Téléchargement inutile de 230 Mo quand la version installée est déjà la bonne | Compare l'horodatage de build **avant** de télécharger, et sort si c'est identique |
-| Xmind (Electron) refuse de démarrer sur Ubuntu ≥ 24.04 | Installe un profil AppArmor qui autorise les espaces de noms utilisateur pour ce seul binaire |
+| Xmind (Electron) refuse de démarrer sur Ubuntu ≥ 24.04 | Vérifie que le profil AppArmor livré par le paquet a bien été installé — son `postinst` y renonce en silence quand AppArmor est trop ancien |
 | Xmind oublie la connexion au compte à chaque lancement sur KDE/XFCE | Vérifie la présence d'un trousseau *Secret Service* et indique le paquet manquant selon le bureau |
 
 Il se distingue des autres installateurs du dépôt sur un point : il n'existe **pas de variante arm64** chez l'éditeur, le script refuse donc toute architecture autre qu'`amd64`.
@@ -29,8 +29,7 @@ Le script relève du **Tier 2** de la politique sudo du dépôt (voir [CLAUDE.md
 | `curl` | Résolution de la redirection et téléchargement | `curl --version` |
 | `dpkg` / `dpkg-deb` | Architecture, version installée, vérification de l'archive | `dpkg --version` |
 | `apt-get` | Installation du `.deb` et de ses dépendances | `apt-get --version` |
-| `sudo` | Installation système et écriture du profil AppArmor | `sudo -V` |
-| `apparmor_parser` | Chargement du profil AppArmor (facultatif) | `apparmor_parser --version` |
+| `sudo` | Installation système du paquet | `sudo -V` |
 | `gdbus` | Détection du trousseau de clés (facultatif, paquet `libglib2.0-bin`) | `gdbus --version` |
 
 Les deux derniers outils sont facultatifs : leur absence produit un avertissement, pas un échec.
@@ -38,7 +37,7 @@ Les deux derniers outils sont facultatifs : leur absence produit un avertissemen
 ### Syntaxe
 
 ```bash
-install-xmind.sh [-f] [--file FICHIER.deb] [--keep-deb DIR] [--no-apparmor] [-h]
+install-xmind.sh [-f] [--file FICHIER.deb] [--keep-deb DIR] [-h]
 ```
 
 | Option | Argument | Défaut | Description |
@@ -46,7 +45,6 @@ install-xmind.sh [-f] [--file FICHIER.deb] [--keep-deb DIR] [--no-apparmor] [-h]
 | `-f`, `--force` | — | désactivé | Réinstalle même si la build en ligne est déjà installée, et ne pose aucune question |
 | `--file` | chemin | téléchargement | Installe ce `.deb` local au lieu de télécharger (hors ligne, ou rejeu d'une version) |
 | `--keep-deb` | répertoire | fichier supprimé | Copie le `.deb` téléchargé dans ce répertoire avant nettoyage |
-| `--no-apparmor` | — | profil installé | N'installe pas le profil AppArmor |
 | `-h`, `--help` | — | — | Affiche l'en-tête manpage du script |
 
 ### Exemples d'utilisation
@@ -60,9 +58,6 @@ install-xmind.sh --force --keep-deb ~/Téléchargements
 
 # Installation sur un poste hors ligne, depuis le .deb récupéré plus tôt
 install-xmind.sh --file ~/Téléchargements/Xmind-for-Linux-amd64bit-26.05.01106-202608091931.deb
-
-# Installation sans toucher à AppArmor (poste où le profil est géré autrement)
-install-xmind.sh --no-apparmor
 ```
 
 Sortie sur une première installation sous KUbuntu :
@@ -80,11 +75,10 @@ Sortie sur une première installation sous KUbuntu :
 [INFO]      Paquet vérifié : xmind-vana 26.5.1106-202608091931
 [INFO]      Installation du paquet (apt résout les dépendances)…
 [OK]        Paquet xmind-vana installé.
-[INFO]      Installation du profil AppArmor pour /opt/Xmind/Xmind…
-[OK]        Profil AppArmor chargé : /etc/apparmor.d/xmind
+[OK]        Profil AppArmor en place : /etc/apparmor.d/xmind (installé par le paquet).
 [OK]        Trousseau de clés disponible (org.freedesktop.secrets).
 [OK]        Xmind 26.5.1106-202608091931 installé.
-[INFO]      Binaire : /opt/Xmind/Xmind
+[INFO]      Binaire : /opt/Xmind/xmind
 [INFO]      Lancement : depuis le menu des applications, ou « xmind » si le lien est dans le PATH.
 [INFO]      Mise à jour : relancez ce script (Xmind n'a pas de dépôt APT).
 ```
@@ -110,7 +104,7 @@ Sur un second lancement sans nouvelle version :
 ### Après l'installation
 
 - **Mises à jour** : manuelles. Relancer `install-xmind.sh` ; sans nouvelle build, le script sort en quelques secondes sans rien télécharger.
-- **Désinstallation** : `sudo apt remove xmind-vana` puis `sudo rm -f /etc/apparmor.d/xmind` (le profil n'est pas retiré automatiquement).
+- **Désinstallation** : `sudo apt remove xmind-vana` puis `sudo rm -f /etc/apparmor.d/xmind`. Le profil est posé par le `postinst` du paquet mais n'est retiré par aucun `prerm` : c'est une trace laissée par l'éditeur, pas par ce script.
 - **Trousseau de clés** : si le script a averti de son absence, installer `kwalletmanager kwallet-pam` (KDE) ou `gnome-keyring seahorse` (XFCE), puis **rouvrir la session** — le service ne s'enregistre sur le bus qu'au démarrage de celle-ci.
 
 ---
@@ -130,7 +124,7 @@ Enchaînement de `main()` :
 7. Branche `--file` : `sudo_warmup` puis `verify_deb` sur le fichier fourni.
    Branche par défaut : `resolve_remote_url` → `build_id_of_string` sur les deux versions → sortie anticipée si identiques → confirmation → `sudo_warmup` → `download_deb` → `verify_deb` → `keep_deb`.
 8. `install_deb` — `apt-get install -y` sur le chemin du `.deb`.
-9. `configure_apparmor` — conditionnée au sysctl et à la présence d'`apparmor_parser`.
+9. `check_apparmor` — vérifie le profil posé par le paquet ; n'écrit rien.
 10. `check_secret_service` — sondage D-Bus, avertissement ciblé par bureau.
 11. `refresh_desktop_db` — `update-desktop-database` et `gtk-update-icon-cache`.
 12. `verify_install` — relit la version dpkg et affiche le chemin du binaire.
@@ -145,9 +139,19 @@ Enchaînement de `main()` :
 
 **Deux listes D-Bus interrogées.** `check_secret_service` teste `ListNames` **puis** `ListActivatableNames`. Une seule ne suffit pas : gnome-keyring déclare un service activable à la demande (visible uniquement dans `ListActivatableNames`), tandis que KWallet occupe le nom `org.freedesktop.secrets` au vol via `org.kde.secretservicecompat`, sans fichier de service — il n'apparaît donc que dans `ListNames`. Ne tester que la liste des activables produisait un faux négatif sur KUbuntu.
 
-**Profil AppArmor plutôt que `--no-sandbox`.** Depuis Ubuntu 24.04, `kernel.apparmor_restrict_unprivileged_userns=1` empêche Chromium — donc toute application Electron installée hors dépôts — de créer les espaces de noms de son bac à sable. Trois réponses possibles : passer le sysctl à 0 (affaiblit tout le système), lancer avec `--no-sandbox` (désactive le bac à sable de Xmind), ou déclarer un profil `flags=(unconfined)` n'accordant que `userns`. C'est cette troisième voie, celle qu'Ubuntu emploie elle-même pour les navigateurs empaquetés — le profil produit est calqué sur `/etc/apparmor.d/obsidian` fourni par la distribution. Le profil n'est écrit que si le sysctl vaut effectivement `1`.
+**AppArmor : vérifier, ne pas écrire.** Depuis Ubuntu 24.04, `kernel.apparmor_restrict_unprivileged_userns=1` empêche Chromium — donc toute application Electron — de créer les espaces de noms de son bac à sable. La réponse propre est un profil `flags=(unconfined)` n'accordant que `userns`, comme Ubuntu le fait pour les navigateurs empaquetés.
 
-**Chemin du binaire découvert, pas codé en dur.** `xmind_binary` lit `dpkg -L xmind-vana` : l'éditeur a déjà changé la casse du répertoire d'installation (`/opt/XMind` puis `/opt/Xmind`) d'une version à l'autre, et le profil AppArmor doit désigner le chemin exact.
+Une version antérieure de ce script écrivait donc ce profil elle-même. **C'était inutile et destructeur** : le paquet de l'éditeur le fait déjà. Son `postinst` copie `/opt/Xmind/resources/apparmor-profile` vers `/etc/apparmor.d/xmind` et le charge par `apparmor_parser --replace --write-cache --skip-read-cache`. Le profil livré est d'ailleurs identique, au commentaire près, à celui que le script produisait. Écrire par-dessus revenait à remplacer le fichier du paquet par une copie de lui-même — sans bénéfice, et en écrasant ce que l'éditeur pourrait y ajouter demain.
+
+Le `postinst` amont est en outre plus prudent : il teste `apparmor_status --enabled`, valide le profil à blanc par `apparmor_parser --skip-kernel-load --debug` avant de l'installer — pour rester compatible avec Ubuntu 22.04, qui ne comprend pas `abi/4.0` — et s'abstient dans un chroot.
+
+`check_apparmor` se limite donc à constater. Son seul cas intéressant : profil absent **et** restriction active. C'est exactement la situation que le `postinst` crée sans le dire, puisqu'il renonce sans message d'erreur ; le script l'annonce et donne les deux commandes pour poser le profil à la main.
+
+**Chemin du binaire découvert, pas codé en dur.** `xmind_binary` lit `dpkg -L xmind-vana` : l'éditeur a déjà changé la casse du répertoire d'installation (`/opt/XMind` puis `/opt/Xmind`) d'une version à l'autre, et le profil AppArmor doit désigner le chemin exact. L'installation réelle confirme que la prudence était justifiée : le binaire est `/opt/Xmind/xmind` — répertoire capitalisé, **exécutable en minuscules**. Écrire `/opt/Xmind/Xmind` en dur, ce qui semblait le choix naturel, aurait produit un profil AppArmor désignant un fichier inexistant, donc sans effet, et un échec de démarrage incompréhensible sur Ubuntu ≥ 24.04.
+
+**`dpkg -L` ne dit pas tout.** `/etc/apparmor.d/xmind` n'apparaît pas dans la liste des fichiers du paquet, et `dpkg -S` répond qu'aucun chemin ne correspond — ce qui donne à croire que le fichier vient d'ailleurs. Il est en réalité créé par le `postinst`, donc hors du suivi de dpkg. Même remarque pour `/usr/bin/xmind`, posé par `update-alternatives`. Chercher l'origine d'un fichier par `dpkg -S` seul mène ici à une conclusion fausse ; il faut lire `/var/lib/dpkg/info/xmind-vana.postinst`.
+
+**Rafraîchissement des bases de bureau supprimé.** Le script appelait `update-desktop-database` et `gtk-update-icon-cache`. Le `postinst` du paquet exécute déjà le premier, et les caches d'icônes relèvent des triggers dpkg. Deux appels de plus à `sudo` pour rien.
 
 **Permissions du répertoire temporaire.** `mktemp -d` crée en `0700`. `apt-get install` abandonne ses privilèges vers l'utilisateur `_apt` pour lire le fichier et émettrait alors l'avertissement *« Download is performed unsandboxed as root »*. `download_deb` passe donc le répertoire en `755` et le `.deb` en `644`.
 
@@ -160,7 +164,6 @@ Enchaînement de `main()` :
 | `curl` | ≥ 7.21 | `-w '%{url_effective}'` avec `-I -L` pour résoudre la redirection sans télécharger |
 | `dpkg-deb` | toute version Debian | `-f FICHIER Package` pour vérifier l'archive sans l'extraire |
 | `apt-get` | ≥ 1.1 | Installation directe d'un `.deb` par chemin de fichier |
-| `apparmor_parser` | ≥ 4.0 (Ubuntu 24.04) | Règle `userns,` et `abi <abi/4.0>` du profil |
 | `gdbus` | glib ≥ 2.30 | `ListNames` / `ListActivatableNames` sur le bus de session |
 | `bash` | ≥ 4 | `[[ =~ ]]` avec `BASH_REMATCH`, expansion `${raw^^}` |
 
@@ -191,11 +194,13 @@ warn "Rouvrez votre session pour que le trousseau s'enregistre sur le bus."
 
 Ce n'est volontairement pas le comportement par défaut : le script installerait des paquets que l'utilisateur n'a pas demandés, et le service ne serait utilisable qu'après réouverture de session.
 
-**Suppression du profil AppArmor à la désinstallation.** Le script ne gère que l'installation. Un `--uninstall` cohérent ferait `sudo apt-get remove -y xmind-vana`, `sudo rm -f /etc/apparmor.d/xmind` puis `sudo apparmor_parser -R /etc/apparmor.d/xmind` **avant** la suppression du fichier.
+**Suppression du profil AppArmor à la désinstallation.** Le script ne gère que l'installation, et le paquet ne retire pas son propre profil. Un `--uninstall` cohérent ferait `sudo apt-get remove -y xmind-vana`, puis `sudo apparmor_parser -R /etc/apparmor.d/xmind` **avant** `sudo rm -f /etc/apparmor.d/xmind` — décharger après suppression du fichier échouerait.
 
 ### Notes de maintenance
 
-- **Le chemin `/opt/Xmind/Xmind` n'est pas vérifié à l'écriture de cette page.** `xmind_binary` le découvre par `dpkg -L` et le motif `^/opt/[^/]+/[A-Za-z]*[Xx]mind$`. Si l'éditeur déplace le binaire hors de `/opt` ou le renomme, le motif ne matche plus : le script avertit et poursuit sans installer le profil AppArmor — Xmind refusera alors de démarrer sur Ubuntu ≥ 24.04, avec une erreur Chromium sur les espaces de noms. C'est le premier endroit à regarder en cas de régression.
+- **Vérifié sur une installation réelle** (Ubuntu 26.04, 20 août 2026) : le paquet s'installe et Xmind se lance ; version `26.5.1106-202608091931` ; le binaire est `/opt/Xmind/xmind` et le motif `^/opt/[^/]+/[A-Za-z]*[Xx]mind$` de `xmind_binary` le trouve correctement ; `/usr/bin/xmind` est un lien géré par `update-alternatives` ; le profil AppArmor du paquet est en place et identique à `/opt/Xmind/resources/apparmor-profile`. Les trois branches de `check_apparmor` ont été exercées, dont deux en simulant le sysctl.
+- **Le binaire est `xmind` en minuscules dans un répertoire `Xmind` capitalisé.** C'est ce qui justifie la découverte par `dpkg -L` plutôt qu'un chemin codé en dur. Si l'éditeur le déplace hors de `/opt` ou le renomme, le motif de `xmind_binary` ne matchera plus ; la fonction n'est aujourd'hui utilisée que pour l'affichage final, l'échec serait donc cosmétique.
+- **Le cas « restriction active » reste non observé.** La machine de test a `kernel.apparmor_restrict_unprivileged_userns = 0`, et Xmind y fonctionne. Sur une Ubuntu 24.04/25.x, où la valeur est `1` par défaut, il reste à confirmer que le `postinst` du paquet installe bien le profil et que Xmind démarre.
 - **Le nom de paquet `xmind-vana` est codé en dur** dans `PACKAGE`. Un renommage côté éditeur ferait échouer `verify_deb` avec un message explicite (« Paquet inattendu dans l'archive »), pas silencieusement.
 - **`libappindicator3-1` est en `Recommends`** et vit dans le composant `universe`. Sur un système où `universe` est désactivé, apt ignore la recommandation en émettant un avertissement ; l'installation aboutit et l'icône de zone de notification peut manquer.
 - **Aucune signature ni somme de contrôle** n'est publiée par l'éditeur. La confiance repose entièrement sur TLS et sur la vérification du nom de paquet.

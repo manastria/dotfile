@@ -3,8 +3,7 @@
 #     install-xmind.sh — installe ou met à jour Xmind (paquet .deb officiel)
 #
 # SYNOPSIS
-#     install-xmind.sh [-f] [--file FICHIER.deb] [--keep-deb DIR]
-#                      [--no-apparmor] [-h]
+#     install-xmind.sh [-f] [--file FICHIER.deb] [--keep-deb DIR] [-h]
 #
 # DESCRIPTION
 #     Installe Xmind sur une Ubuntu de bureau, en particulier KUbuntu (KDE)
@@ -20,10 +19,10 @@
 #     Bac à sable Electron. Depuis Ubuntu 24.04, le noyau interdit par
 #     défaut les espaces de noms utilisateur non privilégiés
 #     (kernel.apparmor_restrict_unprivileged_userns=1), ce qui empêche
-#     Chromium — donc Xmind — de démarrer. Le script installe un profil
-#     AppArmor qui rend le droit à Xmind, plutôt que de désactiver la
-#     protection pour tout le système ou de lancer l'application avec
-#     --no-sandbox.
+#     Chromium — donc Xmind — de démarrer. Le paquet de l'éditeur installe
+#     lui-même le profil AppArmor qui rend ce droit à Xmind ; le script se
+#     borne à vérifier que l'opération a réussi, le postinst y renonçant en
+#     silence sur les systèmes dont AppArmor est trop ancien.
 #
 #     Trousseau de clés. Xmind dépend de libsecret et cherche un service
 #     « Secret Service » sur le bus D-Bus de session pour stocker le jeton
@@ -42,7 +41,6 @@
 #                        Utile hors ligne ou pour rejouer une version.
 #     --keep-deb DIR     Copie le .deb téléchargé dans DIR avant de nettoyer
 #                        le répertoire temporaire.
-#     --no-apparmor      N'installe pas le profil AppArmor.
 #     -h, --help         Affiche cette aide.
 #
 # EXAMPLES
@@ -104,7 +102,6 @@ value_of() { [[ -n "$2" ]] || usage_error "$1 attend une valeur."; }
 FORCE="no"
 LOCAL_DEB=""
 KEEP_DIR=""
-WITH_APPARMOR="yes"
 TMP_DIR=""
 DEB_PATH=""
 DESKTOP=""
@@ -118,7 +115,6 @@ parse_args() {
             -f|--force)    FORCE="yes"; shift ;;
             --file)        value_of "$1" "${2:-}"; LOCAL_DEB="$2"; shift 2 ;;
             --keep-deb)    value_of "$1" "${2:-}"; KEEP_DIR="$2"; shift 2 ;;
-            --no-apparmor) WITH_APPARMOR="no"; shift ;;
             -h|--help)     usage; exit 0 ;;
             *)             usage_error "Option inconnue : $1" ;;
         esac
@@ -275,55 +271,37 @@ xmind_binary() {
         | head -1
 }
 
-configure_apparmor() {
-    [[ "$WITH_APPARMOR" == "yes" ]] || { info "Profil AppArmor ignoré (--no-apparmor)."; return 0; }
-
+# Le paquet de l'éditeur installe lui-même le profil AppArmor : son postinst
+# copie /opt/Xmind/resources/apparmor-profile vers /etc/apparmor.d/xmind puis le
+# charge avec « apparmor_parser --replace ». Ce script n'a donc rien à écrire —
+# une version antérieure le faisait et écrasait le fichier du paquet par un
+# profil identique, travail inutile et destructeur. Reste à vérifier que
+# l'opération a bien eu lieu, car le postinst y renonce en silence quand
+# AppArmor ne sait pas analyser le profil livré.
+check_apparmor() {
     local restricted
     restricted="$(sysctl -n "$USERNS_SYSCTL" 2>/dev/null || echo "")"
+
+    if [[ -f "$APPARMOR_PROFILE" ]]; then
+        success "Profil AppArmor en place : ${APPARMOR_PROFILE} (installé par le paquet)."
+        return 0
+    fi
+
     if [[ "$restricted" != "1" ]]; then
-        info "Espaces de noms utilisateur non restreints : aucun profil AppArmor nécessaire."
-        return 0
-    fi
-    if ! command -v apparmor_parser &>/dev/null; then
-        warn "AppArmor actif mais apparmor_parser introuvable : profil non installé."
-        warn "Si Xmind ne démarre pas, installez le paquet apparmor."
+        info "Pas de profil AppArmor, et aucun n'est nécessaire :"
+        info "  ${USERNS_SYSCTL} vaut ${restricted:-0}, les espaces de noms sont autorisés."
         return 0
     fi
 
-    local bin
-    bin="$(xmind_binary)"
-    if [[ -z "$bin" ]]; then
-        warn "Binaire Xmind introuvable dans le paquet : profil AppArmor non installé."
-        return 0
-    fi
-
-    info "Installation du profil AppArmor pour ${bin}…"
-    # Profil « unconfined » qui n'accorde qu'une chose : le droit de créer des
-    # espaces de noms utilisateur (userns). C'est la méthode retenue par Ubuntu
-    # pour les navigateurs empaquetés hors dépôts. L'alternative — passer le
-    # sysctl à 0 ou lancer avec --no-sandbox — affaiblirait tout le système ou
-    # désactiverait le bac à sable de Xmind.
-    sudo tee "$APPARMOR_PROFILE" >/dev/null <<PROFILE
-# Profil généré par install-xmind.sh
-# Autorise Xmind (Electron/Chromium) à créer des espaces de noms utilisateur,
-# nécessaires à son bac à sable, sans toucher au réglage global
-# ${USERNS_SYSCTL}.
-abi <abi/4.0>,
-include <tunables/global>
-
-profile xmind "${bin}" flags=(unconfined) {
-  userns,
-
-  include if exists <local/xmind>
-}
-PROFILE
-
-    if sudo apparmor_parser -r "$APPARMOR_PROFILE" 2>/dev/null; then
-        success "Profil AppArmor chargé : ${APPARMOR_PROFILE}"
-    else
-        warn "Le profil AppArmor n'a pas pu être chargé (syntaxe ABI trop récente ?)."
-        warn "Supprimez ${APPARMOR_PROFILE} et relancez avec --no-apparmor si Xmind refuse de démarrer."
-    fi
+    # Seul cas réellement problématique : restriction active et profil absent.
+    # Le bac à sable de Chromium ne pourra pas créer ses espaces de noms.
+    warn "La restriction ${USERNS_SYSCTL} est active, mais aucun profil AppArmor"
+    warn "n'a été installé (${APPARMOR_PROFILE} absent)."
+    warn "Cause probable : AppArmor trop ancien pour analyser un profil « abi/4.0 »."
+    warn "Le postinst du paquet renonce alors sans message d'erreur."
+    warn "Si Xmind refuse de démarrer avec une erreur sur les espaces de noms :"
+    warn "  sudo cp /opt/Xmind/resources/apparmor-profile ${APPARMOR_PROFILE}"
+    warn "  sudo apparmor_parser -r ${APPARMOR_PROFILE}"
 }
 
 check_secret_service() {
@@ -356,17 +334,6 @@ check_secret_service() {
         xfce) warn "Sur XUbuntu : sudo apt install gnome-keyring seahorse" ;;
         *)    warn "Installez gnome-keyring (GTK) ou kwalletmanager (KDE), puis rouvrez la session." ;;
     esac
-}
-
-refresh_desktop_db() {
-    # KDE et XFCE relisent le menu au démarrage : sans ce rafraîchissement,
-    # l'entrée Xmind peut n'apparaître qu'à la session suivante.
-    if command -v update-desktop-database &>/dev/null; then
-        sudo update-desktop-database /usr/share/applications &>/dev/null || true
-    fi
-    if command -v gtk-update-icon-cache &>/dev/null; then
-        sudo gtk-update-icon-cache -f -t /usr/share/icons/hicolor &>/dev/null || true
-    fi
 }
 
 verify_install() {
@@ -426,9 +393,8 @@ main() {
     fi
 
     install_deb
-    configure_apparmor
+    check_apparmor
     check_secret_service
-    refresh_desktop_db
     verify_install
 }
 
