@@ -2,6 +2,12 @@
 
 > Script : [`.local/bin/fix-zsh-completions.sh`](../.local/bin/fix-zsh-completions.sh)
 
+## En bref
+
+> Paragraphe de rappel, à coller tel quel dans le mémo.
+
+`fix-zsh-completions.sh` fait taire l'erreur `compinit:527: no such file or directory: …/_docker` affichée à chaque ouverture de shell. Elle vient d'un lien symbolique mort dans un répertoire de `$fpath` — typiquement la complétion Docker sous WSL, qui pointe vers `/mnt/wsl/docker-desktop/…`, un montage qui n'existe que lorsque Docker Desktop tourne côté Windows. Le script inspecte les répertoires de complétion, supprime les liens morts, et remplace les liens vers un montage volatile (`/mnt`, `/media`) par une copie réelle du fichier quand la cible est lisible : la complétion survit alors au démontage, et le problème ne revient plus. `--dry-run` donne le diagnostic sans rien modifier, `-y` évite les questions. À lancer **sans** `sudo` (il élève lui-même ce qui doit l'être), de préférence Docker Desktop démarré pour figer une copie à jour ; si l'erreur persiste, supprimer `~/.zcompdump*`.
+
 ---
 
 # Section utilisateur

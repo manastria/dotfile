@@ -67,7 +67,7 @@ Les conventions de rédaction sont fixées dans [CLAUDE.md](../CLAUDE.md), secti
 
 1. Nommer le fichier d'après le script, **sans extension** : `mon-script.sh` → `docs/mon-script.md`.
    Les pages `pack_dir.md` et `pack_project.md` utilisent des tirets bas pour des raisons historiques ; ne pas reproduire ce choix.
-2. Reprendre le plan imposé — *Section utilisateur* (Description, Prérequis, Syntaxe, Exemples, Codes de retour) puis *Section développeur* (Architecture interne, Détail des choix techniques, Dépendances externes, Points d'extension, Notes de maintenance). [pack-bundle.md](pack-bundle.md) sert de modèle récent.
+2. Reprendre le plan imposé — *En bref* (paragraphe de rappel pour le mémo), puis *Section utilisateur* (Description, Prérequis, Syntaxe, Exemples, Codes de retour), puis *Section développeur* (Architecture interne, Détail des choix techniques, Dépendances externes, Points d'extension, Notes de maintenance). [yadm-check-submodules.md](yadm-check-submodules.md) sert de modèle récent.
 3. **Ajouter la ligne correspondante dans cet index**, dans la catégorie qui convient.
 4. À chaque modification du comportement d'un script (option, valeur par défaut, code de retour, prérequis), relire sa page. Script supprimé : supprimer sa page et sa ligne ici.
 

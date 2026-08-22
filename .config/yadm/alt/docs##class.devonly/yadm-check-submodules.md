@@ -3,6 +3,12 @@
 > Script : [`.local/bin/yadm-check-submodules.sh`](../.local/bin/yadm-check-submodules.sh)
 > Guide associé : [mise-a-jour-submodules-zsh.md](mise-a-jour-submodules-zsh.md)
 
+## En bref
+
+> Paragraphe de rappel, à coller tel quel dans le mémo.
+
+`yadm-check-submodules.sh` remet les submodules du dépôt dotfiles (oh-my-zsh, powerlevel10k, plugins zsh) au commit épinglé par le dépôt — le réflexe après un `yadm pull` ou sur une machine fraîchement installée. Il équivaut à `yadm submodule update --init --recursive`, mais ne fait rien quand tout est déjà en place, et détaille les submodules fautifs sinon (`-` non initialisé, `+` commit local différent, `U` conflit). Il ne tire **jamais** la dernière version upstream d'un submodule : ça, c'est `git submodule update --remote`, depuis le dépôt de développement. `--dry-run` se contente du diagnostic. Le script se place dans `$HOME` avant d'appeler git : il est lançable depuis n'importe quel répertoire, y compris `/mnt/c` sous WSL.
+
 ---
 
 # Section utilisateur

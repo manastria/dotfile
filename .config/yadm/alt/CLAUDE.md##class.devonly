@@ -74,7 +74,23 @@ Obligatoire pour **tout nouveau script**, et **à mettre à jour à chaque chang
 - Rédigée en **français**, comme les commentaires et les messages des scripts.
 - **Référencer la page dans l'index `docs/README.md`** (et l'y retirer si le script disparaît). Les liens vers les scripts s'écrivent en relatif depuis `docs/` : `../.local/bin/mon-script.sh`.
 
-Structure imposée, en deux parties (références : `docs/pack-bundle.md`, `docs/pack_dir.md`) :
+Structure imposée, en trois parties (références : `docs/yadm-check-submodules.md`, `docs/pack-bundle.md`) :
+
+**En bref** — paragraphe de rappel destiné au mémo `562 shell.docx` (section 11.2), placé **en tête de page**, juste après la ligne `> Script : …` et avant le premier séparateur `---` :
+
+```markdown
+## En bref
+
+> Paragraphe de rappel, à coller tel quel dans le mémo.
+
+`mon-script.sh` fait ceci… (4 à 6 phrases)
+```
+
+- **Un seul paragraphe**, 4 à 6 phrases, sans liste ni tableau : c'est un rappel de quelques lignes dans un mémo, pas une fiche.
+- Le Markdown est collé tel quel dans Word (via une extension) : le balisage `code` et `**gras**` est donc à utiliser normalement, mais **aucun lien** — sorti de `docs/`, un `[texte](../.local/bin/…)` ne pointe plus nulle part.
+- **Autonome** : il nomme le script, dit à quoi il sert, ce qu'il ne fait **pas** (la confusion à éviter avec un script voisin), et les deux ou trois options réellement utilisées au quotidien.
+- La ligne `>` au-dessus signale le contenu à recopier ; elle ne fait pas partie du texte à coller.
+- C'est un rappel, pas un résumé de la page : ni prérequis, ni codes de retour, ni détail d'implémentation.
 
 **Section utilisateur** — ce qu'il faut savoir pour s'en servir :
 - `Description` : à quoi sert le script, et en quoi il diffère des scripts voisins
@@ -91,6 +107,8 @@ Structure imposée, en deux parties (références : `docs/pack-bundle.md`, `docs
 - `Notes de maintenance` : limites connues et pièges pour la prochaine personne qui y touche
 
 La page doit rester cohérente avec l'en-tête manpage du script : l'en-tête est la référence courte (`--help`), la page docs explique le contexte, les cas d'usage et les raisons.
+
+Trois niveaux de détail, donc, du plus court au plus long : le paragraphe `En bref` (mémo), l'en-tête manpage (`--help`), la page `docs/` (contexte et raisons).
 
 ## Shell Script Color and Logging Conventions
 
