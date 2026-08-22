@@ -31,12 +31,14 @@ Les conventions de rédaction sont fixées dans [CLAUDE.md](../CLAUDE.md), secti
 | Page | Script | Objet |
 | ---- | ------ | ----- |
 | [set-default-shell.md](set-default-shell.md) | [`set-default-shell.sh`](../.local/bin/set-default-shell.sh) | Menu interactif : shell par défaut (bash/zsh) et profil zsh |
+| [fix-zsh-completions.md](fix-zsh-completions.md) | [`fix-zsh-completions.sh`](../.local/bin/fix-zsh-completions.sh) | Répare les complétions zsh cassées (liens morts `compinit`, montages WSL volatils) |
 
 ### Outillage du dépôt
 
 | Page | Script | Objet |
 | ---- | ------ | ----- |
 | [yadm-alt-link.md](yadm-alt-link.md) | [`yadm-alt-link.py`](../.local/bin/yadm-alt-link.py) | Sépare les fichiers réservés au développement via les alt yadm |
+| [yadm-check-submodules.md](yadm-check-submodules.md) | [`yadm-check-submodules.sh`](../.local/bin/yadm-check-submodules.sh) | Synchronise les submodules du dépôt yadm vers le commit épinglé |
 
 ### Installateurs
 

@@ -62,6 +62,8 @@ yadm submodule update --init --recursive
 ~/.local/bin/yadm-check-submodules.sh
 ```
 
+Le script est lançable depuis n'importe quel répertoire, y compris `/mnt/c` sous WSL, et n'agit que si un submodule est effectivement désynchronisé. Détail des options et des codes de retour : [yadm-check-submodules.md](yadm-check-submodules.md).
+
 ---
 
 ### C. Mettre à jour un submodule vers la dernière version upstream
