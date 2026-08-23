@@ -14,10 +14,16 @@ if [[ $- != *i* ]] ; then
   return
 fi
 
-# Lancer zsh automatiquement s'il est disponible et que le fichier sentinel ~/.zsh-force existe
-if [ -x /bin/zsh ] && [ -f "$HOME/.zsh-force" ]; then
-    export SHELL=/bin/zsh
-    exec /bin/zsh -l
+# Lancer zsh automatiquement s'il est disponible et que le fichier sentinel ~/.zsh-force existe.
+# command -v plutôt qu'un chemin en dur : selon la distribution, zsh est en
+# /bin ou en /usr/bin, et un test sur /bin/zsh seul rendrait le sentinel inerte.
+if [ -f "$HOME/.zsh-force" ]; then
+    _zsh_bin="$(command -v zsh 2>/dev/null)"
+    if [ -x "$_zsh_bin" ]; then
+        export SHELL="$_zsh_bin"
+        exec "$_zsh_bin" -l
+    fi
+    unset _zsh_bin
 fi
 
 # Source global definitions

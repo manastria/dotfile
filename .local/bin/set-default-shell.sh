@@ -31,11 +31,59 @@ ZSH_FORCE="${HOME}/.zsh-force"
 ZSH_PROFILE_FILE="${HOME}/.zsh-profile"
 ZSH_LIGHT_LEGACY="${HOME}/.zsh-light"
 
-# Récupère le shell par défaut de l'utilisateur courant
+# Chemin canonique d'un shell. Sur une distribution à /usr fusionné, /bin/zsh
+# et /usr/bin/zsh désignent le même binaire, mais getent renvoie l'un ou
+# l'autre selon la façon dont le compte a été créé : comparer les chaînes
+# brutes ferait croire qu'un changement de shell est nécessaire alors qu'il
+# est déjà en place.
+_canonical() {
+    local path="$1"
+    if [ -n "${path}" ] && command -v realpath >/dev/null 2>&1; then
+        realpath -m -- "${path}" 2>/dev/null || echo "${path}"
+    else
+        echo "${path}"
+    fi
+}
+
+# Vrai si les deux chemins désignent le même shell
+_same_shell() {
+    [ "$(_canonical "$1")" = "$(_canonical "$2")" ]
+}
+
+# Emplacement réel d'un shell, au lieu d'un chemin codé en dur
+_shell_bin() {
+    command -v "$1" 2>/dev/null
+}
+
+# chsh refuse tout shell absent de /etc/shells : autant le signaler avant
+# d'essayer plutôt que de laisser l'utilisateur devant un échec obscur.
+_is_login_shell() {
+    local candidate="$1" line
+    [ -r /etc/shells ] || return 0
+    while IFS= read -r line; do
+        case "${line}" in
+            ''|\#*) continue ;;
+        esac
+        if _same_shell "${line}" "${candidate}"; then
+            return 0
+        fi
+    done < /etc/shells
+    return 1
+}
+
+# Récupère le shell par défaut de l'utilisateur courant.
+# Le résultat est testé à chaque étape : dans un pipeline, le code de retour
+# est celui de « cut », qui vaut 0 même quand getent n'a rien trouvé — un
+# enchaînement « getent | cut || grep | cut || echo » ne se replierait donc
+# jamais et renverrait une chaîne vide.
 _current_shell() {
-    getent passwd "${USER}" 2>/dev/null | cut -d: -f7 \
-        || grep "^${USER}:" /etc/passwd 2>/dev/null | cut -d: -f7 \
-        || echo "(inconnu)"
+    local shell
+    shell="$(getent passwd "${USER}" 2>/dev/null | cut -d: -f7)"
+    if [ -z "${shell}" ]; then
+        shell="$(grep "^${USER}:" /etc/passwd 2>/dev/null | cut -d: -f7)"
+    fi
+    [ -n "${shell}" ] || shell="(inconnu)"
+    echo "${shell}"
 }
 
 # Vrai si le compte est géré par SSSD/LDAP (absent de /etc/passwd)
@@ -72,11 +120,14 @@ _try_chsh() {
 # ─── Actions ─────────────────────────────────────────────────────────────────
 
 _switch_to_zsh() {
-    if [ ! -x /bin/zsh ]; then
-        die "zsh n'est pas installé (/bin/zsh introuvable). Installez-le d'abord."
-    fi
+    local zsh_bin
+    zsh_bin="$(_shell_bin zsh)" \
+        || die "zsh n'est pas installé (introuvable dans le PATH). Installez-le d'abord."
 
-    local used_chsh=false
+    if ! _is_login_shell "${zsh_bin}"; then
+        warn "${BOLD}${zsh_bin}${RESET}${YELLOW} n'est pas listé dans /etc/shells :"
+        warn "chsh le refusera. Le fichier sentinel prendra le relais."
+    fi
 
     if _is_sssd_user; then
         warn "Compte centralisé (SSSD/LDAP) détecté : chsh ne peut pas modifier ce compte."
@@ -84,9 +135,8 @@ _switch_to_zsh() {
         touch "${ZSH_FORCE}"
         success "Fichier ~/.zsh-force créé : bash lancera zsh automatiquement."
     else
-        if _try_chsh /bin/zsh; then
-            success "Shell par défaut changé en zsh (via chsh)."
-            used_chsh=true
+        if _try_chsh "${zsh_bin}"; then
+            success "Shell par défaut changé en zsh (via ${zsh_bin})."
         else
             warn "chsh a échoué (compte SSSD ou droits insuffisants)."
             info "Utilisation du fichier sentinel ~/.zsh-force à la place."
@@ -105,11 +155,15 @@ _switch_to_bash() {
         changed=true
     fi
 
-    local cur
+    local cur bash_bin
     cur="$(_current_shell)"
-    if [ "${cur}" != "/bin/bash" ] && ! _is_sssd_user; then
-        if _try_chsh /bin/bash; then
-            success "Shell par défaut changé en bash (via chsh)."
+    bash_bin="$(_shell_bin bash)" || bash_bin="/bin/bash"
+
+    # Comparaison canonique : /bin/bash et /usr/bin/bash sont le même shell,
+    # inutile de demander un mot de passe pour un chsh sans effet.
+    if ! _same_shell "${cur}" "${bash_bin}" && ! _is_sssd_user; then
+        if _try_chsh "${bash_bin}"; then
+            success "Shell par défaut changé en bash (via ${bash_bin})."
             changed=true
         else
             warn "chsh a échoué. Le fichier sentinel a été supprimé : bash sera actif au prochain démarrage."
