@@ -10,9 +10,9 @@
 
 ---
 
-# Section utilisateur
+## Section utilisateur
 
-## Description
+### Description
 
 Répare les fichiers de complétion zsh cassés qui font échouer `compinit` au démarrage du shell :
 
@@ -35,7 +35,7 @@ Le gel est le correctif durable : une fois la copie en place, arrêter Docker De
 
 À ne pas confondre avec les autres scripts du dépôt : [`install-docker.sh`](../.local/bin/install-docker.sh) installe le moteur Docker natif sous Linux ; ce script-ci ne touche qu'aux fichiers de complétion zsh.
 
-## Prérequis
+### Prérequis
 
 | Outil | Rôle | Vérification |
 | ----- | ---- | ------------ |
@@ -46,7 +46,7 @@ Le gel est le correctif durable : une fois la copie en place, arrêter Docker De
 
 Le script **refuse de tourner en root** : il peut écrire dans `~/.zsh/completions`, où des fichiers appartenant à root seraient un piège. Les répertoires système sont élevés au cas par cas, uniquement quand c'est nécessaire.
 
-## Syntaxe
+### Syntaxe
 
 ```bash
 fix-zsh-completions.sh [-n] [-y] [--no-freeze] [DIR]... [-h]
@@ -67,7 +67,7 @@ Répertoires inspectés par défaut, quand ils existent :
 - `/usr/local/share/zsh/site-functions`
 - `~/.zsh/completions`
 
-## Exemples d'utilisation
+### Exemples d'utilisation
 
 ```bash
 # Diagnostic : que trouverait le script ?
@@ -107,7 +107,7 @@ Rien à faire :
 [OK]        Aucun lien de complétion à réparer.
 ```
 
-## Codes de retour
+### Codes de retour
 
 | Code | Signification |
 | ---- | ------------- |
@@ -117,9 +117,9 @@ Rien à faire :
 
 ---
 
-# Section développeur
+## Section développeur
 
-## Architecture interne
+### Architecture interne
 
 `main()` enchaîne :
 
@@ -133,7 +133,7 @@ Rien à faire :
 
 `is_volatile`, `confirm` et `run_privileged` sont les utilitaires partagés par les deux phases de réparation.
 
-## Détail des choix techniques
+### Détail des choix techniques
 
 **Pourquoi supprimer, et pas renommer.** `compinit` lit tout fichier du répertoire sauf `*~` et `*.zwc`. Renommer `_docker` en `_docker.disabled` ne résout donc rien : le lien mort serait toujours lu, et l'erreur persisterait. Seules la suppression et le remplacement par un fichier réel fonctionnent.
 
@@ -149,7 +149,7 @@ Rien à faire :
 
 **`-maxdepth 1`.** `compinit` ne descend pas dans les sous-répertoires des entrées de `$fpath` ; les inspecter produirait des faux positifs sans rapport avec l'erreur traitée.
 
-## Dépendances externes
+### Dépendances externes
 
 | Binaire | Version minimale | Fonctionnalité qui l'impose |
 | ------- | ---------------- | --------------------------- |
@@ -158,7 +158,7 @@ Rien à faire :
 | `coreutils` | — | `readlink -f`, `install -m`, `mktemp -d` |
 | `sudo` | — | écriture dans `/usr/share/zsh/…` |
 
-## Points d'extension
+### Points d'extension
 
 **Ajouter un répertoire par défaut** — compléter le tableau `DEFAULT_DIRS` ; les répertoires inexistants sont ignorés :
 
@@ -182,7 +182,7 @@ readonly VOLATILE_PREFIXES=(/mnt/ /media/ /run/media/ /net/)
 fix-zsh-completions.sh $(zsh -f -c 'print -l $fpath')
 ```
 
-## Notes de maintenance
+### Notes de maintenance
 
 - **Le gel fige une version.** Après une mise à jour majeure de Docker Desktop, la complétion figée peut ignorer de nouvelles sous-commandes. Relancer le script Docker Desktop démarré : le lien recréé par l'intégration WSL sera de nouveau gelé, avec le contenu à jour.
 - **Le lien peut réapparaître.** L'intégration WSL de Docker Desktop reprovisionne `/usr/share/zsh/vendor-completions/_docker`. Un `_docker` gelé peut donc être remplacé par un nouveau lien symbolique : le script est prévu pour être relancé, il est idempotent.

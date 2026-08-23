@@ -15,7 +15,7 @@ Les conventions de rédaction sont fixées dans [CLAUDE.md](../CLAUDE.md), secti
 
 | Page | Script | Objet |
 | ---- | ------ | ----- |
-| [pack_project.md](pack_project.md) | [`pack-project.sh`](../.local/bin/pack-project.sh) | Archive `.tar.zst` d'un projet, exclusions dev automatiques |
+| [pack_project.md](pack_project.md) | [`pack-project.sh`](../.local/bin/pack-project.sh) | Archive `.tar.zst` d'un projet, exclusions dev automatiques, `.git` conservé |
 | [pack_dir.md](pack_dir.md) | [`pack-dir.sh`](../.local/bin/pack-dir.sh) | Même chose en configurable : codec, `.zip`, exclusions personnalisées |
 | [pack-bundle.md](pack-bundle.md) | [`pack-bundle.sh`](../.local/bin/pack-bundle.sh) | Sauvegarde de l'historique Git en fichier `.bundle` clonable |
 

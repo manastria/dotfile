@@ -11,9 +11,9 @@
 
 ---
 
-# Section utilisateur
+## Section utilisateur
 
-## Description
+### Description
 
 Vérifie que les submodules du dépôt dotfiles géré par yadm (oh-my-zsh, powerlevel10k, plugins zsh) sont au **commit épinglé** par le dépôt, et les synchronise sinon. Usage courant : juste après un `yadm pull`, ou lors de l'installation d'une nouvelle machine ([`dot-test.sh`](../.local/bin/dot-test.sh) l'appelle).
 
@@ -27,7 +27,7 @@ yadm submodule update --init --recursive
 
 L'intérêt du script est de ne rien faire quand tout est déjà en place, de rapporter précisément ce qui cloche, et de fonctionner quel que soit le répertoire courant.
 
-## Prérequis
+### Prérequis
 
 | Outil | Rôle | Vérification |
 | ----- | ---- | ------------ |
@@ -35,7 +35,7 @@ L'intérêt du script est de ne rien faire quand tout est déjà en place, de ra
 | dépôt yadm | données du dépôt dotfiles | `ls -d ~/.local/share/yadm/repo.git` |
 | accès réseau | uniquement si un submodule doit être cloné | `git ls-remote https://github.com/ohmyzsh/ohmyzsh` |
 
-## Syntaxe
+### Syntaxe
 
 ```bash
 yadm-check-submodules.sh [-n] [-h]
@@ -50,7 +50,7 @@ yadm-check-submodules.sh [-n] [-h]
 | ------------------------ | ------ | ----------- |
 | `YADM_REPO` | `~/.local/share/yadm/repo.git` | Chemin du dépôt yadm |
 
-## Exemples d'utilisation
+### Exemples d'utilisation
 
 ```bash
 # Usage courant, après un yadm pull
@@ -89,7 +89,7 @@ Préfixes de `git submodule status` interprétés par le script :
 | `+` | commit local différent de celui épinglé | `submodule update` |
 | `U` | conflit de fusion | arrêt en erreur, intervention manuelle |
 
-## Codes de retour
+### Codes de retour
 
 | Code | Signification |
 | ---- | ------------- |
@@ -99,9 +99,9 @@ Préfixes de `git submodule status` interprétés par le script :
 
 ---
 
-# Section développeur
+## Section développeur
 
-## Architecture interne
+### Architecture interne
 
 `main()` enchaîne :
 
@@ -111,7 +111,7 @@ Préfixes de `git submodule status` interprétés par le script :
 
 `yadm_git()` encapsule le préfixe `git --git-dir=… --work-tree=…` commun à tous les appels.
 
-## Détail des choix techniques
+### Détail des choix techniques
 
 **`cd "$HOME"` obligatoire.** yadm range ses données dans un dépôt dont l'arbre de travail est `$HOME`. `git-submodule` est un script shell qui appelle `require_work_tree` : il exige que le **répertoire courant** soit dans l'arbre de travail, en plus de `--work-tree`. Lancé depuis un chemin extérieur — typiquement `/mnt/c/Users/…` sous WSL — il échouait avec :
 
@@ -135,7 +135,7 @@ Le code de retour d'un pipeline est celui de sa **dernière** commande : l'éche
 
 **`#!/usr/bin/env bash` et `set -euo pipefail`.** Alignement sur les scripts récents de `.local/bin/` ; le `-u` protège notamment `${YADM_REPO}` d'une variable vide mal exportée.
 
-## Dépendances externes
+### Dépendances externes
 
 | Binaire | Version minimale | Fonctionnalité qui l'impose |
 | ------- | ---------------- | --------------------------- |
@@ -143,7 +143,7 @@ Le code de retour d'un pipeline est celui de sa **dernière** commande : l'éche
 | `bash` | 3.2 | `<<<` (here-string), `[[ ]]` |
 | `awk` | — | extraction de l'aide depuis l'en-tête |
 
-## Points d'extension
+### Points d'extension
 
 **Synchroniser un sous-ensemble de submodules** — `git submodule update` accepte des chemins :
 
@@ -155,7 +155,7 @@ yadm_git submodule update --init --recursive -- .zsh/oh-my-zsh
 
 **Contrôler la profondeur des clones** — les submodules sont déclarés `shallow = true` dans `.gitmodules` ; ajouter `--depth 1` à `submodule update` si un jour un clone complet remonte par erreur.
 
-## Notes de maintenance
+### Notes de maintenance
 
 - **Ce script ne met pas à jour vers upstream.** Toute demande de type « mets à jour oh-my-zsh » relève de `git submodule update --remote`, décrit dans [mise-a-jour-submodules-zsh.md](mise-a-jour-submodules-zsh.md). Ne pas ajouter `--remote` ici : le script serait alors capable de modifier les commits épinglés sans commit associé.
 - **`dot-test.sh` l'appelle avec `|| true`** : un échec de synchronisation n'interrompt pas l'installation. Ne pas compter sur ce script pour signaler un problème bloquant dans ce contexte.

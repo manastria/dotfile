@@ -1,5 +1,13 @@
 # `pack-bundle.sh` — Sauvegarde d'un dépôt Git en fichier `.bundle`
 
+> Script : [`.local/bin/pack-bundle.sh`](../.local/bin/pack-bundle.sh)
+
+## En bref
+
+> Paragraphe de rappel, à coller tel quel dans le mémo.
+
+`pack-bundle.sh` empaquette **tout l'historique Git** d'un dépôt — commits, branches, tags — dans un fichier `.bundle` unique, qui se clone directement : `git clone dotfile_20260820_1030.bundle dotfile`. C'est l'outil pour sauvegarder ou transporter un dépôt hors ligne (clé USB, pièce jointe, machine sans réseau), là où `pack-project.sh` et `pack-dir.sh` archivent l'arborescence de travail. La contrepartie est à retenir : un bundle ne contient **que ce qui est commité** — ni modifications en cours, ni fichiers ignorés, ni historique des sous-modules ; le script prévient quand l'arbre de travail n'est pas propre. Sans argument, il empaquette le dépôt courant dans le répertoire parent sous `nom-du-depot_AAAAMMJJ_HHMM.bundle`, puis contrôle le résultat avec `git bundle verify`. Les options utiles au quotidien sont `-T` (nom fixe, sans horodatage, pratique pour un rsync récurrent), `-o` (répertoire de sortie, créé au besoin) et `-r` (se limiter à une branche, ou produire un bundle incrémental avec `origin/main..main`).
+
 ---
 
 ## Section utilisateur
@@ -14,9 +22,9 @@ Un bundle est un fichier unique contenant l'historique Git : commits, arborescen
 git clone mon-projet_20260820_1030.bundle mon-projet
 ```
 
-C'est donc l'outil adapté pour **sauvegarder ou transporter un dépôt hors-ligne** (clé USB, pièce jointe, machine sans réseau), là où `pack_project` sauvegarde l'arborescence de travail à un instant donné.
+C'est donc l'outil adapté pour **sauvegarder ou transporter un dépôt hors-ligne** (clé USB, pièce jointe, machine sans réseau), là où `pack-project.sh` sauvegarde l'arborescence de travail à un instant donné.
 
-| Critère                                  | `pack_project` / `pack-dir.sh` (tar) | `pack-bundle.sh` (bundle)  |
+| Critère                                  | `pack-project.sh` / `pack-dir.sh` (tar) | `pack-bundle.sh` (bundle)  |
 | ---------------------------------------- | ------------------------------------ | -------------------------- |
 | Historique Git complet                   | oui, via le dossier `.git` copié tel quel | oui, format natif Git, vérifié |
 | Fichiers non commités / non suivis       | **oui**                              | **non**                    |
