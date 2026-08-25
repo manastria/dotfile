@@ -85,6 +85,9 @@ readonly PACKAGE="projecteur"
 readonly BRANCH_LEGACY="legacy/qt5"
 readonly BRANCH_DEVELOP="develop"
 readonly MODULES_CONF="/etc/modules-load.d/projecteur.conf"
+readonly DESKTOP_SYSTEM="/usr/local/share/applications/projecteur.desktop"
+readonly DESKTOP_OVERRIDE="${HOME}/.local/share/applications/projecteur.desktop"
+readonly OVERRIDE_MARKER="X-Generated-By=install-projecteur.sh"
 
 # Dépendances de compilation de la branche Qt5/X11. libudev-dev n'est là que
 # pour fournir udev.pc, dont CMake tire le répertoire des règles udev.
@@ -156,6 +159,7 @@ JOBS="$(nproc 2>/dev/null || echo 2)"
 DEPS_ONLY="no"
 BUILD_DIR=""
 TMP_DIR=""
+INSTALLED_SOMETHING="no"
 SESSION_TYPE=""
 DESKTOP=""
 
@@ -316,9 +320,12 @@ install_release_package() {
     if [[ -n "$current" ]]; then
         info "Version déjà installée : ${current}"
         if [[ "$current" == "$new_version" && "$FORCE" != "yes" ]]; then
-            success "Projecteur ${current} est déjà à jour. Rien à faire."
+            success "Projecteur ${current} est déjà à jour : rien à installer."
             info "Utilisez --force pour réinstaller, --from-source pour compiler plus récent."
-            exit 0
+            # « return » et non « exit » : les étapes suivantes (lanceur Wayland,
+            # vérification) restent utiles même sans réinstallation, et c'est par
+            # elles qu'une machine installée avant l'ajout du lanceur le reçoit.
+            return 0
         fi
     fi
 
@@ -339,6 +346,7 @@ install_release_package() {
     sudo_warmup
     info "Installation du paquet…"
     sudo apt-get install -y "$deb" || die "Échec de l'installation du paquet."
+    INSTALLED_SOMETHING="yes"
     success "Paquet ${PACKAGE} ${new_version} installé."
 }
 
@@ -500,6 +508,7 @@ package_and_install() {
     # --allow-downgrades : revenir d'une compilation récente au paquet publié,
     # ou d'une branche à l'autre, ne doit pas buter sur un refus d'apt.
     sudo apt-get install -y --allow-downgrades "$deb" || die "Échec de l'installation du paquet."
+    INSTALLED_SOMETHING="yes"
     success "Paquet ${PACKAGE} installé."
 }
 
@@ -511,14 +520,83 @@ package_and_install() {
 # (TAG+="uaccess"), mais le module doit être chargé — et l'être encore après un
 # redémarrage, ce que le postinst amont ne garantit pas.
 setup_uinput() {
-    if ! lsmod | grep -q '^uinput'; then
+    # Trois états possibles, qu'il faut distinguer avant d'agir :
+    #   /dev/uinput absent                      -> il faut charger le module
+    #   /dev/uinput présent, /sys/module absent -> uinput est intégré au noyau
+    #   /dev/uinput présent, /sys/module présent-> module chargé, à rendre persistant
+    if [[ ! -e /dev/uinput ]]; then
         info "Chargement du module uinput…"
-        sudo modprobe uinput || warn "Impossible de charger uinput (module intégré au noyau ?)."
+        sudo modprobe uinput || warn "Impossible de charger uinput."
     fi
+
+    if [[ ! -e /dev/uinput ]]; then
+        warn "/dev/uinput reste absent : la réinjection des touches ne fonctionnera pas."
+        warn "Projecteur affichera le spot, mais les boutons du présentateur seront inertes."
+        return 0
+    fi
+
+    if [[ ! -d /sys/module/uinput ]]; then
+        # Compilé en dur (CONFIG_INPUT_UINPUT=y) : il n'y a rien à charger au
+        # démarrage, et un fichier modules-load.d ne servirait qu'à encombrer.
+        # C'est le cas des noyaux Ubuntu récents.
+        info "uinput est intégré au noyau : aucun chargement à prévoir au démarrage."
+        return 0
+    fi
+
     if [[ ! -f "$MODULES_CONF" ]]; then
         info "Chargement de uinput au démarrage : ${MODULES_CONF}"
         echo "uinput" | sudo tee "$MODULES_CONF" >/dev/null
     fi
+}
+
+# Sous une session Wayland, Qt5 choisit tout seul son plugin « wayland ». Or
+# Projecteur rend son incrustation traversable par Qt::WindowTransparentForInput,
+# drapeau que le plugin Wayland de Qt5 n'implémente pas : la fenêtre plein écran
+# avale alors tous les clics, et la souris reste prisonnière tant que
+# l'application n'est pas tuée.
+#
+# L'amont ne gère ce cas que pour la plateforme « xcb » : son contournement
+# (masquer la fenêtre quand le spot s'éteint) est conditionné à
+# « platformName() == "xcb" && isWayland() », dans src/projecteurapp.cc. Forcer
+# QT_QPA_PLATFORM=xcb fait donc passer Projecteur par XWayland et active ce
+# contournement. Sans cela, l'application est inutilisable sur session Wayland.
+setup_wayland_launcher() {
+    [[ "$SESSION_TYPE" == "wayland" ]] || return 0
+
+    # La branche develop est nativement Wayland : lui imposer XWayland serait
+    # une régression, pas un correctif.
+    if [[ "$FROM_SOURCE" == "yes" && "$BRANCH" == "$BRANCH_DEVELOP" ]]; then
+        return 0
+    fi
+
+    if [[ ! -f "$DESKTOP_SYSTEM" ]]; then
+        warn "Lanceur système introuvable (${DESKTOP_SYSTEM}) : lanceur Wayland non installé."
+        return 0
+    fi
+
+    # Même prudence que pour les profils AppArmor : un lanceur personnel que ce
+    # script n'a pas écrit peut porter des réglages voulus par l'utilisateur.
+    if [[ -f "$DESKTOP_OVERRIDE" ]] && ! grep -q "$OVERRIDE_MARKER" "$DESKTOP_OVERRIDE"; then
+        warn "Un lanceur personnel existe déjà et n'a pas été écrit par ce script :"
+        warn "  ${DESKTOP_OVERRIDE}"
+        warn "Il est conservé. Si le spot bloque la souris, ajoutez-y :"
+        warn "  Exec=env QT_QPA_PLATFORM=xcb /usr/local/bin/projecteur"
+        return 0
+    fi
+
+    info "Session Wayland : installation d'un lanceur forçant XWayland…"
+    mkdir -p "$(dirname "$DESKTOP_OVERRIDE")"
+    # Régénéré à chaque exécution à partir du fichier du paquet, pour suivre un
+    # éventuel changement amont (icône, catégories, nom du binaire).
+    {
+        sed 's|^Exec=|Exec=env QT_QPA_PLATFORM=xcb |' "$DESKTOP_SYSTEM"
+        echo "$OVERRIDE_MARKER"
+    } > "$DESKTOP_OVERRIDE"
+
+    if command -v update-desktop-database &>/dev/null; then
+        update-desktop-database "$(dirname "$DESKTOP_OVERRIDE")" 2>/dev/null || true
+    fi
+    success "Lanceur Wayland installé : ${DESKTOP_OVERRIDE}"
 }
 
 reload_udev() {
@@ -535,11 +613,23 @@ verify_install() {
     info "Binaire : $(command -v projecteur)"
 
     echo
-    info "Étapes suivantes :"
-    info "  1. Rebranchez le récepteur USB (ou reconnectez le Bluetooth) :"
-    info "     les règles udev ne s'appliquent qu'à la connexion du périphérique."
-    info "  2. Lancez Projecteur depuis le menu des applications."
-    info "  3. Périphérique non détecté ? projecteur --device-scan"
+    # Le rebranchement n'a de sens que si les règles udev viennent d'être
+    # posées ; le répéter à chaque exécution ferait douter d'une installation
+    # qui n'a pourtant rien changé.
+    if [[ "$INSTALLED_SOMETHING" == "yes" ]]; then
+        info "Étapes suivantes :"
+        info "  1. Rebranchez le récepteur USB (ou reconnectez le Bluetooth) :"
+        info "     les règles udev ne s'appliquent qu'à la connexion du périphérique."
+        info "  2. Lancez Projecteur depuis le menu des applications."
+        info "  3. Périphérique non détecté ? projecteur -d"
+    else
+        info "Périphérique non détecté ? projecteur -d"
+    fi
+    if [[ -f "$DESKTOP_OVERRIDE" ]] && grep -q "$OVERRIDE_MARKER" "$DESKTOP_OVERRIDE"; then
+        echo
+        warn "Le lanceur du menu force XWayland, mais pas un lancement en terminal."
+        warn "Depuis un terminal, utilisez : QT_QPA_PLATFORM=xcb projecteur"
+    fi
 }
 
 # -----------------------------------------------------------------------------
@@ -572,8 +662,13 @@ main() {
         install_release_package
     fi
 
-    setup_uinput
-    reload_udev
+    # Les étapes système ne servent que si quelque chose vient d'être installé ;
+    # les exécuter sinon ferait demander le mot de passe pour rien.
+    if [[ "$INSTALLED_SOMETHING" == "yes" ]]; then
+        setup_uinput
+        reload_udev
+    fi
+    setup_wayland_launcher
     verify_install
 }
 
