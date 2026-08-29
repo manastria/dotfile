@@ -1,0 +1,31 @@
+# Liste des projets sauvegardés par backup-projets.sh
+#
+# À copier en ~/.config/backup-projets/projets.conf, puis à adapter.
+#
+# Une entrée par ligne, « # » pour les commentaires :
+#
+#   /chemin/projet              un projet précis
+#   /chemin/*                   un glob : chaque sous-répertoire devient un projet
+#   /chemin/projet|autre-nom    nom imposé sur la clé (séparateur : barre verticale)
+#   !/chemin/motif              exclusion, motif glob, valable où qu'elle soit écrite
+#
+# Le « ~ » de tête est développé. Le nom sur la clé est par défaut le nom de
+# base du répertoire ; deux projets homonymes sont désambiguïsés par le nom
+# de leur répertoire parent, sauf si un nom explicite est donné.
+
+# --- Projets Linux ------------------------------------------------------------
+~/projets/*
+
+# Trop gros, déjà publié ailleurs : inutile de le trimballer chaque soir.
+#!~/projets/gclasse-quartz
+
+# --- Projets Windows, vus depuis WSL ------------------------------------------
+# Lecture à travers un montage 9p : compter dix fois plus lent qu'un projet
+# local. La première sauvegarde est longue, les suivantes ne transfèrent que
+# le différentiel.
+/mnt/f/_Obsidian/gclasse
+/mnt/f/_Obsidian/quatro
+
+# Homonyme d'un projet de ~/projets : on impose le nom pour éviter que le
+# script ne le renomme tout seul.
+#/mnt/f/_Obsidian/manastria|manastria-windows

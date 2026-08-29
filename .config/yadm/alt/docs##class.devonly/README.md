@@ -18,6 +18,7 @@ Les conventions de rédaction sont fixées dans [CLAUDE.md](../CLAUDE.md), secti
 | [pack_project.md](pack_project.md) | [`pack-project.sh`](../.local/bin/pack-project.sh) | Archive `.tar.zst` d'un projet, exclusions dev automatiques, `.git` conservé |
 | [pack_dir.md](pack_dir.md) | [`pack-dir.sh`](../.local/bin/pack-dir.sh) | Même chose en configurable : codec, `.zip`, exclusions personnalisées |
 | [pack-bundle.md](pack-bundle.md) | [`pack-bundle.sh`](../.local/bin/pack-bundle.sh) | Sauvegarde de l'historique Git en fichier `.bundle` clonable |
+| [backup-projets.md](backup-projets.md) | [`backup-projets.sh`](../.local/bin/backup-projets.sh) | Miroir incrémental d'une liste de projets vers une clé USB, avant d'éteindre |
 
 ### Système et matériel
 
