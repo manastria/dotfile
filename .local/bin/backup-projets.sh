@@ -115,6 +115,9 @@
 #         une sauvegarde réussie.
 #     2   Erreur d'usage : option inconnue, configuration illisible ou vide,
 #         support de destination introuvable, ambigu, ou non monté.
+#   130   Interrompu au clavier (Ctrl+C). Un seul Ctrl+C arrête toute la
+#         sauvegarde, pas seulement la copie en cours. Le récapitulatif
+#         partiel est affiché ; aucun rapport n'est écrit sur le support.
 set -euo pipefail
 
 # -----------------------------------------------------------------------------
@@ -128,7 +131,7 @@ readonly ARCHIVE_DIRNAME="archives"
 readonly REPORT_NAME="DERNIERE-SAUVEGARDE.txt"
 readonly DEFAULT_KEEP=3
 readonly ZSTD_LEVEL="${PACK_ZSTD_LEVEL:-3}"
-readonly STATE_WIDTH=9
+readonly STATE_WIDTH=10
 # Espace libre en dessous duquel on prévient (2 Gio), sans bloquer : le
 # volume réellement nécessaire dépend du différentiel, inconnu avant rsync.
 readonly LOW_SPACE_BYTES=$(( 2 * 1024 * 1024 * 1024 ))
@@ -701,10 +704,15 @@ git_state() {
 # -----------------------------------------------------------------------------
 EXCLUDE_FILE=""
 RSYNC_LOG=""
+TMP_DIR=""
+
+cleanup() {
+    [[ -n "$TMP_DIR" && -d "$TMP_DIR" ]] && rm -rf "$TMP_DIR"
+    return 0
+}
 
 setup_workdir() {
     TMP_DIR="$(mktemp -d)"
-    trap 'rm -rf "$TMP_DIR"' EXIT
 
     EXCLUDE_FILE="${TMP_DIR}/excludes"
     printf '%s\n' "${DEV_EXCLUDES[@]}" > "$EXCLUDE_FILE"
@@ -807,6 +815,15 @@ sync_project() {
             # si un éditeur écrit pendant la sauvegarde, sans conséquence.
             CUR_DETAIL+=" — fichiers disparus pendant la copie"
             ;;
+        20|130|143)
+            # rsync rend 20 quand il a reçu SIGINT, 128+n quand le shell
+            # constate qu'un signal l'a tué. Dans les deux cas l'utilisateur
+            # a demandé l'arrêt : on le note pour que la boucle s'interrompe.
+            CUR_STATE="INTERROMPU"; CUR_COLOR="$RED"; CUR_SEV=2
+            CUR_DETAIL="copie interrompue — miroir incomplet"
+            INTERRUPTED="yes"
+            return 1
+            ;;
         23) CUR_STATE="PARTIEL"; CUR_COLOR="$YELLOW"; CUR_SEV=2
             CUR_DETAIL+=" — $(first_rsync_error)"
             return 1
@@ -880,6 +897,60 @@ rotate_archives() {
     for old in "${sorted[@]:0:$(( ${#sorted[@]} - KEEP ))}"; do
         rm -f "$old"
     done
+}
+
+# -----------------------------------------------------------------------------
+# Interruption
+# -----------------------------------------------------------------------------
+INTERRUPTED="no"
+CURRENT_LABEL=""
+
+# Sortie propre sur Ctrl+C. Deux chemins y mènent, et il en faut deux :
+#
+#   - le trap INT/TERM, déclenché entre deux commandes ;
+#   - le code de retour de rsync, qui rend 20 lorsqu'il a reçu SIGINT (ou
+#     128+signal si le shell constate qu'il a été tué).
+#
+# Le trap seul ne suffit pas : bash n'exécute un gestionnaire qu'une fois la
+# commande courante terminée, et rien ne garantit que le signal atteigne le
+# script lui-même plutôt que le seul rsync — c'est le cas lorsque le script
+# n'est pas au premier plan d'un terminal. Sans le second chemin, la boucle
+# repartirait alors sur le projet suivant, et il faudrait un Ctrl+C par
+# projet : exactement le comportement à corriger.
+finish_interrupted() {
+    trap - INT TERM     # un second Ctrl+C doit tuer sans discuter
+
+    echo ""
+    warn "${BOLD}Interruption${RESET} — la sauvegarde s'arrête."
+
+    if (( ${#R_LABEL[@]} > 0 )); then
+        echo ""
+        echo -e "${BOLD}=== RÉCAPITULATIF PARTIEL ===${RESET}"
+        render_table couleur
+        echo ""
+    fi
+
+    if [[ -n "$CURRENT_LABEL" ]]; then
+        warn "« ${CURRENT_LABEL} » était en cours de copie : son miroir est incomplet."
+    fi
+
+    local total=${#PROJ_LABEL[@]} done_count=${#R_LABEL[@]} remaining
+    remaining=$(( total - done_count ))
+    if (( remaining > 0 )); then
+        warn "${remaining} projet(s) sur ${total} n'ont pas été traités."
+    fi
+
+    # Le rapport déposé sur le support décrit une sauvegarde complète. En
+    # écrire un partiel ferait passer une sauvegarde tronquée pour la
+    # dernière en date ; celui de la passe précédente reste plus honnête.
+    warn "Aucun rapport n'a été écrit sur le support : celui de la sauvegarde précédente est conservé."
+
+    exit 130
+}
+
+on_interrupt() {
+    INTERRUPTED="yes"
+    finish_interrupted
 }
 
 # -----------------------------------------------------------------------------
@@ -992,6 +1063,9 @@ write_report() {
 # Point d'entrée
 # -----------------------------------------------------------------------------
 main() {
+    trap cleanup EXIT
+    trap on_interrupt INT TERM
+
     parse_args "$@"
     check_not_root
 
@@ -1017,6 +1091,7 @@ main() {
     for i in "${!PROJ_PATH[@]}"; do
         src="${PROJ_PATH[$i]}"
         label="${PROJ_LABEL[$i]}"
+        CURRENT_LABEL="$label"
         started=$SECONDS
 
         [[ "$QUIET" == "no" ]] && info "${BOLD}${label}${RESET}  ←  ${src}"
@@ -1028,7 +1103,7 @@ main() {
         # qu'il ne faut pas faire un soir où l'on est pressé.
         sync_project "$src" "$label" || true
 
-        if [[ "$DO_ARCHIVE" == "yes" && "$CUR_STATE" != "ABSENT" && "$CUR_STATE" != "VIDE" && "$CUR_STATE" != "ÉCHEC" ]]; then
+        if [[ "$DO_ARCHIVE" == "yes" && "$CUR_STATE" != "ABSENT" && "$CUR_STATE" != "VIDE" && "$CUR_STATE" != "ÉCHEC" && "$CUR_STATE" != "INTERROMPU" ]]; then
             archive_project "$label" || true
         fi
 
@@ -1042,8 +1117,13 @@ main() {
         R_GIT+=("$GIT_LABEL")
         R_GITSEV+=("$GIT_SEV")
         R_DETAIL+=("$CUR_DETAIL")
+        CURRENT_LABEL=""    # le projet est comptabilisé, plus rien « en cours »
 
         [[ "$QUIET" == "no" ]] && echo ""
+
+        # Le trap n'a pas pu s'exécuter (signal reçu par rsync seul) : c'est
+        # ici que l'arrêt est honoré, une fois le projet consigné.
+        [[ "$INTERRUPTED" == "yes" ]] && finish_interrupted
     done
 
     echo -e "${BOLD}=== RÉCAPITULATIF ===${RESET}"

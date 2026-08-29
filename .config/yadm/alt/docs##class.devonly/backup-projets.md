@@ -33,6 +33,8 @@ Ce que le script fait, projet par projet :
 3. **archive** en option le résultat dans `<clé>/backup-projets/archives/<nom>_AAAAMMJJ_HHMM.tar.zst`, en ne gardant que les *N* dernières ;
 4. **rapporte** l'ensemble dans un tableau à l'écran et dans `<clé>/backup-projets/DERNIERE-SAUVEGARDE.txt`, lisible depuis le Bloc-notes du poste de la classe.
 
+Un **Ctrl+C** arrête toute la sauvegarde, pas seulement la copie en cours : le script affiche le récapitulatif partiel de ce qui est passé, nomme le projet qui était en cours de copie — son miroir est donc incomplet — et sort en code `130`. Aucun rapport n'est écrit sur le support dans ce cas : celui de la sauvegarde précédente, qui décrit une passe complète, reste plus honnête qu'un rapport tronqué qui se ferait passer pour la dernière en date.
+
 Ce que le script ne fait **pas** : il ne commite rien, ne pousse rien, ne modifie aucun dépôt. Pour l'état de synchronisation détaillé, avec `git fetch` et détection des divergences, c'est [`check-git-sync.sh`](../.local/bin/check-git-sync.sh) — les deux s'enchaînent bien.
 
 L'arborescence obtenue sur la clé :
@@ -216,6 +218,23 @@ Un répertoire réellement vide, ramené par un glob, est simplement signalé en
 template-dir  VIDE  hors git  répertoire vide, rien à sauvegarder
 ```
 
+Une sauvegarde interrompue au clavier :
+
+```text
+[INFO]      gclasse  ←  /mnt/f/_Obsidian/gclasse
+rsync error: received SIGINT, SIGTERM, or SIGHUP (code 20) at rsync.c(716) [sender=3.2.7]
+
+[ATTENTION] Interruption — la sauvegarde s'arrête.
+
+=== RÉCAPITULATIF PARTIEL ===
+PROJET   COPIE       GIT  DÉTAIL
+--------------------------------------------------
+gclasse  INTERROMPU  -    copie interrompue — miroir incomplet | 5s
+
+[ATTENTION] 2 projet(s) sur 3 n'ont pas été traités.
+[ATTENTION] Aucun rapport n'a été écrit sur le support : celui de la sauvegarde précédente est conservé.
+```
+
 Récupérer un projet depuis la clé, en cours :
 
 ```bash
@@ -233,6 +252,7 @@ git clone /mnt/e/backup-projets/miroir/gclasse ~/projets/gclasse
 | `0` | Tous les projets ont été sauvegardés. |
 | `1` | Sauvegarde non garantie : au moins un projet en échec, absent, partiellement copié ou dont la source a disparu, ou un prérequis manquant (`rsync` absent, support non inscriptible). |
 | `2` | Erreur d'usage : option inconnue, configuration illisible ou vide, support de destination introuvable, ambigu, non monté, ou incapable de dater les fichiers. |
+| `130` | Interrompu au clavier (Ctrl+C). Récapitulatif partiel affiché, aucun rapport écrit sur le support. |
 
 L'état Git n'entre **pas** dans le code de retour : un projet non publié est une sauvegarde réussie, c'est même la raison d'être du script. Pour un code de retour qui réagit à l'état de publication, enchaîner avec [`check-git-sync.sh`](../.local/bin/check-git-sync.sh).
 
@@ -285,6 +305,10 @@ Sous WSL, la cause est presque toujours un montage drvfs manuel sans `uid=`. Les
 
 `--no-times` bascule alors `rsync` en `--no-times --size-only`, seul critère qui reste déterministe quand les dates sont fausses. C'est une dégradation assumée, pas un mode normal : un fichier modifié sans changer de taille — une coquille corrigée dans une note — ne serait plus jamais sauvegardé.
 
+**Interruption : deux chemins, dont un seul fonctionne vraiment.** Un Ctrl+C dans un terminal envoie SIGINT à tout le groupe de processus : le script et `rsync` le reçoivent ensemble. On attend donc du `trap on_interrupt INT` qu'il fasse le travail — et il ne le fait pas. Bash mémorise un SIGINT reçu pendant l'attente d'une commande au premier plan, mais ne le **rejoue qu'à la condition que l'enfant soit lui-même mort de ce signal** ; sinon il le jette. Vérifié sur ce script : SIGINT envoyé au seul processus bash pendant un `rsync` de douze secondes, le `rsync` va au bout, et le trap n'est jamais exécuté — code de sortie `0`, sauvegarde réputée complète.
+
+D'où le second chemin, celui qui porte réellement l'arrêt : `rsync` rend **20** quand il a reçu SIGINT (ou `128+n` si le shell constate qu'un signal l'a tué). `sync_project` reconnaît ces codes, marque le projet `INTERROMPU` et lève `INTERRUPTED` ; la boucle principale honore le drapeau juste après avoir consigné le projet. Le trap reste utile pour les signaux qui arrivent ailleurs que pendant `rsync` — `git status` sur un gros dépôt, le `tar | zstd` d'une archive, les sondes de `prepare_dest` — et pour SIGTERM. Les deux chemins convergent vers `finish_interrupted`, qui neutralise le trap (un second Ctrl+C doit tuer sans discuter), affiche le récapitulatif partiel et sort en `130`.
+
 **Séparateur `|` dans la configuration.** Les chemins Windows contiennent régulièrement des espaces (`/mnt/f/_Obsidian/Atomic Thinking - Obsidian Expert`), ce qui interdit de séparer chemin et nom par une espace. La barre verticale n'apparaît jamais dans un nom de fichier Windows, où elle est illégale.
 
 **Les orphelins sont signalés, jamais supprimés.** Un miroir dont le projet a quitté la configuration est peut-être la dernière copie d'un travail effacé côté source. `warn_orphans` le nomme et laisse décider.
@@ -330,6 +354,8 @@ Le code 25 n'est pas traité aujourd'hui et tomberait dans la branche `ÉCHEC`, 
 - **`pad()` compte les caractères, pas les octets.** `printf %-Ns` désaligne les colonnes dès qu'un nom de projet contient un accent. Même remarque que dans `check-git-sync.sh`.
 - **La sortie de `rsync --stats` est relue** pour alimenter la colonne `DÉTAIL`, d'où le `LC_ALL=C` qui fige le format. Une évolution de `rsync` qui renommerait ces lignes ferait afficher `0 fichier(s)` sans autre symptôme : c'est le premier endroit à vérifier si le différentiel paraît toujours nul.
 - **Les codes de sortie de `rsync` sont traités finement** : `24` (fichiers disparus pendant la copie, typiquement un éditeur ouvert) est bénin, `23` signale un transfert partiel — souvent un nom de fichier illégal sur exFAT (`:`, `?`, `*`) — et tout le reste est un échec. Un projet en échec n'interrompt pas la boucle : les suivants sont sauvegardés quand même.
+- **Ne pas « simplifier » la gestion de l'interruption en supprimant le test des codes 20/130/143 dans `sync_project`.** C'est lui qui arrête la sauvegarde, pas le trap : sans lui, chaque projet réclamerait son propre Ctrl+C. Le trap seul donne une fausse impression de correction — il ne se déclenche que si l'enfant meurt du signal, ce qui n'est pas garanti.
+- **`CURRENT_LABEL` doit être remis à vide** dès qu'un projet est consigné dans les tableaux `R_*`, sans quoi un arrêt survenu entre deux projets annoncerait à tort un miroir incomplet.
 - **Les deux sondes de `prepare_dest` écrivent réellement sur le support**, y compris en `--dry-run` : un lien symbolique pour `detect_deref`, un fichier daté pour `detect_times`, tous deux supprimés dans la foulée. C'est assumé — une simulation qui ne testerait pas le support ne simulerait rien d'utile.
 - **`stat -c %m` est le seul juge du montage.** `findmnt -T` donnerait la même information mais n'est pas garanti partout ; `mountpoint` échouerait sur un sous-répertoire d'un montage légitime, comme `--dest /mnt/g/sauvegardes`. Toute évolution de ce contrôle doit continuer à accepter un sous-répertoire d'un vrai montage et à refuser un `/mnt/<lettre>` fantôme.
 - **La gravité d'un projet est portée par `CUR_SEV`/`R_SEV`**, pas par le libellé de la colonne `COPIE` : deux situations peuvent afficher `VIDE` sans peser pareil sur le code de retour. Ajouter un état, c'est lui attribuer une sévérité — `2` pour « la sauvegarde de ce projet n'est pas garantie », `1` pour une remarque.
