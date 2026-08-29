@@ -31,6 +31,19 @@
 #     lecteur attribuée par Windows et interdit d'écrire sur le mauvais
 #     disque. L'option -d force une destination quelconque.
 #
+#     Le script refuse d'écrire sur le système de fichiers racine. Sous WSL,
+#     un lecteur branché après le démarrage n'est pas monté automatiquement
+#     et /mnt/<lettre> n'est alors qu'un répertoire vide du disque virtuel :
+#     la sauvegarde s'y déverserait sans que rien n'apparaisse sur la clé.
+#     Le cas est détecté et la commande de montage est proposée. L'option
+#     --allow-local lève ce garde-fou, pour un essai vers un répertoire local.
+#
+#     Le support doit également accepter que l'on fixe la date des fichiers,
+#     sans quoi rsync ne peut plus distinguer ce qui a changé et recopie tout
+#     à chaque passe. Un montage drvfs sans « uid= » produit exactement cet
+#     effet : les fichiers appartiennent à root et leur date est verrouillée.
+#     Le script sonde le support et propose la commande de remontage.
+#
 #     L'option -a ajoute, en plus du miroir, une archive .tar.zst horodatée
 #     par projet — un instantané figé, auquel se raccrocher si un fichier est
 #     abîmé côté source et que le miroir a déjà répercuté les dégâts.
@@ -66,6 +79,12 @@
 #                           Détecté automatiquement si la clé ne sait pas
 #                           stocker de lien.
 #     -q, --quiet           N'afficher que le récapitulatif final.
+#         --allow-local     Autoriser une destination sur le système de
+#                           fichiers racine (essai local, pas un support).
+#         --no-times        Accepter un support qui refuse de dater les
+#                           fichiers. La comparaison se fait alors sur la
+#                           taille seule : une modification qui ne change
+#                           pas la taille passe inaperçue. À éviter.
 #         --init DIR        Déposer le fichier marqueur sur DIR et quitter.
 #     -h, --help            Affiche cette aide.
 #
@@ -95,7 +114,7 @@
 #         L'état Git n'entre pas dans ce calcul : un projet non publié est
 #         une sauvegarde réussie.
 #     2   Erreur d'usage : option inconnue, configuration illisible ou vide,
-#         support de destination introuvable ou ambigu.
+#         support de destination introuvable, ambigu, ou non monté.
 set -euo pipefail
 
 # -----------------------------------------------------------------------------
@@ -168,6 +187,8 @@ DRY_RUN="no"
 DO_GIT="yes"
 DEREF="auto"
 QUIET="no"
+ALLOW_LOCAL="no"
+NO_TIMES="no"
 INIT_DIR=""
 declare -a ONLY_PATTERNS=()
 
@@ -183,6 +204,8 @@ parse_args() {
             -G|--no-git)  DO_GIT="no"; shift ;;
             -L|--deref)   DEREF="yes"; shift ;;
             -q|--quiet)   QUIET="yes"; shift ;;
+            --allow-local) ALLOW_LOCAL="yes"; shift ;;
+            --no-times)   NO_TIMES="yes"; shift ;;
             --init)       INIT_DIR="${2:-}"; shift 2 ;;
             -h|--help)    usage; exit 0 ;;
             *)            usage_error "Option inconnue : $1" ;;
@@ -416,6 +439,9 @@ detect_dest() {
         case "$cand" in
             /mnt/wsl|/mnt/wslg) continue ;;
         esac
+        # Un marqueur déposé par erreur dans le disque de WSL ne doit jamais
+        # faire élire cette destination : elle n'est pas un support.
+        [[ "$ALLOW_LOCAL" == "no" ]] && is_on_root_fs "$cand" && continue
         if timeout 3 test -e "${cand}/${MARKER}" 2>/dev/null; then
             found+=("$cand")
         fi
@@ -434,10 +460,45 @@ detect_dest() {
     esac
 }
 
+# Le système de fichiers qui porte réellement un répertoire. « / » signale
+# que le chemin n'est adossé à aucun montage propre : sous WSL, c'est la
+# signature d'un /mnt/<lettre> laissé vide par un montage précédent, et donc
+# d'une sauvegarde qui partirait dans le disque virtuel au lieu de la clé.
+mount_point_of() { stat -c %m "$1" 2>/dev/null; }
+
+is_on_root_fs() { [[ "$(mount_point_of "$1")" == "/" ]]; }
+
+# Refus commenté, avec la commande de montage quand le chemin ressemble à une
+# lettre de lecteur Windows : c'est l'unique manœuvre à connaître, et elle
+# n'est pas devinable au moment où l'on est pressé de partir.
+reject_local_dest() {
+    local dir="$1"
+    error "« ${dir} » n'est pas un support monté : ce chemin appartient au système de fichiers racine."
+    echo "Y écrire remplirait le disque de WSL sans rien déposer sur la clé." >&2
+    if [[ "$dir" =~ ^(/mnt/([a-z]))(/|$) ]]; then
+        local mnt="${BASH_REMATCH[1]}" letter="${BASH_REMATCH[2]}"
+        echo "" >&2
+        echo "Sous WSL, un lecteur branché après le démarrage n'est pas monté tout seul." >&2
+        echo "Montez-le, puis relancez :" >&2
+        echo "    sudo mount -t drvfs ${letter^^}: ${mnt}" >&2
+    fi
+    echo "" >&2
+    echo "Pour une destination locale assumée (essai, disque interne), ajoutez --allow-local." >&2
+    exit 2
+}
+
+check_real_medium() {
+    local dir="$1"
+    [[ "$ALLOW_LOCAL" == "yes" ]] && return 0
+    is_on_root_fs "$dir" && reject_local_dest "$dir"
+    return 0
+}
+
 init_dest() {
     local dir="$1"
     [[ -d "$dir" ]] || die "Répertoire introuvable : $dir"
     [[ -w "$dir" ]] || die "Répertoire non inscriptible : $dir"
+    check_real_medium "$dir"
 
     if [[ -e "${dir}/${MARKER}" ]]; then
         info "Marqueur déjà présent : ${dir}/${MARKER}"
@@ -466,6 +527,59 @@ detect_deref() {
     fi
 }
 
+# rsync décide de recopier ou non un fichier en comparant sa taille et sa
+# date. Si le support refuse qu'on lui fixe une date, la destination porte
+# celle de la copie : toujours différente de la source, donc tout est recopié
+# à chaque passe, indéfiniment. Le symptôme visible est une avalanche de
+# « failed to set times … Operation not permitted » et un état PARTIEL, mais
+# le vrai dégât est la perte silencieuse du caractère incrémental.
+#
+# Cause de loin la plus fréquente sous WSL : un montage drvfs manuel sans
+# « uid= ». Les répertoires sont en 777, on peut donc y créer des fichiers,
+# mais ceux-ci appartiennent à root — et seul le propriétaire d'un fichier
+# peut en fixer la date.
+detect_times() {
+    local probe="${DEST_ROOT}/.probe-date-$$"
+    local owner=""
+
+    : > "$probe" 2>/dev/null || return 0     # l'inscriptibilité est testée ailleurs
+    owner="$(stat -c %u "$probe" 2>/dev/null || true)"
+
+    if touch -d '2001-02-03 04:05:00' "$probe" 2>/dev/null; then
+        rm -f "$probe"
+        return 0
+    fi
+    rm -f "$probe"
+
+    if [[ "$NO_TIMES" == "yes" ]]; then
+        warn "Support incapable de dater les fichiers : comparaison sur la taille seule."
+        warn "Une modification qui ne change pas la taille d'un fichier passera inaperçue."
+        return 0
+    fi
+
+    error "Le support « ${DEST_ROOT} » refuse que l'on fixe la date des fichiers."
+    echo "Sans date conservée, rsync ne distingue plus ce qui a changé : chaque" >&2
+    echo "sauvegarde recopierait l'intégralité des projets." >&2
+
+    if [[ -n "$owner" && "$owner" != "$(id -u)" ]]; then
+        local mnt letter
+        mnt="$(mount_point_of "$DEST_ROOT")"
+        echo "" >&2
+        echo "Les fichiers y appartiennent à l'utilisateur ${owner}, pas à vous (${USER}, $(id -u))." >&2
+        echo "Le support est monté sans « uid= » ; seul le propriétaire d'un fichier peut le dater." >&2
+        if [[ "$mnt" =~ ^/mnt/([a-z])$ ]]; then
+            letter="${BASH_REMATCH[1]}"
+            echo "Remontez-le avec votre identité :" >&2
+            echo "    sudo umount ${mnt}" >&2
+            echo "    sudo mount -t drvfs ${letter^^}: ${mnt} -o uid=$(id -u),gid=$(id -g),noatime" >&2
+        fi
+    fi
+
+    echo "" >&2
+    echo "Pour passer outre malgré tout, ajoutez --no-times (comparaison sur la taille)." >&2
+    exit 2
+}
+
 prepare_dest() {
     if [[ -z "$DEST_ROOT" ]]; then
         DEST_ROOT="$(detect_dest || true)"
@@ -479,10 +593,12 @@ prepare_dest() {
         info "Support détecté : ${BOLD}${DEST_ROOT}${RESET}"
     else
         [[ -d "$DEST_ROOT" ]] || usage_error "Destination introuvable : $DEST_ROOT"
+        check_real_medium "$DEST_ROOT"
         info "Destination imposée : ${BOLD}${DEST_ROOT}${RESET}"
     fi
 
     [[ -w "$DEST_ROOT" ]] || die "Destination non inscriptible : $DEST_ROOT"
+    info "Montage       : $(mount_point_of "$DEST_ROOT")"
 
     BACKUP_ROOT="${DEST_ROOT}/${BACKUP_DIRNAME}"
     MIRROR_ROOT="${BACKUP_ROOT}/${MIRROR_DIRNAME}"
@@ -494,6 +610,7 @@ prepare_dest() {
     fi
 
     [[ "$DEREF" == "auto" ]] && detect_deref
+    detect_times
 
     local avail
     avail="$(df -B1 --output=avail "$DEST_ROOT" 2>/dev/null | tail -1 | tr -dc '0-9')"
@@ -637,14 +754,22 @@ sync_project() {
     fi
 
     local -a opts=(
-        --recursive --times
+        --recursive
         --delete --delete-excluded
         --exclude-from="$EXCLUDE_FILE"
         --stats
     )
-    # Horodatages FAT/exFAT à la granularité de 2 s : sans cette tolérance,
-    # rsync retransfère indéfiniment les mêmes fichiers.
-    opts+=(--modify-window=2)
+
+    if [[ "$NO_TIMES" == "yes" ]]; then
+        # Support incapable de dater : comparer les dates n'aurait aucun sens,
+        # elles seraient toutes fausses. La taille reste le seul critère
+        # exploitable — imparfait, mais déterministe.
+        opts+=(--no-times --size-only)
+    else
+        # Horodatages FAT/exFAT à la granularité de 2 s : sans cette tolérance,
+        # rsync retransfère indéfiniment les mêmes fichiers.
+        opts+=(--times --modify-window=2)
+    fi
 
     if [[ "$DEREF" == "yes" ]]; then
         opts+=(--copy-links)

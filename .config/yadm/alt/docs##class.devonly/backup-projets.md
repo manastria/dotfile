@@ -8,7 +8,7 @@
 
 > Paragraphe de rappel, à coller tel quel dans le mémo.
 
-`backup-projets.sh` recopie sur une clé USB tous les projets listés dans `~/.config/backup-projets/projets.conf` — c'est le dernier geste avant d'éteindre : si un commit n'a pas été poussé, ou pas même fait, le travail est malgré tout sur la clé pour le cours du lendemain. La copie est un **miroir incrémental** : seuls les fichiers modifiés depuis la veille sont transférés, les `.git` sont conservés et les `node_modules`, `.venv`, `target` et consorts sont écartés comme le fait `pack-project.sh`. Contrairement à ce dernier, le résultat n'est pas une archive mais une arborescence directement ouvrable depuis n'importe quel poste de la salle, et clonable par un `git clone` depuis la clé. Chaque projet est aussi inspecté côté Git, **sans accès réseau**, pour signaler dans le récapitulatif ce qui n'a pas été publié. La clé est reconnue à un fichier marqueur déposé une fois pour toutes par `--init`, ce qui la rend insensible à la lettre de lecteur attribuée par Windows. Au quotidien, deux options suffisent : `--dry-run` pour vérifier avant, et `--archive` pour ajouter un instantané `.tar.zst` horodaté quand on veut pouvoir revenir en arrière.
+`backup-projets.sh` recopie sur une clé USB tous les projets listés dans `~/.config/backup-projets/projets.conf` — c'est le dernier geste avant d'éteindre : si un commit n'a pas été poussé, ou pas même fait, le travail est malgré tout sur la clé pour le cours du lendemain. La copie est un **miroir incrémental** : seuls les fichiers modifiés depuis la veille sont transférés, les `.git` sont conservés et les `node_modules`, `.venv`, `target` et consorts sont écartés comme le fait `pack-project.sh`. Contrairement à ce dernier, le résultat n'est pas une archive mais une arborescence directement ouvrable depuis n'importe quel poste de la salle, et clonable par un `git clone` depuis la clé. Chaque projet est aussi inspecté côté Git, **sans accès réseau**, pour signaler dans le récapitulatif ce qui n'a pas été publié. La clé est reconnue à un fichier marqueur déposé une fois pour toutes par `--init`, ce qui la rend insensible à la lettre de lecteur attribuée par Windows ; le script refuse par ailleurs d'écrire sur un `/mnt/<lettre>` que WSL n'a pas monté, ou monté sans `uid=`, deux pièges classiques qui, l'un, remplit le disque virtuel sans rien déposer sur la clé, l'autre, fait tout recopier à chaque passe. Au quotidien, deux options suffisent : `--dry-run` pour vérifier avant, et `--archive` pour ajouter un instantané `.tar.zst` horodaté quand on veut pouvoir revenir en arrière.
 
 ---
 
@@ -59,6 +59,8 @@ CLÉ/
 | `numfmt` | volumes lisibles dans le récapitulatif (coreutils) | `numfmt --version` |
 | `git` | colonne d'état de publication ; facultatif, `-G` s'en passe | `git --version` |
 | `tar`, `zstd` | uniquement pour `--archive` | `zstd --version` |
+| une clé **montée** | sous WSL, un lecteur branché après le démarrage ne l'est pas | `stat -c %m /mnt/h` doit rendre `/mnt/h`, pas `/` |
+| montée avec **votre identité** | sans `uid=`, les fichiers appartiennent à root et leur date est verrouillée | `ls -lna /mnt/h` doit montrer votre UID, pas `0` |
 | une clé préparée | fichier marqueur `.backup-projets` à sa racine | `backup-projets.sh --init /mnt/e` |
 | le fichier de liste | projets à sauvegarder | `ls ~/.config/backup-projets/projets.conf` |
 
@@ -82,6 +84,8 @@ backup-projets.sh --init POINT_DE_MONTAGE
 | `-G`, `--no-git` | — | non | Ne pas inspecter l'état Git. Utile sur un gros dépôt monté en 9p. |
 | `-L`, `--deref` | — | auto | Remplacer les liens symboliques par leur cible. Activé d'office si la clé ne sait pas en stocker. |
 | `-q`, `--quiet` | — | non | N'afficher que le récapitulatif final. |
+| `--allow-local` | — | non | Autoriser une destination sur le système de fichiers racine. Lève le garde-fou anti-`/mnt` non monté, pour un essai vers un répertoire local. |
+| `--no-times` | — | non | Accepter un support qui refuse de dater les fichiers. La comparaison se fait alors sur la **taille seule** : une modification qui ne change pas la taille passe inaperçue. À éviter. |
 | `--init` | `DIR` | — | Déposer le marqueur sur `DIR` et quitter. |
 | `-h`, `--help` | — | — | Réimprime l'en-tête manpage du script. |
 
@@ -147,6 +151,50 @@ cours_astro  OK         publié                     0 fichier(s), 0,0o
 
 La colonne `DÉTAIL` porte le différentiel réellement transféré : `0 fichier(s)` signifie que la sauvegarde de la veille était déjà à jour. Le temps n'est affiché qu'au-delà de cinq secondes.
 
+Le piège le plus coûteux, sous WSL — la clé est branchée, Windows lui a donné la lettre `H:`, mais WSL ne l'a pas montée. `/mnt/h` n'est alors qu'un répertoire vide du disque virtuel :
+
+```text
+[ERREUR]    « /mnt/h » n'est pas un support monté : ce chemin appartient au système de fichiers racine.
+Y écrire remplirait le disque de WSL sans rien déposer sur la clé.
+
+Sous WSL, un lecteur branché après le démarrage n'est pas monté tout seul.
+Montez-le, puis relancez :
+    sudo mount -t drvfs H: /mnt/h
+
+Pour une destination locale assumée (essai, disque interne), ajoutez --allow-local.
+```
+
+Second piège, immédiatement après le premier : la clé est bien montée, mais sans `uid=`. Tout ce qu'on y écrit appartient alors à root, et seul le propriétaire d'un fichier peut en fixer la date :
+
+```text
+[ERREUR]    Le support « /mnt/h » refuse que l'on fixe la date des fichiers.
+Sans date conservée, rsync ne distingue plus ce qui a changé : chaque
+sauvegarde recopierait l'intégralité des projets.
+
+Les fichiers y appartiennent à l'utilisateur 0, pas à vous (jpdemory, 1000).
+Le support est monté sans « uid= » ; seul le propriétaire d'un fichier peut le dater.
+Remontez-le avec votre identité :
+    sudo umount /mnt/h
+    sudo mount -t drvfs H: /mnt/h -o uid=1000,gid=1000,noatime
+
+Pour passer outre malgré tout, ajoutez --no-times (comparaison sur la taille).
+```
+
+La séquence complète, correcte, pour une clé branchée en cours de session :
+
+```bash
+sudo mount -t drvfs H: /mnt/h -o uid=$(id -u),gid=$(id -g),noatime
+backup-projets.sh --init /mnt/h      # une seule fois par clé
+backup-projets.sh                    # la clé est désormais retrouvée seule
+```
+
+Les deux vérifications, à tout moment :
+
+```bash
+stat -c %m /mnt/h     # « /mnt/h » = monté ; « / » = répertoire vide du disque WSL
+ls -lna /mnt/h        # 3e et 4e colonnes = votre UID/GID, et non 0 0
+```
+
 Une clé absente ou non préparée :
 
 ```text
@@ -184,7 +232,7 @@ git clone /mnt/e/backup-projets/miroir/gclasse ~/projets/gclasse
 | ---- | ------------- |
 | `0` | Tous les projets ont été sauvegardés. |
 | `1` | Sauvegarde non garantie : au moins un projet en échec, absent, partiellement copié ou dont la source a disparu, ou un prérequis manquant (`rsync` absent, support non inscriptible). |
-| `2` | Erreur d'usage : option inconnue, configuration illisible ou vide, support de destination introuvable ou ambigu. |
+| `2` | Erreur d'usage : option inconnue, configuration illisible ou vide, support de destination introuvable, ambigu, non monté, ou incapable de dater les fichiers. |
 
 L'état Git n'entre **pas** dans le code de retour : un projet non publié est une sauvegarde réussie, c'est même la raison d'être du script. Pour un code de retour qui réagit à l'état de publication, enchaîner avec [`check-git-sync.sh`](../.local/bin/check-git-sync.sh).
 
@@ -224,6 +272,18 @@ Encore faut-il ne pas crier au loup : un glob `~/projets/*` finit toujours par r
 **Rotation par tri lexicographique.** `rotate_archives` trie sur le **nom** de fichier, pas sur la date d'inode : l'horodatage `AAAAMMJJ_HHMM` se trie lexicographiquement comme chronologiquement, et les dates de fichiers d'un système FAT sont trop peu fiables (fuseau, granularité) pour arbitrer une suppression.
 
 **Marqueur plutôt que chemin fixe.** Windows n'attribue pas toujours la même lettre à la même clé. Un chemin figé en configuration mène soit à un échec, soit — bien pire — à une écriture sur le mauvais disque. Le marqueur `.backup-projets` rend la détection indépendante de la lettre ; deux supports marqués font échouer le script en code `2` plutôt que de choisir à l'aveugle. Chaque test d'existence est borné par `timeout 3` : sous WSL, `/mnt/` expose aussi les lecteurs réseau Windows, dont un seul déconnecté suffirait à figer le script.
+
+**Refus d'écrire sur le système de fichiers racine.** C'est le garde-fou né d'un incident réel : la clé montée sous Windows en `H:`, `backup-projets.sh --init /mnt/h`, une sauvegarde annoncée terminée — et rien sur la clé. Sous WSL, les lecteurs sont montés au démarrage de la distribution ; un support branché ensuite ne l'est pas, et `/mnt/h` reste le répertoire vide laissé par un montage précédent. Les 1,4 Go étaient partis dans le disque virtuel de WSL, invisibles depuis Windows, et `wsl` lancé depuis `H:\` répondait `Failed to translate 'H:\'` — le même symptôme vu de l'autre côté.
+
+`check_real_medium` compare donc `stat -c %m` à `/` : si le répertoire n'est adossé à aucun montage propre, le script s'arrête en code `2` et affiche la commande de montage, déduite de la lettre. `detect_dest` applique le même filtre, pour qu'un marqueur déposé par erreur dans le disque de WSL ne fasse jamais élire cette destination. `--allow-local` lève le contrôle quand la destination locale est voulue.
+
+Le test porte sur le montage et non sur le caractère amovible du support : sous WSL, une clé USB est vue exactement comme un disque interne (`v9fs`), et rien ne les distingue. Ce qui compte n'est pas que la destination soit une clé, mais qu'elle ne soit pas le disque virtuel de la distribution.
+
+**Sonde de datation, pour la même raison.** `rsync` décide de recopier un fichier en comparant sa taille et sa date. Si le support refuse qu'on lui fixe une date, la destination porte celle de la copie : toujours différente de la source, donc **tout est recopié à chaque passe**. Le symptôme bruyant est une avalanche de `failed to set times … Operation not permitted` et un état `PARTIEL` ; le vrai dégât est la disparition silencieuse du caractère incrémental, précisément ce pour quoi le miroir a été choisi.
+
+Sous WSL, la cause est presque toujours un montage drvfs manuel sans `uid=`. Les répertoires sont en 777, on peut donc y créer des fichiers — mais ils appartiennent à root, et seul le propriétaire d'un fichier peut en fixer la date. Les montages automatiques de WSL, eux, portent `uid=1000,gid=1000` : d'où un `/mnt/f` qui fonctionne et un `/mnt/h` monté à la main qui échoue, sur la même machine et avec le même type de système de fichiers. `detect_times` crée un fichier témoin, relève son propriétaire, tente un `touch -d`, et rend la main en code `2` avec la commande de remontage si l'opération est refusée. L'exFAT n'a rien à voir dans l'affaire : ce sont les options de montage.
+
+`--no-times` bascule alors `rsync` en `--no-times --size-only`, seul critère qui reste déterministe quand les dates sont fausses. C'est une dégradation assumée, pas un mode normal : un fichier modifié sans changer de taille — une coquille corrigée dans une note — ne serait plus jamais sauvegardé.
 
 **Séparateur `|` dans la configuration.** Les chemins Windows contiennent régulièrement des espaces (`/mnt/f/_Obsidian/Atomic Thinking - Obsidian Expert`), ce qui interdit de séparer chemin et nom par une espace. La barre verticale n'apparaît jamais dans un nom de fichier Windows, où elle est illégale.
 
@@ -270,6 +330,8 @@ Le code 25 n'est pas traité aujourd'hui et tomberait dans la branche `ÉCHEC`, 
 - **`pad()` compte les caractères, pas les octets.** `printf %-Ns` désaligne les colonnes dès qu'un nom de projet contient un accent. Même remarque que dans `check-git-sync.sh`.
 - **La sortie de `rsync --stats` est relue** pour alimenter la colonne `DÉTAIL`, d'où le `LC_ALL=C` qui fige le format. Une évolution de `rsync` qui renommerait ces lignes ferait afficher `0 fichier(s)` sans autre symptôme : c'est le premier endroit à vérifier si le différentiel paraît toujours nul.
 - **Les codes de sortie de `rsync` sont traités finement** : `24` (fichiers disparus pendant la copie, typiquement un éditeur ouvert) est bénin, `23` signale un transfert partiel — souvent un nom de fichier illégal sur exFAT (`:`, `?`, `*`) — et tout le reste est un échec. Un projet en échec n'interrompt pas la boucle : les suivants sont sauvegardés quand même.
+- **Les deux sondes de `prepare_dest` écrivent réellement sur le support**, y compris en `--dry-run` : un lien symbolique pour `detect_deref`, un fichier daté pour `detect_times`, tous deux supprimés dans la foulée. C'est assumé — une simulation qui ne testerait pas le support ne simulerait rien d'utile.
+- **`stat -c %m` est le seul juge du montage.** `findmnt -T` donnerait la même information mais n'est pas garanti partout ; `mountpoint` échouerait sur un sous-répertoire d'un montage légitime, comme `--dest /mnt/g/sauvegardes`. Toute évolution de ce contrôle doit continuer à accepter un sous-répertoire d'un vrai montage et à refuser un `/mnt/<lettre>` fantôme.
 - **La gravité d'un projet est portée par `CUR_SEV`/`R_SEV`**, pas par le libellé de la colonne `COPIE` : deux situations peuvent afficher `VIDE` sans peser pareil sur le code de retour. Ajouter un état, c'est lui attribuer une sévérité — `2` pour « la sauvegarde de ce projet n'est pas garantie », `1` pour une remarque.
 - **Deux projets homonymes** sont désambiguïsés automatiquement par le nom de leur répertoire parent, avec un avertissement. Le miroir change alors de nom, donc l'ancien apparaîtra en orphelin à la passe suivante : mieux vaut fixer un nom explicite dans la configuration.
 - **Le fichier `~/.config/backup-projets/projets.conf` n'est pas versionné** dans le dépôt, seul l'exemple `.sample` l'est — même convention que `usb-mount`. Il contient des chemins propres à la machine.
