@@ -791,23 +791,61 @@ sync_project() {
 
     [[ "$DRY_RUN" == "no" ]] && mkdir -p "$dst"
 
-    # LC_ALL=C : la section --stats est relue plus bas, on fige son format.
-    local rc=0
-    set +e
-    if [[ "$QUIET" == "no" ]]; then
-        LC_ALL=C rsync "${opts[@]}" "${src}/" "${dst}/" 2>&1 | tee "$RSYNC_LOG"
-        rc=${PIPESTATUS[0]}
-    else
-        LC_ALL=C rsync "${opts[@]}" "${src}/" "${dst}/" > "$RSYNC_LOG" 2>&1
-        rc=$?
-    fi
-    set -e
+    local rc=0 files=0 bytes=0
+    run_rsync "$src" "$dst" "${opts[@]}"
+    rc=$RSYNC_RC
+    parse_rsync_stats
+    files=$RSYNC_FILES
+    bytes=$RSYNC_BYTES
 
-    local files bytes
-    files="$(grep -m1 '^Number of regular files transferred:' "$RSYNC_LOG" | tr -dc '0-9' || true)"
-    bytes="$(grep -m1 '^Total transferred file size:' "$RSYNC_LOG" \
-        | sed 's/.*: *//; s/ bytes.*//' | tr -dc '0-9' || true)"
-    CUR_DETAIL="${files:-0} fichier(s), $(human "${bytes:-0}")"
+    # Liens symboliques cassés : en mode --copy-links, rsync veut recopier la
+    # cible d'un lien, ne la trouve pas, et rend 23. Il va plus loin — « IO
+    # error encountered » lui fait aussi abandonner la purge du miroir, qui
+    # accumule alors les fichiers supprimés côté source.
+    #
+    # Or un lien mort ne contient aucune donnée : il n'y a rien à sauvegarder
+    # et rien à perdre. Plutôt que de faire échouer le projet, on relance la
+    # copie une fois en excluant nommément ces liens. La passe supplémentaire
+    # ne coûte que dans ce cas précis, rare, et elle rétablit la purge.
+    local broken_count=0
+    if (( rc == 23 )); then
+        local -a broken=()
+        mapfile -t broken < <(sed -n 's/^symlink has no referent: "\(.*\)"$/\1/p' "$RSYNC_LOG" || true)
+
+        if (( ${#broken[@]} > 0 )); then
+            broken_count=${#broken[@]}
+            local b rel
+            for b in "${broken[@]}"; do
+                # Motif ancré sur la racine du transfert : « /a/b/lien »
+                # désigne ce lien précis, et non tout fichier de même nom.
+                rel="${b#"${src}"/}"
+                opts+=(--exclude="/${rel}")
+            done
+            [[ "$QUIET" == "no" ]] && warn "${broken_count} lien(s) symbolique(s) cassé(s) — seconde passe sans eux."
+            run_rsync "$src" "$dst" "${opts[@]}"
+            rc=$RSYNC_RC
+
+            # La première passe a déjà transféré ce qu'elle pouvait : sans ce
+            # cumul, le récapitulatif n'annoncerait que le reliquat de la
+            # seconde, soit presque toujours zéro.
+            parse_rsync_stats
+            files=$(( files + RSYNC_FILES ))
+            bytes=$(( bytes + RSYNC_BYTES ))
+        fi
+    fi
+
+    CUR_DETAIL="${files} fichier(s), $(human "${bytes}")"
+
+    if (( broken_count > 0 )); then
+        CUR_DETAIL+=" | ${broken_count} lien(s) cassé(s) ignoré(s)"
+        CUR_SEV=1       # une remarque, pas un échec : le case peut encore aggraver
+    fi
+
+    # Signalé explicitement : sans purge, le miroir conserve des fichiers
+    # supprimés côté source et ne reflète plus l'état réel du projet.
+    if grep -q 'IO error encountered' "$RSYNC_LOG" 2>/dev/null; then
+        CUR_DETAIL+=" | purge du miroir désactivée par rsync"
+    fi
 
     case "$rc" in
         0)  ;;
@@ -834,6 +872,40 @@ sync_project() {
             ;;
     esac
 
+    return 0
+}
+
+# Relit la section --stats du dernier rsync. Le format est figé par LC_ALL=C
+# dans run_rsync ; ces libellés ne sont pas traduits.
+RSYNC_FILES=0
+RSYNC_BYTES=0
+parse_rsync_stats() {
+    local f b
+    f="$(grep -m1 '^Number of regular files transferred:' "$RSYNC_LOG" | tr -dc '0-9' || true)"
+    b="$(grep -m1 '^Total transferred file size:' "$RSYNC_LOG" \
+        | sed 's/.*: *//; s/ bytes.*//' | tr -dc '0-9' || true)"
+    RSYNC_FILES="${f:-0}"
+    RSYNC_BYTES="${b:-0}"
+}
+
+# Un seul point d'appel à rsync, pour que la seconde passe (exclusion des
+# liens morts) soit rigoureusement identique à la première.
+RSYNC_RC=0
+run_rsync() {
+    local src="$1" dst="$2"
+    shift 2
+
+    # LC_ALL=C : la section --stats et les messages d'erreur sont relus plus
+    # bas, on fige leur format.
+    set +e
+    if [[ "$QUIET" == "no" ]]; then
+        LC_ALL=C rsync "$@" "${src}/" "${dst}/" 2>&1 | tee "$RSYNC_LOG"
+        RSYNC_RC=${PIPESTATUS[0]}
+    else
+        LC_ALL=C rsync "$@" "${src}/" "${dst}/" > "$RSYNC_LOG" 2>&1
+        RSYNC_RC=$?
+    fi
+    set -e
     return 0
 }
 

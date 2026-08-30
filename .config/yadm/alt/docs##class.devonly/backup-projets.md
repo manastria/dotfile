@@ -33,6 +33,8 @@ Ce que le script fait, projet par projet :
 3. **archive** en option le résultat dans `<clé>/backup-projets/archives/<nom>_AAAAMMJJ_HHMM.tar.zst`, en ne gardant que les *N* dernières ;
 4. **rapporte** l'ensemble dans un tableau à l'écran et dans `<clé>/backup-projets/DERNIERE-SAUVEGARDE.txt`, lisible depuis le Bloc-notes du poste de la classe.
 
+Les **liens symboliques cassés** de la source ne font pas échouer la sauvegarde. Ils sont exclus et signalés dans le récapitulatif : un lien mort ne contient aucune donnée, il n'y a rien à sauvegarder et rien à perdre.
+
 Un **Ctrl+C** arrête toute la sauvegarde, pas seulement la copie en cours : le script affiche le récapitulatif partiel de ce qui est passé, nomme le projet qui était en cours de copie — son miroir est donc incomplet — et sort en code `130`. Aucun rapport n'est écrit sur le support dans ce cas : celui de la sauvegarde précédente, qui décrit une passe complète, reste plus honnête qu'un rapport tronqué qui se ferait passer pour la dernière en date.
 
 Ce que le script ne fait **pas** : il ne commite rien, ne pousse rien, ne modifie aucun dépôt. Pour l'état de synchronisation détaillé, avec `git fetch` et détection des divergences, c'est [`check-git-sync.sh`](../.local/bin/check-git-sync.sh) — les deux s'enchaînent bien.
@@ -218,6 +220,20 @@ Un répertoire réellement vide, ramené par un glob, est simplement signalé en
 template-dir  VIDE  hors git  répertoire vide, rien à sauvegarder
 ```
 
+Un projet contenant un lien symbolique mort — un lien de déploiement vers un coffre Obsidian déplacé, par exemple :
+
+```text
+[INFO]      obsidian-asset-hash-rename  ←  /home/jpdemory/projets/obsidian-asset-hash-rename
+symlink has no referent: "/home/jpdemory/projets/obsidian-asset-hash-rename/asset-hash-rename"
+IO error encountered -- skipping file deletion
+rsync error: some files/attrs were not transferred (see previous errors) (code 23)
+[ATTENTION] 1 lien(s) symbolique(s) cassé(s) — seconde passe sans eux.
+
+obsidian-asset-hash-rename  OK  publié  64 fichier(s), 116,4Kio | 1 lien(s) cassé(s) ignoré(s)
+```
+
+Le projet est sauvegardé, le code de retour reste `0`. Pour faire disparaître l'avertissement, il faut corriger la source : supprimer le lien mort, ou recréer sa cible.
+
 Une sauvegarde interrompue au clavier :
 
 ```text
@@ -305,6 +321,14 @@ Sous WSL, la cause est presque toujours un montage drvfs manuel sans `uid=`. Les
 
 `--no-times` bascule alors `rsync` en `--no-times --size-only`, seul critère qui reste déterministe quand les dates sont fausses. C'est une dégradation assumée, pas un mode normal : un fichier modifié sans changer de taille — une coquille corrigée dans une note — ne serait plus jamais sauvegardé.
 
+**Liens morts : une seconde passe plutôt qu'un échec.** En mode `--copy-links` — celui qu'impose une clé exFAT — rsync veut recopier la cible de chaque lien symbolique. Si elle n'existe pas, il émet `symlink has no referent`, rend `23`, et le projet passerait en `PARTIEL`. Il fait pire : le message `IO error encountered -- skipping file deletion` signale qu'il a **abandonné la purge du miroir** pour ce projet, qui accumule dès lors les fichiers supprimés côté source sans que rien ne le dise.
+
+Or un lien mort ne contient aucune donnée. `sync_project` relit donc les lignes `symlink has no referent` du journal, en extrait les chemins, et relance la copie une seule fois en les excluant nommément (`--exclude=/chemin/relatif`, ancré sur la racine du transfert pour ne pas écarter les homonymes ailleurs dans l'arborescence). La seconde passe rétablit du même coup la purge. Le projet ressort `OK`, avec le nombre de liens ignorés dans la colonne `DÉTAIL` et une sévérité `1` — une remarque, pas un échec.
+
+Le coût est nul dans le cas courant : la seconde passe n'a lieu que si des liens morts existent réellement. C'est ce qui a fait préférer cette approche à un pré-scan systématique par `find -xtype l`, qui aurait doublé le temps de parcours de chaque projet — douze secondes de plus pour `gclasse` sur un montage 9p, tous les soirs, pour un cas qui ne se présente presque jamais.
+
+Les statistiques des deux passes sont **cumulées** : la première a transféré ce qu'elle pouvait avant d'échouer, et n'afficher que le reliquat de la seconde annoncerait un trompeur « 0 fichier ».
+
 **Interruption : deux chemins, dont un seul fonctionne vraiment.** Un Ctrl+C dans un terminal envoie SIGINT à tout le groupe de processus : le script et `rsync` le reçoivent ensemble. On attend donc du `trap on_interrupt INT` qu'il fasse le travail — et il ne le fait pas. Bash mémorise un SIGINT reçu pendant l'attente d'une commande au premier plan, mais ne le **rejoue qu'à la condition que l'enfant soit lui-même mort de ce signal** ; sinon il le jette. Vérifié sur ce script : SIGINT envoyé au seul processus bash pendant un `rsync` de douze secondes, le `rsync` va au bout, et le trap n'est jamais exécuté — code de sortie `0`, sauvegarde réputée complète.
 
 D'où le second chemin, celui qui porte réellement l'arrêt : `rsync` rend **20** quand il a reçu SIGINT (ou `128+n` si le shell constate qu'un signal l'a tué). `sync_project` reconnaît ces codes, marque le projet `INTERROMPU` et lève `INTERRUPTED` ; la boucle principale honore le drapeau juste après avoir consigné le projet. Le trap reste utile pour les signaux qui arrivent ailleurs que pendant `rsync` — `git status` sur un gros dépôt, le `tar | zstd` d'une archive, les sondes de `prepare_dest` — et pour SIGTERM. Les deux chemins convergent vers `finish_interrupted`, qui neutralise le trap (un second Ctrl+C doit tuer sans discuter), affiche le récapitulatif partiel et sort en `130`.
@@ -354,6 +378,8 @@ Le code 25 n'est pas traité aujourd'hui et tomberait dans la branche `ÉCHEC`, 
 - **`pad()` compte les caractères, pas les octets.** `printf %-Ns` désaligne les colonnes dès qu'un nom de projet contient un accent. Même remarque que dans `check-git-sync.sh`.
 - **La sortie de `rsync --stats` est relue** pour alimenter la colonne `DÉTAIL`, d'où le `LC_ALL=C` qui fige le format. Une évolution de `rsync` qui renommerait ces lignes ferait afficher `0 fichier(s)` sans autre symptôme : c'est le premier endroit à vérifier si le différentiel paraît toujours nul.
 - **Les codes de sortie de `rsync` sont traités finement** : `24` (fichiers disparus pendant la copie, typiquement un éditeur ouvert) est bénin, `23` signale un transfert partiel — souvent un nom de fichier illégal sur exFAT (`:`, `?`, `*`) — et tout le reste est un échec. Un projet en échec n'interrompt pas la boucle : les suivants sont sauvegardés quand même.
+- **Un lien symbolique dont la cible existe n'est jamais exclu** : seul `symlink has no referent`, émis par rsync, déclenche l'exclusion. C'est rsync qui juge, pas le script — inutile de dupliquer la logique de résolution des liens relatifs.
+- **Les chemins exclus sont repris tels quels dans un motif `--exclude`.** Un nom de fichier contenant `*`, `?` ou `[` serait interprété comme un joker par rsync et pourrait écarter plus que prévu. Le cas ne s'est jamais présenté ; s'il survient, passer par `--exclude-from` avec un fichier temporaire ne suffirait pas non plus — rsync y applique les mêmes jokers — il faudrait échapper les métacaractères.
 - **Ne pas « simplifier » la gestion de l'interruption en supprimant le test des codes 20/130/143 dans `sync_project`.** C'est lui qui arrête la sauvegarde, pas le trap : sans lui, chaque projet réclamerait son propre Ctrl+C. Le trap seul donne une fausse impression de correction — il ne se déclenche que si l'enfant meurt du signal, ce qui n'est pas garanti.
 - **`CURRENT_LABEL` doit être remis à vide** dès qu'un projet est consigné dans les tableaux `R_*`, sans quoi un arrêt survenu entre deux projets annoncerait à tort un miroir incomplet.
 - **Les deux sondes de `prepare_dest` écrivent réellement sur le support**, y compris en `--dry-run` : un lien symbolique pour `detect_deref`, un fichier daté pour `detect_times`, tous deux supprimés dans la foulée. C'est assumé — une simulation qui ne testerait pas le support ne simulerait rien d'utile.
