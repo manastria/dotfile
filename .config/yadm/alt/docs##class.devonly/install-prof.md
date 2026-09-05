@@ -112,6 +112,8 @@ curl -fsSL "$URL" | bash -s
 
 Chaque exemple utilise en outre `${BRANCH:-main}` (valeur par défaut si `BRANCH` n'est pas définie) plutôt qu'un `BRANCH=main` explicite dans le premier cas : la variable n'a besoin d'exister que lorsqu'elle diffère de `main`, l'usage courant s'en passe.
 
+Ces trois URL sont une **copie figée** de ce qu'affiche `install-prof.sh --help` : le script, lui, les construit dynamiquement depuis ses constantes (`SCRIPT_RAW_URL_BASE`, `SCRIPT_RAW_PATH`, `DEFAULT_DOTFILES_BRANCH` — voir *Détail des choix techniques*), donc son `--help` reste juste même si le dépôt est renommé ou le script déplacé. Cette page Markdown, elle, ne peut pas se mettre à jour toute seule : en cas de doute sur sa fraîcheur, comparer avec `install-prof.sh --help`, qui fait autorité.
+
 Sortie d'une première installation, hors établissement (pas de proxy) :
 
 ```text
@@ -261,6 +263,18 @@ relaunch_from_branch_if_needed() {
 
 Le mécanisme a été validé par test direct de la fonction (sans passer par un vrai réseau, `curl` étant simulé) : exécution locale → aucune relance ; `curl \| bash` sur la branche par défaut → aucune relance ; `curl \| bash` avec `--branch dev1` → relance avec les arguments transmis et la variable de garde exportée ; relance déjà faite → pas de seconde tentative ; `curl` en échec → message d'erreur explicite et sortie en 1 (pas un `bash -c ""` silencieux).
 
+**`--help` construit ses exemples d'URL depuis les constantes, pas depuis du texte figé.** Le bloc `# EXAMPLES` de l'en-tête ne contient pas l'URL en clair mais un jeton `__EXAMPLE_URL__`, répété trois fois. `usage()` le remplace au moment de l'affichage :
+
+```bash
+usage() {
+    local example_url="${SCRIPT_RAW_URL_BASE}/\${BRANCH:-${DEFAULT_DOTFILES_BRANCH}}/${SCRIPT_RAW_PATH}"
+    awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$0" \
+        | sed "s|__EXAMPLE_URL__|${example_url}|g"
+}
+```
+
+Avant cette modification, la même URL était retapée trois fois dans le commentaire d'en-tête (une par exemple) *en plus* de sa forme fonctionnelle dans `SCRIPT_RAW_URL_BASE`/`SCRIPT_RAW_PATH` : quatre endroits à retenir pour un seul renommage de dépôt ou de script. Le `\$` (échappé) dans `example_url` produit un `$` littéral dans la chaîne construite : le texte affiché contient donc réellement `${BRANCH:-main}`, copiable tel quel, alors que `main` provient bien de `DEFAULT_DOTFILES_BRANCH` et non d'un second texte figé — vérifié en changeant cette constante et en confirmant que les trois occurrences de `--help` suivent sans qu'aucun texte d'exemple n'ait été touché. Seul reste manuel : la page `docs/install-prof.md`, qui ne peut pas s'auto-générer depuis le script (voir *Exemples d'utilisation* plus haut).
+
 **`ensure_prof_ssh_key()` résout le home et le groupe de prof dynamiquement**, via `getent passwd` et `id -gn`, plutôt que de supposer `/home/prof` et un groupe `prof`. Un `useradd` avec un home ou un schéma de groupe personnalisé (`adduser.conf`, LDAP, etc.) reste ainsi pris en compte.
 
 **Idempotence par `grep -qxF`, pas par écrasement du fichier.** `authorized_keys` peut contenir d'autres clés ajoutées manuellement (portable personnel d'un enseignant, par exemple) : le script ajoute la sienne si elle est absente, sans jamais rien retirer. `-x` compare la ligne entière (évite qu'une clé soit vue comme « déjà présente » parce qu'elle est sous-chaîne d'une autre), `-F` traite le motif comme du texte brut et non une expression régulière — une clé base64 contient des caractères (`+`, `/`) qui ont un sens spécial en regex.
@@ -278,6 +292,7 @@ Le mécanisme a été validé par test direct de la fonction (sans passer par un
 | `apt-get` | — | Installation de `yadm` (Debian ≥ 10, Ubuntu ≥ 20.04 fournissent le paquet) |
 | `yadm` | 2.5 | `clone`, `fetch`, `checkout`, `submodule` (aucune option propre à la 3.x) |
 | `coreutils` | — | `timeout`, `id`, `env` |
+| `sed` | — | Substitution de `__EXAMPLE_URL__` dans `usage()` |
 | `libc-bin` (`getent`) | — | Résolution du home de prof dans `ensure_prof_ssh_key()` |
 
 ---
@@ -312,6 +327,6 @@ $(declare -f info success warn error die setup_dotfiles ma_nouvelle_fonction)
 - **La clé SSH par défaut est, elle aussi, embarquée dans le script** et donc publique au même titre que le mot de passe. Révoquer l'accès qu'elle donne suppose de retirer la ligne correspondante de `~prof/.ssh/authorized_keys` sur chaque VM déjà provisionnée : changer `PROF_SSH_PUBKEY` dans le script n'affecte que les futures exécutions, il n'existe pas de mécanisme de rotation.
 - **Le `checkout -f` est destructeur** pour le home de prof. C'est le comportement voulu, mais il interdit d'utiliser prof comme compte de travail : les fichiers suivis par le dépôt y sont écrasés à chaque exécution.
 - **Le payload sérialisé est le point fragile.** Une fonction de phase 2 oubliée dans la liste `declare -f` ne se voit qu'à l'exécution, sous forme de `command not found` dans la session prof. Le payload se teste sans droits particuliers en remplaçant `sudo -u prof -H env … bash -s` par `cat`.
-- **`SCRIPT_RAW_URL_BASE`/`SCRIPT_RAW_PATH` dupliquent le chemin du script**, utilisé par `relaunch_from_branch_if_needed()` pour se retélécharger. Un renommage du dépôt, du script, ou son déplacement dans `.local/bin/` doit être répercuté ici — sans quoi l'auto-relance échoue avec un message `curl` explicite (404), sans effet silencieux.
+- **`SCRIPT_RAW_URL_BASE`/`SCRIPT_RAW_PATH` sont la seule source de vérité pour le chemin du script** — utilisées à la fois par `relaunch_from_branch_if_needed()` et par les exemples de `--help` (via `usage()`). Un renommage du dépôt, du script, ou son déplacement dans `.local/bin/` ne se corrige donc qu'à un seul endroit dans le code ; en cas d'oubli, l'auto-relance échoue avec un message `curl` explicite (404), jamais silencieusement. Seule cette page Markdown reste à mettre à jour à la main (voir *Exemples d'utilisation*).
 - **L'auto-relance ajoute un aller-retour réseau à chaque usage de `--branch dev1`**, y compris quand l'URL de départ pointait déjà sur `dev1` — la vérification `[ -f "$0" ]` ne sait pas d'où vient le contenu déjà chargé, seulement s'il vient d'un fichier local. Construire l'URL de `curl` avec la même variable que `--branch` (voir les exemples) évite ce coût dans le cas où l'on connaît déjà la branche cible.
 - **`raw.githubusercontent.com` est mis en cache 5 minutes** (`max-age=300`, CDN Fastly) : après un push, la commande `curl … | bash` peut encore servir la version précédente. Un paramètre `?v=…` ne contourne rien, la clé de cache ignore la *query string*.

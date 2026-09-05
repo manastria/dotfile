@@ -59,18 +59,18 @@
 #
 # EXAMPLES
 #     # Usage courant, depuis la session de l'étudiant
-#     URL=https://raw.githubusercontent.com/manastria/dotfile/refs/heads/${BRANCH:-main}/.local/bin/install-prof.sh
+#     URL=__EXAMPLE_URL__
 #     curl -fsSL "$URL" | bash -s
 #
 #     # Tester une branche de développement : un seul BRANCH à changer, script
 #     # ET dotfiles suivent (le script se relance seul si l'URL ne suivait pas)
 #     BRANCH=dev1
-#     URL=https://raw.githubusercontent.com/manastria/dotfile/refs/heads/${BRANCH:-main}/.local/bin/install-prof.sh
+#     URL=__EXAMPLE_URL__
 #     curl -fsSL "$URL" | bash -s -- --branch "$BRANCH"
 #
 #     # Forcer un proxy que la détection automatique ne trouve pas
 #     export http_proxy=http://172.16.0.1:3128
-#     URL=https://raw.githubusercontent.com/manastria/dotfile/refs/heads/${BRANCH:-main}/.local/bin/install-prof.sh
+#     URL=__EXAMPLE_URL__
 #     curl -fsSL "$URL" | bash -s
 #
 #     NOTE : BRANCH doit toujours être définie AVANT la ligne URL=... qui s'en
@@ -118,8 +118,17 @@ error()   { echo -e "${RED}[ERREUR]${RESET}    $*" >&2; }
 die()     { error "$*"; exit 1; }
 
 usage() {
+    # __EXAMPLE_URL__ est substitué depuis les constantes ci-dessus, pas
+    # retapé en dur : la commande affichée par --help ne peut donc jamais
+    # diverger du chemin réellement utilisé par relaunch_from_branch_if_needed()
+    # (une seule source de vérité pour les trois occurrences des EXAMPLES).
+    # « \${BRANCH:-... } » reste du texte littéral à copier-coller : seul le
+    # « ... » (DEFAULT_DOTFILES_BRANCH) provient d'une variable.
+    local example_url="${SCRIPT_RAW_URL_BASE}/\${BRANCH:-${DEFAULT_DOTFILES_BRANCH}}/${SCRIPT_RAW_PATH}"
+
     # Réimprime le bloc d'en-tête manpage en retirant le préfixe « # ».
-    awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$0"
+    awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$0" \
+        | sed "s|__EXAMPLE_URL__|${example_url}|g"
 }
 usage_error() { error "$*"; echo "Essayez : $(basename "$0") --help" >&2; exit 2; }
 
