@@ -270,19 +270,27 @@ ensure_prof_account() {
         || die "Échec de l'ajout de ${PROF_USER} aux groupes adm/sudo."
 }
 
+# Résout le home réel du compte prof et le mémorise dans PROF_HOME.
+#
+# Cette valeur ne vient JAMAIS de $HOME : sous sudo, $HOME reste très souvent
+# celui de l'appelant (voir run_dotfiles_as_prof), ce qui ferait travailler
+# yadm dans le home de l'étudiant. getent est la seule source fiable.
+resolve_prof_home() {
+    # « || die » directement sur l'affectation : sous set -e, l'échec de
+    # « getent » (utilisateur introuvable) interromprait sinon le script
+    # avant que le test « [ -n "$PROF_HOME" ] » n'ait la moindre chance de
+    # s'exécuter, avec un exit code brut et aucun message.
+    PROF_HOME="$(getent passwd "$PROF_USER" | cut -d: -f6)" \
+        || die "Impossible de déterminer le home de ${PROF_USER} (getent)."
+    [ -n "$PROF_HOME" ] || die "Home introuvable pour ${PROF_USER} (champ vide chez getent)."
+}
+
 ensure_prof_ssh_key() {
     [ -n "$PROF_SSH_PUBKEY" ] || return 0
 
-    local home_dir prof_group ssh_dir authorized_keys
-    # « || die » directement sur l'affectation : sous set -e, l'échec de
-    # « getent » (utilisateur introuvable) interromprait sinon le script
-    # avant que le test « [ -n "$home_dir" ] » n'ait la moindre chance de
-    # s'exécuter, avec un exit code brut et aucun message.
-    home_dir="$(getent passwd "$PROF_USER" | cut -d: -f6)" \
-        || die "Impossible de déterminer le home de ${PROF_USER} (getent)."
-    [ -n "$home_dir" ] || die "Home introuvable pour ${PROF_USER} (champ vide chez getent)."
+    local prof_group ssh_dir authorized_keys
     prof_group="$(id -gn "$PROF_USER")" || die "Impossible de déterminer le groupe de ${PROF_USER}."
-    ssh_dir="${home_dir}/.ssh"
+    ssh_dir="${PROF_HOME}/.ssh"
     authorized_keys="${ssh_dir}/authorized_keys"
 
     sudo install -d -m 700 -o "$PROF_USER" -g "$prof_group" "$ssh_dir" \
@@ -326,11 +334,13 @@ install_yadm() {
 # Phase 2 — dotfiles (exécutée sous le compte prof, sans privilèges)
 # -----------------------------------------------------------------------------
 setup_dotfiles() {
-    local repo_dir="$HOME/.local/share/yadm/repo.git"
+    local repo_dir="${PROF_HOME}/.local/share/yadm/repo.git"
 
-    # Le répertoire courant hérité peut être le home de l'étudiant, illisible
-    # pour prof : on se replace dans le home du compte avant tout appel à yadm.
-    cd "$HOME" || die "Impossible d'accéder à ${HOME}"
+    # PROF_HOME, et non $HOME : sous sudo, $HOME peut rester celui de
+    # l'appelant (voir run_dotfiles_as_prof). Le répertoire courant hérité est
+    # de toute façon celui de l'étudiant, illisible pour prof : on se replace
+    # dans le home du compte avant tout appel à yadm.
+    cd "$PROF_HOME" || die "Impossible d'accéder à ${PROF_HOME}"
 
     command -v yadm >/dev/null 2>&1 \
         || die "yadm est introuvable et le compte $(id -un) ne peut pas l'installer."
@@ -364,7 +374,7 @@ setup_dotfiles() {
     yadm submodule update --init --recursive \
         || warn "Submodules non synchronisés : la configuration zsh sera incomplète."
 
-    success "Dotfiles déployés dans ${HOME}."
+    success "Dotfiles déployés dans ${PROF_HOME}."
 }
 
 # Exécute setup_dotfiles sous l'identité de prof.
@@ -375,15 +385,26 @@ setup_dotfiles() {
 # exécutent exactement la même version du code — ce qui n'était pas le cas
 # avec un « curl | bash » relancé depuis la session prof.
 #
-# sudo -H (et non -i) : on veut HOME=/home/prof sans déclencher de shell de
+# sudo -H (et non -i) : on veut le home de prof sans déclencher de shell de
 # login, dont les fichiers d'initialisation viennent justement d'être
 # remplacés par les dotfiles.
+#
+# Mais « -H » ne suffit PAS : selon la configuration de /etc/sudoers de la
+# machine (HOME dans env_keep, notamment), sudo peut conserver le HOME de
+# l'appelant malgré cette option. Symptôme observé sur une VM Ubuntu :
+#
+#     bash: ligne 34 : cd: /home/sysadmin: Permission non accordée
+#
+# HOME est donc imposé explicitement via « env », après sudo : c'est la seule
+# forme qui ne dépende d'aucune politique sudoers. L'enjeu dépasse le « cd » :
+# yadm déduit son arbre de travail de $HOME, un HOME erroné le ferait opérer
+# dans le home de l'étudiant.
 run_dotfiles_as_prof() {
     info "Bascule vers le compte ${PROF_USER}..."
-    sudo -u "$PROF_USER" -H env "${PROXY_ENV[@]}" bash -s <<PAYLOAD
+    sudo -u "$PROF_USER" -H env HOME="$PROF_HOME" "${PROXY_ENV[@]}" bash -s <<PAYLOAD
 set -euo pipefail
 $(declare -p RED GREEN YELLOW CYAN BOLD RESET)
-$(declare -p DOTFILES_REPO DOTFILES_BRANCH)
+$(declare -p DOTFILES_REPO DOTFILES_BRANCH PROF_HOME)
 $(declare -f info success warn error die setup_dotfiles)
 setup_dotfiles
 PAYLOAD
@@ -403,10 +424,15 @@ main() {
     # dans un shell non interactif, ou héritée du compte appelant).
     if [ "$(id -un)" = "$PROF_USER" ]; then
         info "Session ${PROF_USER} détectée : déploiement des dotfiles uniquement."
+        # Déjà dans la bonne session : $HOME est fiable ici, aucun sudo entre
+        # les deux pour le fausser.
+        PROF_HOME="$HOME"
         setup_dotfiles
     else
         request_sudo
         ensure_prof_account
+        # Après useradd (le home doit exister), avant tout usage de PROF_HOME.
+        resolve_prof_home
         ensure_prof_ssh_key
         install_yadm
         run_dotfiles_as_prof

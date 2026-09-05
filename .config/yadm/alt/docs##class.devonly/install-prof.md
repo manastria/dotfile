@@ -175,12 +175,13 @@ main()
 ├── detect_proxy()          # normalise HTTP_PROXY → http_proxy, sonde le port 3128,
 │   └── proxy_is_reachable()#   remplit le tableau PROXY_ENV
 │
-├── [ id -un = prof ] ──────► setup_dotfiles()      # phase 2 seule
+├── [ id -un = prof ] ──────► PROF_HOME="$HOME" puis setup_dotfiles()   # phase 2 seule
 │
 └── sinon
     ├── request_sudo()          # sudo -v + keep-alive en tâche de fond
     ├── ensure_prof_account()   # useradd / chpasswd / usermod -aG adm,sudo
-    ├── ensure_prof_ssh_key()   # ~prof/.ssh/authorized_keys (idempotent)
+    ├── resolve_prof_home()     # getent passwd → PROF_HOME (jamais $HOME)
+    ├── ensure_prof_ssh_key()   # $PROF_HOME/.ssh/authorized_keys (idempotent)
     ├── install_yadm()          # apt-get update && install, proxy réinjecté
     └── run_dotfiles_as_prof()  # sérialise et exécute setup_dotfiles sous prof
         └── setup_dotfiles()    # clone/fetch + checkout forcé + submodules
@@ -227,7 +228,27 @@ PAYLOAD
 
 Trois bénéfices : un seul aller-retour réseau (précieux derrière un proxy scolaire), les deux phases exécutent la **même** version du code, et les options de la ligne de commande (`--branch`) sont transmises sans avoir à être re-parsées. Le heredoc n'est délibérément **pas** quoté, pour que les `$(declare …)` soient évalués par le shell appelant ; le corps du payload ne contient donc aucun `$` littéral.
 
-**`sudo -H` plutôt que `sudo -i` ou `su -`.** `-H` fixe `HOME=/home/prof` sans lancer de shell de login, donc sans sourcer les `.profile` / `.bashrc` que le script vient précisément de remplacer. `setup_dotfiles()` commence par `cd "$HOME"` : le répertoire courant hérité est celui de l'étudiant, souvent illisible pour prof.
+**`sudo -H` plutôt que `sudo -i` ou `su -`.** `-H` demande le home de prof sans lancer de shell de login, donc sans sourcer les `.profile` / `.bashrc` que le script vient précisément de remplacer.
+
+**Mais `-H` ne suffit pas : `HOME` est imposé explicitement via `env`.** Selon la configuration `/etc/sudoers` de la machine (`HOME` présent dans `env_keep`, notamment), sudo peut conserver le `HOME` de l'appelant *malgré* `-H`. Symptôme observé sur une VM Ubuntu, où `setup_dotfiles()` s'exécutait avec le home de l'étudiant :
+
+```text
+[INFO]      Bascule vers le compte prof...
+bash: ligne 34 : cd: /home/sysadmin: Permission non accordée
+[ERREUR]    Impossible d'accéder à /home/sysadmin
+```
+
+L'enjeu dépasse largement ce `cd` : **yadm déduit son arbre de travail de `$HOME`**. Un `HOME` erroné ne fait pas qu'échouer sur un `cd` — il fait opérer yadm dans le home de l'étudiant. Ici, l'erreur de permission a joué un rôle protecteur (`/home/sysadmin` en mode 750 sur Ubuntu ≥ 21.04) ; sur une machine où les homes sont en 755 (défaut Debian), le `yadm checkout -f` aurait **écrasé les dotfiles de l'étudiant** sans le moindre message. Vérifié en rejouant l'ancienne version contre un `sudo` simulé ignorant `-H` : `yadm clone` et `yadm checkout -f` s'exécutaient bien dans le home de l'appelant.
+
+La correction retire toute dépendance à la politique sudoers :
+
+```bash
+sudo -u "$PROF_USER" -H env HOME="$PROF_HOME" "${PROXY_ENV[@]}" bash -s
+```
+
+`env` applique l'affectation *après* que sudo a construit son environnement : c'est la seule forme qui ne dépende d'aucun réglage de la machine. En complément, `setup_dotfiles()` n'utilise plus `$HOME` du tout mais `PROF_HOME`, transmis dans le payload — le code côté prof ne fait donc plus confiance à une variable d'environnement héritée pour savoir où il travaille.
+
+**`PROF_HOME` vient de `getent passwd`, jamais de `$HOME`.** `resolve_prof_home()` est appelée après `useradd` (le home doit exister) et avant tout usage. Dans le cas où le script est lancé directement depuis une session prof, `main()` pose `PROF_HOME="$HOME"` : il n'y a alors aucun sudo entre les deux pour fausser la valeur.
 
 **Sonde TCP plutôt que `ping`.** Un `ping` ne prouve que la présence de la machine : le port 3128 peut être fermé alors que l'ICMP répond, ou l'ICMP filtré alors que le proxy fonctionne. `timeout 1 bash -c "exec 3<>/dev/tcp/HOST/PORT"` teste le service lui-même, sans dépendre de `nc` (absent de certaines images).
 
@@ -275,7 +296,7 @@ usage() {
 
 Avant cette modification, la même URL était retapée trois fois dans le commentaire d'en-tête (une par exemple) *en plus* de sa forme fonctionnelle dans `SCRIPT_RAW_URL_BASE`/`SCRIPT_RAW_PATH` : quatre endroits à retenir pour un seul renommage de dépôt ou de script. Le `\$` (échappé) dans `example_url` produit un `$` littéral dans la chaîne construite : le texte affiché contient donc réellement `${BRANCH:-main}`, copiable tel quel, alors que `main` provient bien de `DEFAULT_DOTFILES_BRANCH` et non d'un second texte figé — vérifié en changeant cette constante et en confirmant que les trois occurrences de `--help` suivent sans qu'aucun texte d'exemple n'ait été touché. Seul reste manuel : la page `docs/install-prof.md`, qui ne peut pas s'auto-générer depuis le script (voir *Exemples d'utilisation* plus haut).
 
-**`ensure_prof_ssh_key()` résout le home et le groupe de prof dynamiquement**, via `getent passwd` et `id -gn`, plutôt que de supposer `/home/prof` et un groupe `prof`. Un `useradd` avec un home ou un schéma de groupe personnalisé (`adduser.conf`, LDAP, etc.) reste ainsi pris en compte.
+**Le home et le groupe de prof sont résolus dynamiquement**, via `getent passwd` (`resolve_prof_home()`) et `id -gn`, plutôt que de supposer `/home/prof` et un groupe `prof`. Un `useradd` avec un home ou un schéma de groupe personnalisé (`adduser.conf`, LDAP, etc.) reste ainsi pris en compte.
 
 **Idempotence par `grep -qxF`, pas par écrasement du fichier.** `authorized_keys` peut contenir d'autres clés ajoutées manuellement (portable personnel d'un enseignant, par exemple) : le script ajoute la sienne si elle est absente, sans jamais rien retirer. `-x` compare la ligne entière (évite qu'une clé soit vue comme « déjà présente » parce qu'elle est sous-chaîne d'une autre), `-F` traite le motif comme du texte brut et non une expression régulière — une clé base64 contient des caractères (`+`, `/`) qui ont un sens spécial en regex.
 
@@ -326,6 +347,7 @@ $(declare -f info success warn error die setup_dotfiles ma_nouvelle_fonction)
 - **Le mot de passe par défaut est public**, et le compte a délibérément accès à `sudo` : ce script ne doit être diffusé que pour des VM de travaux pratiques isolées, jamais pour une machine exposée à un réseau non maîtrisé.
 - **La clé SSH par défaut est, elle aussi, embarquée dans le script** et donc publique au même titre que le mot de passe. Révoquer l'accès qu'elle donne suppose de retirer la ligne correspondante de `~prof/.ssh/authorized_keys` sur chaque VM déjà provisionnée : changer `PROF_SSH_PUBKEY` dans le script n'affecte que les futures exécutions, il n'existe pas de mécanisme de rotation.
 - **Le `checkout -f` est destructeur** pour le home de prof. C'est le comportement voulu, mais il interdit d'utiliser prof comme compte de travail : les fichiers suivis par le dépôt y sont écrasés à chaque exécution.
+- **Ne jamais faire confiance à `$HOME` dans le code exécuté sous prof.** `sudo` ne garantit pas sa valeur (voir *Détail des choix techniques*), et yadm en déduit son arbre de travail : une régression sur ce point ne se traduit pas par un plantage franc mais, dans le pire des cas, par l'écrasement des dotfiles du compte étudiant. Toute nouvelle fonction de phase 2 doit utiliser `PROF_HOME`, et être ajoutée à la liste `declare -p` du payload si elle a besoin d'autres variables.
 - **Le payload sérialisé est le point fragile.** Une fonction de phase 2 oubliée dans la liste `declare -f` ne se voit qu'à l'exécution, sous forme de `command not found` dans la session prof. Le payload se teste sans droits particuliers en remplaçant `sudo -u prof -H env … bash -s` par `cat`.
 - **`SCRIPT_RAW_URL_BASE`/`SCRIPT_RAW_PATH` sont la seule source de vérité pour le chemin du script** — utilisées à la fois par `relaunch_from_branch_if_needed()` et par les exemples de `--help` (via `usage()`). Un renommage du dépôt, du script, ou son déplacement dans `.local/bin/` ne se corrige donc qu'à un seul endroit dans le code ; en cas d'oubli, l'auto-relance échoue avec un message `curl` explicite (404), jamais silencieusement. Seule cette page Markdown reste à mettre à jour à la main (voir *Exemples d'utilisation*).
 - **L'auto-relance ajoute un aller-retour réseau à chaque usage de `--branch dev1`**, y compris quand l'URL de départ pointait déjà sur `dev1` — la vérification `[ -f "$0" ]` ne sait pas d'où vient le contenu déjà chargé, seulement s'il vient d'un fichier local. Construire l'URL de `curl` avec la même variable que `--branch` (voir les exemples) évite ce coût dans le cas où l'on connaît déjà la branche cible.
