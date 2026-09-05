@@ -95,6 +95,7 @@ packages_communs=(
     tmux
     tree
     unzip
+    util-linux-extra
     vim
     wget
     zip
