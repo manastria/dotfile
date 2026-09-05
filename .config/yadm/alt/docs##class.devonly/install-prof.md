@@ -6,7 +6,7 @@
 
 > Paragraphe de rappel, à coller tel quel dans le mémo.
 
-`install-prof.sh` crée sur la VM d'un étudiant un compte local **`prof`**, membre des groupes `adm` et `sudo`, avec un mot de passe connu, puis y déploie les dotfiles du dépôt avec yadm. Il s'installe en une commande depuis la session de l'étudiant — `curl -fsSL <url> | bash` — et détecte tout seul le proxy de l'établissement en testant le port 3128. Il ne configure **pas** le compte courant : contrairement aux autres installateurs du dépôt, il travaille dans un compte séparé, dédié au dépannage. Le home du compte prof est réaligné de force sur le dépôt à chaque exécution (`yadm checkout -f`) : c'est un environnement jetable et reproductible, pas un compte de travail où conserver des modifications. La seule option utile au quotidien est `--branch`, pour déployer une branche de test plutôt que `main`.
+`install-prof.sh` crée sur la VM d'un étudiant un compte local **`prof`**, membre des groupes `adm` et `sudo`, avec un mot de passe connu et une clé publique SSH déjà autorisée, puis y déploie les dotfiles du dépôt avec yadm. Il s'installe en une commande depuis la session de l'étudiant — `curl -fsSL <url> | bash` — et détecte tout seul le proxy de l'établissement en testant le port 3128. Il ne configure **pas** le compte courant : contrairement aux autres installateurs du dépôt, il travaille dans un compte séparé, dédié au dépannage. Le home du compte prof est réaligné de force sur le dépôt à chaque exécution (`yadm checkout -f`) : c'est un environnement jetable et reproductible, pas un compte de travail où conserver des modifications. La seule option utile au quotidien est `--branch`, pour déployer une branche de test plutôt que `main` : script et dotfiles étant dans le même dépôt, le script se retélécharge et se relance tout seul si nécessaire pour que les deux proviennent bien de la branche demandée.
 
 ---
 
@@ -20,10 +20,12 @@ Il se déroule en deux phases, dans deux contextes de privilèges différents :
 
 | Phase | Exécutée sous | Opérations | Privilèges |
 | ----- | ------------- | ---------- | ---------- |
-| 1 | le compte de l'étudiant | création du compte prof, mot de passe, appartenance aux groupes `adm`/`sudo`, installation du paquet `yadm` | `sudo` de l'étudiant |
+| 1 | le compte de l'étudiant | création du compte prof, mot de passe, appartenance aux groupes `adm`/`sudo`, clé SSH autorisée, installation du paquet `yadm` | `sudo` de l'étudiant |
 | 2 | le compte prof | `yadm clone` / `fetch`, `checkout -f -B`, submodules | `sudo` de prof (non utilisé par le script) |
 
 Cette séparation est structurante : **toutes** les opérations qui exigent le `sudo` de l'étudiant sont regroupées en phase 1, avant que le compte prof n'existe et donc avant qu'il ne puisse rien installer lui-même.
+
+**`--branch` et la version du script.** Script et dotfiles vivent dans le même dépôt. Sans précaution, `--branch dev1` ne change que la branche des dotfiles déployés : la *logique* exécutée reste celle de l'URL passée à `curl`, indépendamment de `--branch`. C'est le piège classique du `curl | bash` — rien ne relie l'un à l'autre par défaut. Le script s'en prémunit : s'il détecte qu'il tourne via `curl | bash` (et non depuis un fichier local) et que `--branch` diffère de `main`, il se retélécharge depuis la bonne branche et se relance une fois avant de continuer, avec les mêmes arguments. Code et dotfiles proviennent donc toujours de la même branche, sans discipline particulière à respecter au moment de construire la commande.
 
 À distinguer des autres installateurs du dépôt :
 
@@ -40,6 +42,8 @@ Le mot de passe par défaut (`netlab123`) est **public** — il figure dans les 
 
 La variable `PROF_PASSWORD` permet de choisir un autre mot de passe si le contexte de déploiement l'exige.
 
+Le script autorise en outre une clé publique SSH fixe (`PROF_SSH_PUBKEY`, embarquée par défaut) dans `~prof/.ssh/authorized_keys`, pour permettre une connexion à distance sans ressaisir le mot de passe. Poser `PROF_SSH_PUBKEY=""` désactive cette étape sans toucher à un fichier existant.
+
 ---
 
 ### Prérequis
@@ -49,7 +53,7 @@ La variable `PROF_PASSWORD` permet de choisir un autre mot de passe si le contex
 | `bash` ≥ 4.4 | Tableaux vides sous `set -u` (`"${PROXY_ENV[@]}"`) | `bash --version` |
 | `sudo` | Phase 1 : création du compte, APT | `sudo -v` |
 | `apt-get` | Installation du paquet `yadm` | `apt-get --version` |
-| `curl` | Récupération du script (usage `curl \| bash`) | `curl --version` |
+| `curl` | Récupération du script (usage `curl \| bash`), et re-récupération si `--branch` diffère de `main` | `curl --version` |
 | `timeout` | Sonde TCP du proxy, bornée à 1 s | `timeout --version` |
 | `git` | Tiré par `yadm` | `git --version` |
 
@@ -65,12 +69,13 @@ install-prof.sh [--branch BRANCHE] [-h]
 
 | Option | Argument | Défaut | Description |
 | ------ | -------- | ------ | ----------- |
-| `--branch` | nom de branche | `main` | Branche des dotfiles à déployer |
+| `--branch` | nom de branche | `main` | Branche à déployer — dotfiles **et** script lui-même (relance automatique si besoin, en usage `curl \| bash`) |
 | `-h`, `--help` | — | — | Affiche l'en-tête manpage du script |
 
 | Variable | Défaut | Rôle |
 | -------- | ------ | ---- |
 | `PROF_PASSWORD` | `netlab123` | Mot de passe du compte prof |
+| `PROF_SSH_PUBKEY` | clé ed25519 embarquée | Clé publique autorisée en SSH ; vide pour ne pas y toucher |
 | `http_proxy` / `https_proxy` | détection auto | Proxy à utiliser ; s'ils sont définis, la détection est court-circuitée |
 
 En usage `curl … | bash`, les options se passent après `-s --` :
@@ -85,18 +90,27 @@ curl -fsSL <url-du-script> | bash -s -- --branch dev1
 
 ```bash
 # Usage courant, depuis la session de l'étudiant
-curl -fsSL https://raw.githubusercontent.com/manastria/dotfile/refs/heads/main/.local/bin/install-prof.sh | bash
+URL=https://raw.githubusercontent.com/manastria/dotfile/refs/heads/${BRANCH:-main}/.local/bin/install-prof.sh
+curl -fsSL "$URL" | bash -s
 
-# Tester une branche de développement
-curl -fsSL <url-du-script> | bash -s -- --branch dev1
+# Tester une branche de développement : un seul BRANCH à changer, script
+# ET dotfiles suivent (le script se relance seul si l'URL ne suivait pas)
+BRANCH=dev1
+URL=https://raw.githubusercontent.com/manastria/dotfile/refs/heads/${BRANCH:-main}/.local/bin/install-prof.sh
+curl -fsSL "$URL" | bash -s -- --branch "$BRANCH"
 
 # Mot de passe différent de celui des supports de cours
 PROF_PASSWORD='...' bash install-prof.sh
 
 # Forcer un proxy que la sonde TCP ne trouve pas
 export http_proxy=http://172.16.0.1:3128
-curl -fsSL <url-du-script> | bash
+URL=https://raw.githubusercontent.com/manastria/dotfile/refs/heads/${BRANCH:-main}/.local/bin/install-prof.sh
+curl -fsSL "$URL" | bash -s
 ```
+
+**`BRANCH` doit toujours être définie avant la ligne `URL=...` qui s'en sert.** Le shell substitue `${BRANCH:-main}` au moment de *cette* affectation, pas plus tard quand `$URL` est utilisée — ce n'est pas une référence différée. Concrètement : redéfinir `BRANCH` après avoir construit `URL` ne change plus rien à l'URL déjà figée, et il n'est donc pas possible de factoriser une seule définition de `URL` pour plusieurs valeurs de `BRANCH` — chaque exemple ci-dessus redéfinit sa propre `URL`, dans cet ordre.
+
+Chaque exemple utilise en outre `${BRANCH:-main}` (valeur par défaut si `BRANCH` n'est pas définie) plutôt qu'un `BRANCH=main` explicite dans le premier cas : la variable n'a besoin d'exister que lorsqu'elle diffère de `main`, l'usage courant s'en passe.
 
 Sortie d'une première installation, hors établissement (pas de proxy) :
 
@@ -124,6 +138,15 @@ Le script **ne bascule pas** dans une session prof : il rend la main sur la sess
 
 À la relance, la sortie diffère sur trois lignes : compte déjà présent, mot de passe réinitialisé, et `yadm fetch` au lieu de `yadm clone`.
 
+Avec une URL sur `main` et `--branch dev1`, une ligne supplémentaire apparaît tout au début, avant même la bannière : le script se retélécharge et se relance depuis `dev1`.
+
+```text
+[INFO]      Version de la branche dev1 demandée : relance depuis https://raw.githubusercontent.com/manastria/dotfile/refs/heads/dev1/.local/bin/install-prof.sh...
+
+=== Environnement prof — installation ===
+…
+```
+
 ---
 
 ### Codes de retour
@@ -131,7 +154,7 @@ Le script **ne bascule pas** dans une session prof : il rend la main sur la sess
 | Code | Signification |
 | ---- | ------------- |
 | 0 | Compte prof et dotfiles en place |
-| 1 | Erreur d'exécution : sudo refusé, échec de `useradd`, d'APT ou de yadm |
+| 1 | Erreur d'exécution : sudo refusé, échec de `useradd`, d'APT, de yadm, ou de la relance depuis une autre branche (`curl` en échec, branche inexistante) |
 | 2 | Erreur d'usage : option inconnue, ou `--branch` sans argument |
 
 L'échec de la synchronisation des submodules est le seul cas **non bloquant** : il produit un avertissement et le script se termine en 0, le compte restant utilisable avec un zsh dégradé.
@@ -144,7 +167,9 @@ L'échec de la synchronisation des submodules est le seul cas **non bloquant** :
 
 ```text
 main()
-├── parse_args()            # --branch, -h
+├── parse_args()                     # --branch, -h
+├── relaunch_from_branch_if_needed() # curl | bash + branche ≠ main → re-fetch + exec, sinon no-op
+│
 ├── detect_proxy()          # normalise HTTP_PROXY → http_proxy, sonde le port 3128,
 │   └── proxy_is_reachable()#   remplit le tableau PROXY_ENV
 │
@@ -153,10 +178,13 @@ main()
 └── sinon
     ├── request_sudo()          # sudo -v + keep-alive en tâche de fond
     ├── ensure_prof_account()   # useradd / chpasswd / usermod -aG adm,sudo
+    ├── ensure_prof_ssh_key()   # ~prof/.ssh/authorized_keys (idempotent)
     ├── install_yadm()          # apt-get update && install, proxy réinjecté
     └── run_dotfiles_as_prof()  # sérialise et exécute setup_dotfiles sous prof
         └── setup_dotfiles()    # clone/fetch + checkout forcé + submodules
 ```
+
+`relaunch_from_branch_if_needed()` s'exécute avant tout le reste, y compris la bannière : si elle relance le script, l'exécution actuelle s'arrête net (`exec`) et tout ce qui suit dans `main()` n'a jamais lieu pour cette instance-là — c'est la version relancée qui affiche la bannière et poursuit.
 
 `setup_dotfiles()` est appelée depuis deux contextes : directement si le script est lancé depuis une session prof, sinon transportée dans la session prof par `run_dotfiles_as_prof()`.
 
@@ -213,6 +241,32 @@ Pour la même raison, `--recurse-submodules` n'est pas passé au clone : `clone(
 
 **`id -un` plutôt que `$USER`** pour détecter la session prof : `$USER` n'est pas définie dans un shell non interactif, et peut être héritée du compte appelant.
 
+**L'auto-relance sur `--branch`.** Le problème de départ : `curl -fsSL "$URL" | bash -s -- --branch dev1` exécute le contenu déjà téléchargé par `curl` — celui de l'URL, pas celui de `--branch`. `--branch` n'était consulté qu'une fois le script en train de tourner, bien après que son propre code source avait été figé par le tube. Résultat, silencieux et trompeur : les *dotfiles* basculaient sur `dev1`, mais la *logique* qui les déployait restait celle de `main`. `relaunch_from_branch_if_needed()` referme cette faille en quatre temps :
+
+```bash
+relaunch_from_branch_if_needed() {
+    [ -f "$0" ] && return 0
+    [ -n "${_INSTALL_PROF_RELAUNCHED:-}" ] && return 0
+    [ "$DOTFILES_BRANCH" = "$DEFAULT_DOTFILES_BRANCH" ] && return 0
+    …
+    script_content="$(curl -fsSL "$url")" || die "..."
+    exec env _INSTALL_PROF_RELAUNCHED=1 bash -c "$script_content" bash "$@"
+}
+```
+
+- **`[ -f "$0" ]` distingue `curl | bash` d'une exécution locale.** En `curl | bash`, bash lit le script sur son entrée standard : `$0` vaut littéralement `bash`, et aucun fichier de ce nom n'existe en pratique — le test échoue, la fonction continue. Lancé localement (`bash install-prof.sh`, `./install-prof.sh`), `$0` pointe vers un vrai fichier : le test réussit, la fonction s'arrête aussitôt. C'est ce qui permet de développer et tester des modifications non encore poussées sans qu'elles soient écrasées par un re-téléchargement — vérifié empiriquement (`echo '[ -f "$0" ]...' | bash -s --` renvoie bien « pas un fichier »).
+- **`_INSTALL_PROF_RELAUNCHED` est le garde-fou anti-boucle.** Sans lui, la version relancée verrait à son tour `DOTFILES_BRANCH = dev1 ≠ main` et tenterait de se relancer indéfiniment. La variable est exportée vers le `bash` relancé par `env`, donc déjà présente à son prochain passage dans la fonction.
+- **La comparaison se fait contre `DEFAULT_DOTFILES_BRANCH` (`main`), jamais contre « la branche en cours ».** Le script n'a aucun moyen de savoir de quelle branche il a été récupéré — rien dans un flux `curl | bash` ne le lui dit. L'hypothèse posée est que l'URL utilisée par défaut pointe sur `main` (c'est ce qu'enseignent les EXAMPLES) ; relancer seulement quand `--branch` s'en écarte évite un aller-retour réseau superflu dans le cas courant.
+- **Le contenu téléchargé est vérifié avant le `exec`.** `script_content="$(curl -fsSL "$url")" || die ...` capture l'échec de `curl` (branche inexistante, réseau coupé) ; un test `[ -n "$script_content" ]` couvre en plus le cas d'une réponse HTTP 200 mais vide. Sans ces deux gardes, un `curl` défaillant produirait une chaîne vide passée telle quelle à `bash -c` — un `bash -c ""` démarre et se termine avec succès sans rien faire, et l'échec passerait totalement inaperçu.
+
+Le mécanisme a été validé par test direct de la fonction (sans passer par un vrai réseau, `curl` étant simulé) : exécution locale → aucune relance ; `curl \| bash` sur la branche par défaut → aucune relance ; `curl \| bash` avec `--branch dev1` → relance avec les arguments transmis et la variable de garde exportée ; relance déjà faite → pas de seconde tentative ; `curl` en échec → message d'erreur explicite et sortie en 1 (pas un `bash -c ""` silencieux).
+
+**`ensure_prof_ssh_key()` résout le home et le groupe de prof dynamiquement**, via `getent passwd` et `id -gn`, plutôt que de supposer `/home/prof` et un groupe `prof`. Un `useradd` avec un home ou un schéma de groupe personnalisé (`adduser.conf`, LDAP, etc.) reste ainsi pris en compte.
+
+**Idempotence par `grep -qxF`, pas par écrasement du fichier.** `authorized_keys` peut contenir d'autres clés ajoutées manuellement (portable personnel d'un enseignant, par exemple) : le script ajoute la sienne si elle est absente, sans jamais rien retirer. `-x` compare la ligne entière (évite qu'une clé soit vue comme « déjà présente » parce qu'elle est sous-chaîne d'une autre), `-F` traite le motif comme du texte brut et non une expression régulière — une clé base64 contient des caractères (`+`, `/`) qui ont un sens spécial en regex.
+
+**`chown`/`chmod` sont réappliqués même quand la clé existait déjà.** `sshd` applique `StrictModes` par défaut : un `authorized_keys` ou un `.ssh` aux permissions trop larges est silencieusement ignoré, sans message d'erreur exploitable côté client. Un fichier créé ou modifié par une autre main (root en édition manuelle, par exemple) retrouve donc des permissions correctes à chaque exécution.
+
 ---
 
 ### Dépendances externes
@@ -224,6 +278,7 @@ Pour la même raison, `--recurse-submodules` n'est pas passé au clone : `clone(
 | `apt-get` | — | Installation de `yadm` (Debian ≥ 10, Ubuntu ≥ 20.04 fournissent le paquet) |
 | `yadm` | 2.5 | `clone`, `fetch`, `checkout`, `submodule` (aucune option propre à la 3.x) |
 | `coreutils` | — | `timeout`, `id`, `env` |
+| `libc-bin` (`getent`) | — | Résolution du home de prof dans `ensure_prof_ssh_key()` |
 
 ---
 
@@ -247,12 +302,16 @@ $(declare -f info success warn error die setup_dotfiles ma_nouvelle_fonction)
 
 **Installer d'autres paquets sur la VM** — les ajouter à `install_yadm()` (phase 1, seul endroit disposant de `sudo`), ou créer une fonction voisine appelée depuis la même branche de `main()`.
 
+**Autoriser plusieurs clés SSH** — `PROF_SSH_PUBKEY` n'accepte qu'une seule ligne. Pour plusieurs clés, remplacer la variable scalaire par un tableau et boucler dessus dans `ensure_prof_ssh_key()` en conservant le même test `grep -qxF` par clé, pour rester idempotent.
+
 ---
 
 ### Notes de maintenance
 
 - **Le mot de passe par défaut est public**, et le compte a délibérément accès à `sudo` : ce script ne doit être diffusé que pour des VM de travaux pratiques isolées, jamais pour une machine exposée à un réseau non maîtrisé.
+- **La clé SSH par défaut est, elle aussi, embarquée dans le script** et donc publique au même titre que le mot de passe. Révoquer l'accès qu'elle donne suppose de retirer la ligne correspondante de `~prof/.ssh/authorized_keys` sur chaque VM déjà provisionnée : changer `PROF_SSH_PUBKEY` dans le script n'affecte que les futures exécutions, il n'existe pas de mécanisme de rotation.
 - **Le `checkout -f` est destructeur** pour le home de prof. C'est le comportement voulu, mais il interdit d'utiliser prof comme compte de travail : les fichiers suivis par le dépôt y sont écrasés à chaque exécution.
 - **Le payload sérialisé est le point fragile.** Une fonction de phase 2 oubliée dans la liste `declare -f` ne se voit qu'à l'exécution, sous forme de `command not found` dans la session prof. Le payload se teste sans droits particuliers en remplaçant `sudo -u prof -H env … bash -s` par `cat`.
-- **La branche par défaut est `main`**, alors que le script lui-même est souvent servi depuis `dev1` pendant les phases de test. Vérifier la cohérence de l'URL et de `--branch` avant de diffuser une commande aux étudiants.
+- **`SCRIPT_RAW_URL_BASE`/`SCRIPT_RAW_PATH` dupliquent le chemin du script**, utilisé par `relaunch_from_branch_if_needed()` pour se retélécharger. Un renommage du dépôt, du script, ou son déplacement dans `.local/bin/` doit être répercuté ici — sans quoi l'auto-relance échoue avec un message `curl` explicite (404), sans effet silencieux.
+- **L'auto-relance ajoute un aller-retour réseau à chaque usage de `--branch dev1`**, y compris quand l'URL de départ pointait déjà sur `dev1` — la vérification `[ -f "$0" ]` ne sait pas d'où vient le contenu déjà chargé, seulement s'il vient d'un fichier local. Construire l'URL de `curl` avec la même variable que `--branch` (voir les exemples) évite ce coût dans le cas où l'on connaît déjà la branche cible.
 - **`raw.githubusercontent.com` est mis en cache 5 minutes** (`max-age=300`, CDN Fastly) : après un push, la commande `curl … | bash` peut encore servir la version précédente. Un paramètre `?v=…` ne contourne rien, la clé de cache ignore la *query string*.

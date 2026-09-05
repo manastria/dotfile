@@ -9,20 +9,28 @@
 #
 # DESCRIPTION
 #     Crée (ou réinitialise) un compte local « prof » sur la VM d'un étudiant,
-#     membre des groupes adm et sudo, puis y déploie les dotfiles du dépôt via
-#     yadm. Objectif : disposer en quelques secondes d'un environnement de
-#     dépannage complet (accès root inclus) sans toucher au compte de
-#     l'étudiant.
+#     membre des groupes adm et sudo, autorisé en SSH par clé publique, puis y
+#     déploie les dotfiles du dépôt via yadm. Objectif : disposer en quelques
+#     secondes d'un environnement de dépannage complet (accès root inclus,
+#     joignable à distance) sans toucher au compte de l'étudiant.
 #
 #     Le script se déroule en deux temps, dans deux contextes différents :
 #
 #       1. sous le compte de l'étudiant, qui dispose de sudo : création du
-#          compte prof, mot de passe, appartenance aux groupes, installation
-#          du paquet yadm ;
+#          compte prof, mot de passe, appartenance aux groupes, clé SSH
+#          autorisée, installation du paquet yadm ;
 #       2. sous le compte prof : clonage des dotfiles.
 #
 #     Toutes les opérations qui exigent le sudo de l'étudiant sont donc
 #     regroupées dans la phase 1, avant la bascule vers prof.
+#
+#     Le script et les dotfiles vivent dans le même dépôt : si --branch désigne
+#     une branche différente de celle depuis laquelle le script a été récupéré
+#     par curl, il se retélécharge depuis la bonne branche et se relance tout
+#     seul (une fois), afin que le code exécuté et les dotfiles déployés
+#     proviennent toujours de la même branche. Ce mécanisme ne se déclenche
+#     jamais sur une exécution locale (bash install-prof.sh) : seul l'usage
+#     curl | bash est concerné.
 #
 #     Le script est idempotent : relancé, il réinitialise le mot de passe et
 #     réaligne les dotfiles sur la branche distante.
@@ -41,29 +49,42 @@
 #     -h, --help         Affiche cette aide.
 #
 # ENVIRONMENT
-#     PROF_PASSWORD   Mot de passe du compte prof. Défaut : netlab123.
-#     http_proxy      Proxy à utiliser. S'il n'est pas défini, le script teste
-#     https_proxy     la présence du proxy de l'établissement (port TCP 3128)
-#                     et l'active automatiquement le cas échéant.
+#     PROF_PASSWORD    Mot de passe du compte prof. Défaut : netlab123.
+#     PROF_SSH_PUBKEY  Clé publique à autoriser dans ~prof/.ssh/authorized_keys.
+#                      Chaîne vide pour ne pas toucher au fichier. Défaut :
+#                      une clé ed25519 fixe, embarquée dans le script.
+#     http_proxy       Proxy à utiliser. S'il n'est pas défini, le script
+#     https_proxy      teste la présence du proxy de l'établissement (port TCP
+#                      3128) et l'active automatiquement le cas échéant.
 #
 # EXAMPLES
 #     # Usage courant, depuis la session de l'étudiant
-#     URL=https://raw.githubusercontent.com/manastria/dotfile/refs/heads/main/.local/bin/install-prof.sh
-#     curl -fsSL "$URL" | bash
+#     URL=https://raw.githubusercontent.com/manastria/dotfile/refs/heads/${BRANCH:-main}/.local/bin/install-prof.sh
+#     curl -fsSL "$URL" | bash -s
 #
-#     # Déployer une branche de test plutôt que main
-#     curl -fsSL "$URL" | bash -s -- --branch dev1
+#     # Tester une branche de développement : un seul BRANCH à changer, script
+#     # ET dotfiles suivent (le script se relance seul si l'URL ne suivait pas)
+#     BRANCH=dev1
+#     URL=https://raw.githubusercontent.com/manastria/dotfile/refs/heads/${BRANCH:-main}/.local/bin/install-prof.sh
+#     curl -fsSL "$URL" | bash -s -- --branch "$BRANCH"
 #
 #     # Forcer un proxy que la détection automatique ne trouve pas
 #     export http_proxy=http://172.16.0.1:3128
-#     curl -fsSL "$URL" | bash
+#     URL=https://raw.githubusercontent.com/manastria/dotfile/refs/heads/${BRANCH:-main}/.local/bin/install-prof.sh
+#     curl -fsSL "$URL" | bash -s
+#
+#     NOTE : BRANCH doit toujours être définie AVANT la ligne URL=... qui s'en
+#     sert : le shell substitue sa valeur au moment de CETTE affectation, pas
+#     plus tard quand $URL est utilisée. Redéfinir BRANCH après coup ne change
+#     plus rien à une URL déjà construite.
 #
 #     NOTE : raw.githubusercontent.com met les fichiers en cache 5 minutes.
 #     Après un push, la commande peut encore servir la version précédente.
 #
 # EXIT CODES
 #     0   Compte prof et dotfiles en place.
-#     1   Erreur d'exécution : sudo refusé, échec de useradd, d'APT, de yadm.
+#     1   Erreur d'exécution : sudo refusé, échec de useradd, d'APT, de yadm,
+#         ou de la relance automatique depuis une autre branche.
 #     2   Erreur d'usage : option inconnue ou argument manquant.
 set -euo pipefail
 
@@ -72,8 +93,11 @@ set -euo pipefail
 # -----------------------------------------------------------------------------
 readonly PROF_USER="prof"
 readonly PROF_PASSWORD="${PROF_PASSWORD:-netlab123}"
+readonly PROF_SSH_PUBKEY="${PROF_SSH_PUBKEY:-ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDc+e2L7GFcoWgE2qhVpQmBq2jiCZtXj1vIpFG/+N7Yw}"
 readonly DOTFILES_REPO="https://github.com/manastria/dotfile.git"
 readonly DEFAULT_DOTFILES_BRANCH="main"
+readonly SCRIPT_RAW_URL_BASE="https://raw.githubusercontent.com/manastria/dotfile/refs/heads"
+readonly SCRIPT_RAW_PATH=".local/bin/install-prof.sh"
 readonly PROXY_HOST="172.16.0.1"
 readonly PROXY_PORT="3128"
 
@@ -114,6 +138,44 @@ parse_args() {
             *)         usage_error "Option inconnue : $1" ;;
         esac
     done
+}
+
+# -----------------------------------------------------------------------------
+# Auto-relance depuis la bonne branche (usage curl | bash uniquement)
+# -----------------------------------------------------------------------------
+# Le script et les dotfiles vivent dans le même dépôt : demander --branch dev1
+# doit faire tourner le install-prof.sh de dev1, pas seulement y aligner les
+# dotfiles. Or le contenu déjà exécuté à cet instant est celui de l'URL passée
+# à curl, indépendamment de --branch. Si les deux divergent, on se retélécharge
+# depuis la bonne branche et on se relance avec les mêmes arguments.
+relaunch_from_branch_if_needed() {
+    # En usage « curl | bash », $0 vaut « bash » : bash lit le script depuis
+    # l'entrée standard, il n'existe aucun fichier de ce nom en pratique. Une
+    # exécution locale (bash install-prof.sh, ./install-prof.sh) a un $0 qui
+    # pointe vers un fichier réel : on ne retélécharge jamais dans ce cas, pour
+    # ne pas écraser des modifications non poussées en cours de test.
+    [ -f "$0" ] && return 0
+
+    # Garde-fou anti-boucle : la version relancée exporte cette variable avant
+    # de s'exécuter, pour ne jamais tenter une seconde relance.
+    [ -n "${_INSTALL_PROF_RELAUNCHED:-}" ] && return 0
+
+    # Rien à faire si on déploie déjà la branche par défaut : la version
+    # récupérée par le curl initial (sur main, par convention) convient.
+    [ "$DOTFILES_BRANCH" = "$DEFAULT_DOTFILES_BRANCH" ] && return 0
+
+    command -v curl >/dev/null 2>&1 \
+        || die "curl est requis pour relancer le script depuis la branche ${DOTFILES_BRANCH}."
+
+    local url script_content
+    url="${SCRIPT_RAW_URL_BASE}/${DOTFILES_BRANCH}/${SCRIPT_RAW_PATH}"
+    info "Version de la branche ${DOTFILES_BRANCH} demandée : relance depuis ${url}..."
+    script_content="$(curl -fsSL "$url")" \
+        || die "Échec du téléchargement du script depuis la branche ${DOTFILES_BRANCH}."
+    [ -n "$script_content" ] \
+        || die "Script vide reçu depuis la branche ${DOTFILES_BRANCH} (branche inexistante ?)."
+
+    exec env _INSTALL_PROF_RELAUNCHED=1 bash -c "$script_content" bash "$@"
 }
 
 # -----------------------------------------------------------------------------
@@ -197,6 +259,41 @@ ensure_prof_account() {
     # de dépannage sans l'un des deux ne sert pas à grand-chose.
     sudo usermod -aG adm,sudo "$PROF_USER" \
         || die "Échec de l'ajout de ${PROF_USER} aux groupes adm/sudo."
+}
+
+ensure_prof_ssh_key() {
+    [ -n "$PROF_SSH_PUBKEY" ] || return 0
+
+    local home_dir prof_group ssh_dir authorized_keys
+    # « || die » directement sur l'affectation : sous set -e, l'échec de
+    # « getent » (utilisateur introuvable) interromprait sinon le script
+    # avant que le test « [ -n "$home_dir" ] » n'ait la moindre chance de
+    # s'exécuter, avec un exit code brut et aucun message.
+    home_dir="$(getent passwd "$PROF_USER" | cut -d: -f6)" \
+        || die "Impossible de déterminer le home de ${PROF_USER} (getent)."
+    [ -n "$home_dir" ] || die "Home introuvable pour ${PROF_USER} (champ vide chez getent)."
+    prof_group="$(id -gn "$PROF_USER")" || die "Impossible de déterminer le groupe de ${PROF_USER}."
+    ssh_dir="${home_dir}/.ssh"
+    authorized_keys="${ssh_dir}/authorized_keys"
+
+    sudo install -d -m 700 -o "$PROF_USER" -g "$prof_group" "$ssh_dir" \
+        || die "Échec de la création de ${ssh_dir}."
+
+    if sudo grep -qxF "$PROF_SSH_PUBKEY" "$authorized_keys" 2>/dev/null; then
+        info "Clé SSH déjà autorisée pour ${PROF_USER}."
+    else
+        info "Ajout de la clé SSH publique pour ${PROF_USER}..."
+        echo "$PROF_SSH_PUBKEY" | sudo tee -a "$authorized_keys" >/dev/null \
+            || die "Échec de l'écriture dans ${authorized_keys}."
+    fi
+
+    # Toujours réappliqués, y compris quand la clé était déjà présente : un
+    # « authorized_keys » avec de mauvaises permissions fait échouer sshd
+    # silencieusement (StrictModes), sans que rien ne le signale ici.
+    sudo chown "${PROF_USER}:${prof_group}" "$authorized_keys" \
+        || die "Échec du changement de propriétaire de ${authorized_keys}."
+    sudo chmod 600 "$authorized_keys" \
+        || die "Échec du changement des permissions de ${authorized_keys}."
 }
 
 install_yadm() {
@@ -288,6 +385,7 @@ PAYLOAD
 # -----------------------------------------------------------------------------
 main() {
     parse_args "$@"
+    relaunch_from_branch_if_needed "$@"
 
     echo -e "\n${BOLD}=== Environnement ${PROF_USER} — installation ===${RESET}\n"
     detect_proxy
@@ -300,6 +398,7 @@ main() {
     else
         request_sudo
         ensure_prof_account
+        ensure_prof_ssh_key
         install_yadm
         run_dotfiles_as_prof
     fi
