@@ -1,6 +1,6 @@
 #!/bin/bash
 # install.sh - Installation environnement prof pour dépannage
-# Utilisation : `export http_proxy=http://172.16.0.1:3128; curl -fsSL https://raw.githubusercontent.com/manastria/dotfile/refs/heads/dev1/bin/install-prof.sh | bash"`
+# Utilisation : export http_proxy=http://172.16.0.1:3128; curl -fsSL https://raw.githubusercontent.com/manastria/dotfile/refs/heads/dev1/.local/bin/install-prof.sh | bash
 set -e  # Arrêt en cas d'erreur
 
 # Couleurs pour les messages
@@ -40,7 +40,7 @@ if [ "$USER" != "prof" ]; then
     PROXY_ENV=""
     [ -n "$http_proxy" ] && PROXY_ENV="export http_proxy=$http_proxy https_proxy=$https_proxy;"
     # Le sudo est nécessaire pour basculer vers le compte prof sans demander de mot de passe (grâce à la configuration précédente)
-    sudo su - prof -c "$PROXY_ENV curl -fsSL https://raw.githubusercontent.com/manastria/dotfile/refs/heads/dev1/bin/install-prof.sh | bash"
+    sudo su - prof -c "$PROXY_ENV curl -fsSL https://raw.githubusercontent.com/manastria/dotfile/refs/heads/dev1/.local/bin/install-prof.sh | bash"
     
 else
     # Phase 2 : installer la config yadm
