@@ -26,6 +26,7 @@ Les conventions de rédaction sont fixées dans [CLAUDE.md](../CLAUDE.md), secti
 | ---- | ------ | ----- |
 | [usb-mount.md](usb-mount.md) | [`usb-mount.sh`](../.local/bin/usb-mount.sh), [`usb-umount.sh`](../.local/bin/usb-umount.sh) | Montage de clés USB chiffrées LUKS/f2fs depuis un fichier de configuration |
 | [switch-to-networkmanager.md](switch-to-networkmanager.md) | [`switch-to-networkmanager.sh`](../.local/bin/switch-to-networkmanager.sh) | Bascule de netplan/systemd-networkd vers NetworkManager |
+| [firefox-snap-vers-apt.md](firefox-snap-vers-apt.md) | [`firefox-snap-vers-apt.sh`](../.local/bin/firefox-snap-vers-apt.sh) | Bascule Firefox du Snap vers le `.deb` officiel Mozilla (compat. KeePassXC-Browser) |
 
 ### Shell et environnement
 
