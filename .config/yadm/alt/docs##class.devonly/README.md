@@ -20,6 +20,12 @@ Les conventions de rédaction sont fixées dans [CLAUDE.md](../CLAUDE.md), secti
 | [pack-bundle.md](pack-bundle.md) | [`pack-bundle.sh`](../.local/bin/pack-bundle.sh) | Sauvegarde de l'historique Git en fichier `.bundle` clonable |
 | [backup-projets.md](backup-projets.md) | [`backup-projets.sh`](../.local/bin/backup-projets.sh) | Miroir incrémental d'une liste de projets vers une clé USB, avant d'éteindre |
 
+### Documents et bureautique
+
+| Page | Script | Objet |
+| ---- | ------ | ----- |
+| [md2docx.md](md2docx.md) | [`md2docx.sh`](../.local/bin/md2docx.sh) | Conversion Markdown → `.docx` via pandoc, profil `bts-sio` fixe, sortie déduite du nom d'entrée |
+
 ### Système et matériel
 
 | Page | Script | Objet |
