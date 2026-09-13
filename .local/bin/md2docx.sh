@@ -1,45 +1,62 @@
 #!/usr/bin/env bash
 # NAME
-#     md2docx.sh — convertit un fichier Markdown en .docx via le profil pandoc "bts-sio"
+#     md2docx.sh — convertit un ou plusieurs fichiers Markdown en .docx via le profil pandoc "bts-sio"
 #
 # SYNOPSIS
-#     md2docx.sh FICHIER.md [options pandoc...]
+#     md2docx.sh FICHIER.md... [options pandoc...]
 #     md2docx.sh -h|--help
 #
 # DESCRIPTION
-#     Convertit FICHIER.md en .docx avec pandoc, en appliquant systématiquement
-#     le defaults file "bts-sio" (-d bts-sio) et en déduisant le fichier de
-#     sortie du nom d'entrée : "SEANCE.md" -> "SEANCE.docx".
+#     Convertit un ou plusieurs FICHIER.md en .docx avec pandoc, en appliquant
+#     systématiquement le defaults file "bts-sio" (-d bts-sio) et en déduisant
+#     le fichier de sortie de chaque entrée : "SEANCE.md" -> "SEANCE.docx".
 #
-#     Équivaut à :
+#     Accepte plusieurs fichiers en argument, en les nommant explicitement
+#     (seance1.md seance2.md) ou via un joker shell (*.md) : chaque fichier
+#     est converti séparément, avec le même jeu d'options pandoc.
+#
+#     Équivaut, pour chaque fichier, à :
 #         pandoc -d bts-sio -o SEANCE.docx SEANCE.md
 #
-#     Toute option ajoutée après le fichier est transmise telle quelle à
-#     pandoc, insérée avant le fichier d'entrée. Pandoc ne retenant que la
-#     dernière occurrence d'une option, cela permet de surcharger -o ou -d
-#     au besoin (ex: -d autre-profil).
+#     Tous les arguments se terminant par .md et placés en tête de ligne de
+#     commande sont traités comme fichiers d'entrée ; tout ce qui suit est
+#     transmis tel quel à pandoc, pour chaque conversion. Pandoc ne retenant
+#     que la dernière occurrence d'une option, cela permet de surcharger -d
+#     au besoin (ex: -d autre-profil) — mais pas -o/--output, refusée dès que
+#     plusieurs fichiers sont fournis (toutes les sorties collisionneraient
+#     sur un seul nom).
 #
 # OPTIONS
-#     FICHIER.md   Fichier Markdown à convertir (obligatoire, extension .md).
-#     -h, --help   Affiche cette aide. Doit être le premier argument, sinon
-#                  transmis à pandoc comme les autres options.
-#     ...          Toute autre option est transmise à pandoc.
+#     FICHIER.md...  Un ou plusieurs fichiers Markdown à convertir (obligatoire,
+#                    extension .md), en arguments explicites ou via un joker
+#                    (*.md).
+#     -h, --help     Affiche cette aide. Doit être le premier argument, sinon
+#                    transmis à pandoc comme les autres options.
+#     ...            Toute autre option est transmise à pandoc pour chaque
+#                    fichier. -o/--output est refusée dès que plusieurs
+#                    fichiers sont fournis.
 #
 # EXAMPLES
 #     # Conversion simple : produit SEANCE.docx
 #     md2docx.sh SEANCE.md
 #
-#     # Ajout d'une option pandoc (table des matières)
-#     md2docx.sh SEANCE.md --toc
+#     # Plusieurs fichiers explicites
+#     md2docx.sh seance1.md seance2.md seance3.md
 #
-#     # Surcharge du fichier de sortie
+#     # Tous les Markdown du répertoire courant
+#     md2docx.sh *.md
+#
+#     # Ajout d'une option pandoc (table des matières), appliquée à chaque fichier
+#     md2docx.sh *.md --toc
+#
+#     # Surcharge du fichier de sortie (un seul fichier à la fois)
 #     md2docx.sh SEANCE.md -o /tmp/brouillon.docx
 #
 # EXIT CODES
-#     0   Conversion réussie.
-#     1   Erreur d'exécution : pandoc absent ou échec de la conversion.
-#     2   Erreur d'usage : pas d'argument, fichier introuvable, extension
-#         différente de .md.
+#     0   Conversion(s) réussie(s).
+#     1   Erreur d'exécution : pandoc absent, ou échec d'au moins une conversion.
+#     2   Erreur d'usage : aucun fichier .md, fichier introuvable, ou
+#         -o/--output combiné à plusieurs fichiers.
 set -euo pipefail
 
 # -----------------------------------------------------------------------------
@@ -73,48 +90,80 @@ usage_error() { error "$*"; echo "Essayez : $(basename "$0") --help" >&2; exit 2
 # -----------------------------------------------------------------------------
 # Options
 # -----------------------------------------------------------------------------
-INPUT=""
-OUTPUT=""
+INPUTS=()
 PANDOC_ARGS=()
 
 parse_args() {
-    [[ $# -gt 0 ]] || usage_error "Fichier Markdown manquant."
+    [[ $# -gt 0 ]] || usage_error "Fichier(s) Markdown manquant(s)."
 
     case "$1" in
         -h|--help) usage; exit 0 ;;
     esac
 
-    INPUT="$1"
-    shift
+    # Les arguments se terminant par .md, en tête de ligne de commande, sont
+    # les fichiers d'entrée ; le premier argument qui ne correspond plus à ce
+    # motif marque le début des options pandoc.
+    while [[ $# -gt 0 && "$1" == *.md ]]; do
+        INPUTS+=("$1")
+        shift
+    done
+
+    [[ ${#INPUTS[@]} -gt 0 ]] || usage_error "Aucun fichier .md fourni."
+
     PANDOC_ARGS=("$@")
 }
 
 # -----------------------------------------------------------------------------
-# Validation et résolution du fichier de sortie
+# Validation
 # -----------------------------------------------------------------------------
-validate_input() {
-    [[ -f "$INPUT" ]] || usage_error "Fichier introuvable : $INPUT"
-    [[ "$INPUT" == *.md ]] || usage_error "Le fichier doit avoir l'extension .md : $INPUT"
+validate_inputs() {
+    local f
+    for f in "${INPUTS[@]}"; do
+        [[ -f "$f" ]] || usage_error "Fichier introuvable : $f"
+    done
 }
 
-resolve_output() {
-    OUTPUT="${INPUT%.md}.docx"
+check_output_override() {
+    # -o/--output n'a de sens que pour un fichier unique : avec plusieurs
+    # entrées, toutes les sorties écraseraient le même nom.
+    [[ ${#INPUTS[@]} -gt 1 ]] || return 0
+
+    local a
+    for a in "${PANDOC_ARGS[@]}"; do
+        [[ "$a" == "-o" || "$a" == --output* ]] \
+            && usage_error "-o/--output n'est pas compatible avec plusieurs fichiers en entrée."
+    done
+    return 0
 }
 
 # -----------------------------------------------------------------------------
 # Conversion
 # -----------------------------------------------------------------------------
-convert() {
-    command -v pandoc >/dev/null 2>&1 || die "'pandoc' n'est pas installé."
+convert_one() {
+    local input="$1"
+    local output="${input%.md}.docx"
 
-    info "Entrée  : $INPUT"
-    info "Sortie  : $OUTPUT"
+    info "Entrée  : $input"
+    info "Sortie  : $output"
     info "Profil  : $PANDOC_PROFILE"
 
-    pandoc -d "$PANDOC_PROFILE" -o "$OUTPUT" "${PANDOC_ARGS[@]}" "$INPUT" \
-        || die "Échec de la conversion pandoc."
+    if pandoc -d "$PANDOC_PROFILE" -o "$output" "${PANDOC_ARGS[@]}" "$input"; then
+        success "Document généré : ${BOLD}${output}${RESET}"
+    else
+        error "Échec de la conversion pandoc : $input"
+        return 1
+    fi
+}
 
-    success "Document généré : ${BOLD}${OUTPUT}${RESET}"
+convert_all() {
+    command -v pandoc >/dev/null 2>&1 || die "'pandoc' n'est pas installé."
+
+    local failures=0
+    for input in "${INPUTS[@]}"; do
+        convert_one "$input" || failures=$((failures + 1))
+    done
+
+    [[ $failures -eq 0 ]] || die "$failures conversion(s) échouée(s) sur ${#INPUTS[@]}."
 }
 
 # -----------------------------------------------------------------------------
@@ -122,9 +171,9 @@ convert() {
 # -----------------------------------------------------------------------------
 main() {
     parse_args "$@"
-    validate_input
-    resolve_output
-    convert
+    validate_inputs
+    check_output_override
+    convert_all
 }
 
 main "$@"
