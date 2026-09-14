@@ -55,6 +55,7 @@ Les conventions de rédaction sont fixées dans [CLAUDE.md](../CLAUDE.md), secti
 | Page | Script | Objet |
 | ---- | ------ | ----- |
 | [install-gitkraken.md](install-gitkraken.md) | [`install-gitkraken.sh`](../.local/bin/install-gitkraken.sh) | GitKraken (GUI) et GitKraken CLI (`gk`) sur Debian/Ubuntu |
+| [install-obsidian.md](install-obsidian.md) | [`install-obsidian.sh`](../.local/bin/install-obsidian.sh) | Obsidian (`.deb` GitHub Releases), avec repli automatique si la dernière release n'en publie pas |
 | [install-xmind.md](install-xmind.md) | [`install-xmind.sh`](../.local/bin/install-xmind.sh) | Xmind (`.deb` officiel) sur KUbuntu/XUbuntu : profil AppArmor et trousseau de clés |
 | [install-projecteur.md](install-projecteur.md) | [`install-projecteur.sh`](../.local/bin/install-projecteur.sh) | Projecteur (pointeur laser virtuel Logitech Spotlight), compilé depuis les sources |
 | [install-prof.md](install-prof.md) | [`install-prof.sh`](../.local/bin/install-prof.sh) | Compte `prof` de dépannage sur une VM étudiant : création du compte et dotfiles yadm |
