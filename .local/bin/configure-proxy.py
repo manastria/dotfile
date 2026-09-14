@@ -72,7 +72,7 @@ APT_PROXY_DETECT_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)
 
 SERVICES_CONFIG = {
     "apt": {
-        "proxies": ["172.25.253.25:3142", "172.16.0.1:3128"],
+        "proxies": ["172.25.1.111:3142","172.25.253.25:3142", "172.16.0.1:3128"],
         "config_file": "/etc/apt/apt.conf.d/01proxy",
         "enable_content": 'Acquire::http::Proxy "http://{proxy}";\nAcquire::https::Proxy "http://{proxy}";',
         "enable_content_auto_detect": (
@@ -87,7 +87,7 @@ SERVICES_CONFIG = {
         ),
     },
     "docker": {
-        "proxies": ["172.25.253.25:5000"],
+        "proxies": ["172.25.1.111:5000"],
         "config_file": "/etc/docker/daemon.json",
         "enable_content": '{{"registry-mirrors": ["http://{proxy}"], "insecure-registries": ["{proxy}"]}}',
         "post_actions": {
