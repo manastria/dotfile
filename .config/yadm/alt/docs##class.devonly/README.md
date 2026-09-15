@@ -59,6 +59,7 @@ Les conventions de rédaction sont fixées dans [CLAUDE.md](../CLAUDE.md), secti
 | [install-xmind.md](install-xmind.md) | [`install-xmind.sh`](../.local/bin/install-xmind.sh) | Xmind (`.deb` officiel) sur KUbuntu/XUbuntu : profil AppArmor et trousseau de clés |
 | [install-projecteur.md](install-projecteur.md) | [`install-projecteur.sh`](../.local/bin/install-projecteur.sh) | Projecteur (pointeur laser virtuel Logitech Spotlight), compilé depuis les sources |
 | [install-prof.md](install-prof.md) | [`install-prof.sh`](../.local/bin/install-prof.sh) | Compte `prof` de dépannage sur une VM étudiant : création du compte et dotfiles yadm |
+| [install-paquets-vm.md](install-paquets-vm.md) | [`install-paquets-vm.py`](../.local/bin/install-paquets-vm.py) | Paquets d'une VM pédagogique décrits par un profil TOML : distribution, version, bureau Kubuntu/Xubuntu/Lubuntu |
 | [install-bat.md](install-bat.md) | [`install-bat.sh`](../.local/bin/install-bat.sh) | `bat` (cat/more avec coloration syntaxique), binaire GitHub dans `~/.local/bin` |
 | [install-delta.md](install-delta.md) | [`install-delta.sh`](../.local/bin/install-delta.sh) | `delta` (pager de diff Git colorisé), binaire GitHub + configuration Git optionnelle |
 

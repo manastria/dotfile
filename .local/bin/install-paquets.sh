@@ -1,6 +1,43 @@
 #!/usr/bin/env bash
-# install-paquets.sh — Installation et mise à jour des paquets système
-# Usage : bash install-paquets.sh
+# NAME
+#     install-paquets.sh — installation et mise à jour des paquets système
+#
+# SYNOPSIS
+#     install-paquets.sh [--dry-run] [--os <id>:<version_majeure>] [-h]
+#
+# DESCRIPTION
+#     Met à jour la liste des paquets, désinstalle les paquets obsolètes,
+#     installe la liste de paquets définie pour la distribution détectée
+#     (Debian/Ubuntu, avec variantes selon la version), puis nettoie les
+#     dépendances inutiles. Se relance automatiquement avec sudo si
+#     nécessaire — sauf en --dry-run ou --os, qui ne modifient rien et ne
+#     requièrent donc pas les droits root.
+#
+#     Certains paquets changent de nom selon la distribution/version : voir
+#     package_overrides et resolve_package_name() dans le script.
+#
+# OPTIONS
+#     --dry-run             Affiche l'OS détecté et la liste des paquets
+#                           concernés (avec leur statut : installé / à
+#                           installer / introuvable) sans effectuer aucune
+#                           modification.
+#     --os <id>:<version>   Simule un OS différent de la machine locale
+#                           (ex. ubuntu:24, debian:12) pour n'afficher que
+#                           la liste des paquets qui lui correspond, sans
+#                           vérifier leur statut d'installation (implique
+#                           --dry-run).
+#     -h, --help            Affiche cette aide.
+#
+# EXAMPLES
+#     sudo install-paquets.sh
+#     install-paquets.sh --dry-run
+#     install-paquets.sh --os ubuntu:24
+#     install-paquets.sh --os debian:12
+#
+# EXIT CODES
+#     0   Terminé avec succès (ou mode --dry-run / --os).
+#     1   Erreur d'exécution (apt, OS non supporté...).
+#     2   Erreur d'usage : option inconnue ou --os mal formé.
 set -euo pipefail
 
 # -----------------------------------------------------------------------------
@@ -19,10 +56,48 @@ warn()    { echo -e "${YELLOW}[ATTENTION]${RESET} $*"; }
 error()   { echo -e "${RED}[ERREUR]${RESET}    $*" >&2; }
 die()     { error "$*"; exit 1; }
 
+usage() {
+    # Réimprime le bloc d'en-tête manpage en retirant le préfixe « # ».
+    awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$0"
+}
+usage_error() { error "$*"; echo "Essayez : $(basename "$0") --help" >&2; exit 2; }
+
+# -----------------------------------------------------------------------------
+# Options
+# -----------------------------------------------------------------------------
+DRY_RUN=0
+OS_OVERRIDE=""
+
+parse_args() {
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --dry-run) DRY_RUN=1; shift ;;
+            --os)
+                OS_OVERRIDE="${2:-}"
+                [[ -n "$OS_OVERRIDE" ]] || usage_error "--os requiert une valeur (<id>:<version_majeure>, ex. ubuntu:24)."
+                shift 2
+                ;;
+            -h|--help) usage; exit 0 ;;
+            *)         usage_error "Option inconnue : $1" ;;
+        esac
+    done
+
+    # --os n'a de sens qu'en lecture seule : il ne correspond pas forcément
+    # à la machine locale sur laquelle tourne le script.
+    if [[ -n "$OS_OVERRIDE" ]]; then
+        DRY_RUN=1
+    fi
+}
+
+# Analysé avant l'élévation (contrairement aux scripts Tier 3, qui le font
+# en tête de main()) : --dry-run et --help ne doivent pas exiger sudo.
+parse_args "$@"
+
 # -----------------------------------------------------------------------------
 # Élévation des privilèges (Tier 1 : auto-relaunch sans -E)
 # -----------------------------------------------------------------------------
-if [ "$(id -u)" -ne 0 ]; then
+# Le mode --dry-run ne modifie rien : il n'a pas besoin des droits root.
+if [[ "$DRY_RUN" -eq 0 && "$(id -u)" -ne 0 ]]; then
     exec sudo "$(readlink -f "$0")" "$@"
 fi
 
@@ -39,6 +114,26 @@ OS_CODENAME=""
 OS_VERSION_MAJOR=0
 
 detect_os() {
+    # --os simule un OS cible au lieu de lire la machine locale : la liste
+    # de paquets reflète alors cette cible, pas la machine sur laquelle
+    # tourne le script (voir step_report).
+    if [[ -n "$OS_OVERRIDE" ]]; then
+        [[ "$OS_OVERRIDE" == *:* ]] \
+            || usage_error "Format invalide pour --os : '${OS_OVERRIDE}' (attendu <id>:<version_majeure>, ex. ubuntu:24)."
+
+        OS_ID="${OS_OVERRIDE%%:*}"
+        OS_VERSION_MAJOR="${OS_OVERRIDE#*:}"
+        [[ -n "$OS_ID" && "$OS_VERSION_MAJOR" =~ ^[0-9]+$ ]] \
+            || usage_error "Format invalide pour --os : '${OS_OVERRIDE}' (attendu <id>:<version_majeure>, ex. ubuntu:24)."
+
+        OS_VERSION_ID="$OS_VERSION_MAJOR"
+        OS_CODENAME="simulé"
+        readonly OS_ID OS_VERSION_ID OS_CODENAME OS_VERSION_MAJOR
+
+        warn "OS simulé (--os) : ${BOLD}${OS_ID} ${OS_VERSION_MAJOR}${RESET} — ne reflète pas forcément cette machine."
+        return 0
+    fi
+
     [[ -f /etc/os-release ]] || die "/etc/os-release introuvable — OS non supporté."
 
     OS_ID="$(. /etc/os-release && printf '%s' "${ID:-unknown}")"
@@ -135,6 +230,38 @@ packages_graphiques=(
 )
 
 # -----------------------------------------------------------------------------
+# Correspondance des noms de paquets par distribution/version
+# -----------------------------------------------------------------------------
+# Certains paquets changent de nom selon la distribution ou sa version
+# (ex. netcat -> netcat-openbsd sur les versions récentes). Les listes
+# ci-dessus utilisent le nom canonique ; resolve_package_name() le traduit
+# vers le nom réel à installer pour l'OS détecté.
+#
+# Clé  : "<nom_canonique>:<os_id>:<version_majeure>" (priorité la plus haute)
+#     ou "<nom_canonique>:<os_id>"                   (toutes versions de l'OS)
+# Valeur : nom réel du paquet dans les dépôts de cette distribution.
+#
+# Exemple : ["netcat:ubuntu:24"]="netcat-openbsd"
+declare -A package_overrides=(
+    # Ajouter ici les correspondances nécessaires, après vérification avec
+    # `apt-cache search <nom>` sur la distribution/version concernée.
+)
+
+resolve_package_name() {
+    local canonical="$1"
+    local key_version="${canonical}:${OS_ID}:${OS_VERSION_MAJOR}"
+    local key_os="${canonical}:${OS_ID}"
+
+    if [[ -n "${package_overrides[$key_version]:-}" ]]; then
+        printf '%s' "${package_overrides[$key_version]}"
+    elif [[ -n "${package_overrides[$key_os]:-}" ]]; then
+        printf '%s' "${package_overrides[$key_os]}"
+    else
+        printf '%s' "$canonical"
+    fi
+}
+
+# -----------------------------------------------------------------------------
 # Construction de la liste finale
 # -----------------------------------------------------------------------------
 packages=()
@@ -175,6 +302,39 @@ build_package_list() {
 # -----------------------------------------------------------------------------
 # Étapes
 # -----------------------------------------------------------------------------
+step_report() {
+    build_package_list
+
+    echo ""
+    info "Paquets concernés pour cet OS (${#packages[@]}) :"
+
+    local pkg real_pkg suffix status
+    for pkg in "${packages[@]}"; do
+        real_pkg="$(resolve_package_name "$pkg")"
+        suffix=""
+        [[ "$real_pkg" != "$pkg" ]] && suffix=" (-> ${real_pkg})"
+
+        # --os simule un OS potentiellement différent de la machine locale :
+        # dpkg/apt-cache ne renseigneraient que sur l'état de CETTE machine,
+        # pas sur celui de la cible simulée. On se limite donc à la liste.
+        if [[ -n "$OS_OVERRIDE" ]]; then
+            echo "  - ${pkg}${suffix}"
+            continue
+        fi
+
+        if dpkg -s "$real_pkg" &>/dev/null; then
+            status="${GREEN}installé${RESET}"
+        elif apt-cache show "$real_pkg" &>/dev/null; then
+            status="${YELLOW}à installer${RESET}"
+        else
+            status="${RED}introuvable${RESET}"
+        fi
+
+        echo -e "  - ${pkg}${suffix} : ${status}"
+    done
+    echo ""
+}
+
 step_update() {
     info "Mise à jour de la liste des paquets et mise à niveau..."
     apt-get update -q
@@ -206,12 +366,18 @@ step_install() {
 
     local to_install=()
     local skipped=()
+    local real_pkg
 
     for pkg in "${packages[@]}"; do
-        if dpkg -s "$pkg" &>/dev/null; then
+        real_pkg="$(resolve_package_name "$pkg")"
+        if [[ "$real_pkg" != "$pkg" ]]; then
+            info "Correspondance : ${pkg} -> ${real_pkg} (${OS_ID} ${OS_VERSION_ID})"
+        fi
+
+        if dpkg -s "$real_pkg" &>/dev/null; then
             : # Déjà installé
-        elif apt-cache show "$pkg" &>/dev/null; then
-            to_install+=("$pkg")
+        elif apt-cache show "$real_pkg" &>/dev/null; then
+            to_install+=("$real_pkg")
         else
             skipped+=("$pkg")
         fi
@@ -243,6 +409,12 @@ main() {
     echo -e "\n${BOLD}=== Installation des paquets système ===${RESET}\n"
 
     detect_os
+
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+        [[ -z "$OS_OVERRIDE" ]] && warn "Mode --dry-run : aucune modification ne sera effectuée."
+        step_report
+        exit 0
+    fi
 
     echo -e "\n${BOLD}--- Étape 1 : Mise à jour ---${RESET}"
     step_update

@@ -1,0 +1,131 @@
+# =============================================================================
+# paquets.toml.sample — profil d'exemple pour install-paquets-vm.py
+# =============================================================================
+# Copier ce fichier sous le nom <profil>.toml dans l'un des emplacements
+# suivants. Le premier trouvé l'emporte, les fichiers ne sont pas fusionnés :
+#
+#   1. répertoire courant           ./<profil>.toml
+#   2. configuration utilisateur    ~/.config/install-paquets-vm/<profil>.toml
+#   3. configuration système        /etc/install-paquets-vm/<profil>.toml
+#
+# Le profil par défaut s'appelle « paquets ». En choisir un autre avec
+# --profil NOM, ou désigner un fichier précis avec --config CHEMIN.
+#
+# Vérifier le résultat sans rien installer :
+#   install-paquets-vm.py --dry-run
+#   install-paquets-vm.py --os ubuntu:26.04 --bureau kubuntu
+# =============================================================================
+
+description = "Exemple : outils console communs et compléments par bureau"
+
+# -----------------------------------------------------------------------------
+# Groupes de paquets
+# -----------------------------------------------------------------------------
+# Un [[groupe]] est retenu si TOUTES les conditions de « si » sont vraies ; un
+# groupe sans « si » est toujours retenu. Clés possibles dans « si » :
+#
+#   os          = "ubuntu"  ou  ["ubuntu", "debian"]     (ID de /etc/os-release)
+#   version_min = "24.04"       version_max = "12"       (bornes incluses)
+#   bureau      = "kubuntu" ou  ["xubuntu", "lubuntu"]
+#
+# Les versions s'écrivent entre guillemets : sans guillemets, 24.10 est un
+# nombre décimal que TOML lit 24.1. Une borne ne compare que les composants
+# qu'elle donne : version_max = "24" couvre 24.04 comme 24.10.
+#
+# Bureaux reconnus : kubuntu, xubuntu, lubuntu, ubuntu (GNOME), et « aucun »
+# quand aucun d'eux n'est installé (serveur, console).
+#
+# « paquets » liste ce qu'il faut installer, « retirer » ce qu'il faut
+# désinstaller. Un même paquet ne peut pas figurer dans les deux.
+
+[[groupe]]
+nom = "communs"
+paquets = [
+    "aptitude",
+    "bash-completion",
+    "bat",
+    "byobu",
+    "ccze",
+    "curl",
+    "direnv",
+    "dos2unix",
+    "eza",
+    "fd-find",
+    "git",
+    "git-lfs",
+    "htop",
+    "jq",
+    "libnss3-tools",
+    "lnav",
+    "lsd",
+    "micro",
+    "most",
+    "multitail",
+    "ncdu",
+    "openssh-server",
+    "python3-rich",
+    "reptyr",
+    "rsync",
+    "screen",
+    "screenfetch",
+    "sqlite3",
+    "sshfs",
+    "sudo",
+    "tmux",
+    "tree",
+    "unzip",
+    "util-linux-extra",
+    "vim",
+    "wget",
+    "zip",
+    "zsh",
+    "zstd",
+]
+
+[[groupe]]
+nom = "obsoletes"
+retirer = ["squid-deb-proxy-client"]
+
+# Supprimés ou remplacés à partir de Debian 13
+[[groupe]]
+nom = "debian-12"
+si = { os = "debian", version_max = "12" }
+paquets = ["unrar", "haveged", "mlocate"]
+
+# Invités VirtualBox (compilation des additions invité)
+[[groupe]]
+nom = "virtualbox"
+paquets = ["build-essential", "dkms", "module-assistant"]
+
+[[groupe]]
+nom = "graphiques"
+si = { bureau = ["kubuntu", "xubuntu", "lubuntu", "ubuntu"] }
+paquets = ["gvfs-backends", "terminator"]
+
+# Exemples de compléments propres à chaque bureau, à adapter
+[[groupe]]
+nom = "kubuntu"
+si = { bureau = "kubuntu" }
+paquets = ["yakuake"]
+
+[[groupe]]
+nom = "xubuntu"
+si = { bureau = "xubuntu" }
+paquets = ["xfce4-goodies"]
+
+[[groupe]]
+nom = "lubuntu"
+si = { bureau = "lubuntu" }
+paquets = ["featherpad"]
+
+# -----------------------------------------------------------------------------
+# Renommages
+# -----------------------------------------------------------------------------
+# Les groupes emploient un nom canonique ; [renommages.<nom>] indique le nom
+# réel selon la distribution. Clé "os:version" (préfixe de version : la clé la
+# plus précise l'emporte) ou "os" seul (toutes versions). Vérifier chaque nom
+# avec « apt-cache policy <nom> » sur la version visée avant de l'ajouter.
+#
+# [renommages.netcat]
+# "ubuntu:24.04" = "netcat-openbsd"
+# "debian"       = "netcat-traditional"
