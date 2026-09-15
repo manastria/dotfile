@@ -1,0 +1,22 @@
+[[groupe]]
+nom = "communs"
+paquets = [
+    "curl",
+]
+
+
+[[groupe]]
+nom = "graphiques"
+si = { bureau = ["kubuntu", "xubuntu", "lubuntu", "ubuntu"] }
+paquets = [
+    "terminator"
+]
+
+[[groupe]]
+nom = "xubuntu"
+si = { bureau = ["xubuntu"] }
+paquets = [
+    "xfce4-goodies", 
+
+]
+
