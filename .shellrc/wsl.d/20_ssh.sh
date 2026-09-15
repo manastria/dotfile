@@ -8,3 +8,4 @@ export GIT_SSH_COMMAND="ssh.exe"
 
 alias ssh='ssh.exe'
 alias ssh-add='ssh-add.exe'
+alias scp='scp.exe'
