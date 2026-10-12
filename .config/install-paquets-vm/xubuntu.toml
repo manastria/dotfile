@@ -21,6 +21,9 @@ si = { bureau = ["xubuntu"] }
 paquets = [
     "xfce4-goodies", 
     "firefox",
-    "firefox-locale-fr"
+    "firefox-locale-fr",
+    "xubuntu-desktop",
+    "atril",
+    "mousepad"
 ]
 
