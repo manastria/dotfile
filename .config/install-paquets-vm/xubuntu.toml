@@ -22,7 +22,7 @@ paquets = [
     "xfce4-goodies", 
     "firefox",
     "firefox-locale-fr",
-    "xubuntu-desktop",
+    "xfce4-goodies",
     "atril",
     "mousepad"
 ]
