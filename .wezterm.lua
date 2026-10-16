@@ -12,8 +12,8 @@ config.default_prog = { '/bin/zsh' }
 -- JetBrains Mono comme police principale
 -- FiraMono Nerd Font en fallback pour les glyphes Nerd Font (starship, eza…)
 config.font = wezterm.font_with_fallback {
-  'JetBrains Mono',
   'FiraMono Nerd Font',
+  'JetBrains Mono',
 }
 config.font_size = 11.0
 
@@ -116,5 +116,57 @@ config.selection_word_boundary = ' \t\n{}[]()"\',;:'
 -- Active l'encodage CSI-u : permet aux applications (vim, tmux…) de
 -- distinguer des combinaisons comme Ctrl+Maj+lettre ou Ctrl+I / Tab.
 config.enable_csi_u_key_encoding = true
+
+
+
+
+
+
+
+
+
+-- Active la barre d'onglets pour afficher le statut à droite
+config.use_fancy_tab_bar = false
+config.tab_bar_at_bottom = false
+
+wezterm.on('update-status', function(window, pane)
+  -- 1. Récupération de la taille de police courante
+  local font_size = window:effective_config().font_size
+
+  -- 2. Récupération des dimensions du panneau actif (colonnes x lignes)
+  local dims = pane:get_dimensions()
+  local cols = dims.cols
+  local rows = dims.viewport_rows
+
+  -- 3. Détection du contexte (SSH / tmux / local)
+  local domain_name = pane:get_domain_name()
+  local title = pane:get_title()
+
+  local context_tag = "LOCAL"
+  if domain_name and domain_name ~= "local" then
+    context_tag = "SSH: " .. domain_name
+  elseif title:find("ssh") then
+    context_tag = "SSH"
+  elseif title:find("tmux") then
+    context_tag = "TMUX"
+  end
+
+  -- 4. Formatage visuel avec couleurs sobres
+  window:set_right_status(wezterm.format({
+    { Foreground = { Color = '#89b4fa' } },
+    { Text = ' ' .. context_tag .. ' ' },
+    { Foreground = { Color = '#6c7086' } },
+    { Text = '|' },
+
+    { Foreground = { Color = '#fab387' } },
+    { Text = string.format(' %d×%d ', cols, rows) },
+    { Foreground = { Color = '#6c7086' } },
+    { Text = '|' },
+
+    { Foreground = { Color = '#a6e3a1' } },
+    { Text = string.format(' %.1f pt ', font_size) },
+  }))
+end)
+
 
 return config
