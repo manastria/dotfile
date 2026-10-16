@@ -2,9 +2,9 @@
 # wezterm-terminfo-deploy — déploie l'entrée terminfo wezterm sur une machine distante
 # Usage : wezterm-terminfo-deploy user@machine
 #
-# La commande wezterm tcl génère l'entrée terminfo de WezTerm.
-# tic -x - l'installe dans ~/.terminfo/ sur la machine distante.
-# WezTerm n'a pas besoin d'être installé sur la machine distante.
+# WezTerm n'a pas de sous-commande pour exporter son terminfo : on télécharge
+# le fichier source officiel en local et tic -x - le compile dans ~/.terminfo/
+# sur la machine distante. WezTerm n'a besoin d'être installé nulle part.
 
 set -euo pipefail
 
@@ -13,12 +13,8 @@ if [[ -z "${1:-}" ]]; then
   exit 1
 fi
 
-if ! command -v wezterm &>/dev/null; then
-  echo "Erreur : wezterm n'est pas installé sur cette machine." >&2
-  exit 1
-fi
-
 TARGET="$1"
 
 echo "Déploiement du terminfo wezterm sur ${TARGET}…"
-wezterm tcl | ssh "$TARGET" 'tic -x - && echo "terminfo wezterm installé dans ~/.terminfo/"'
+curl -fsSL https://raw.githubusercontent.com/wezterm/wezterm/main/termwiz/data/wezterm.terminfo \
+  | ssh "$TARGET" 'tic -x - && echo "terminfo wezterm installé dans ~/.terminfo/"'

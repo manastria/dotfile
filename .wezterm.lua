@@ -2,31 +2,12 @@ local wezterm = require 'wezterm'
 local config = wezterm.config_builder()
 
 ---------------------------------------
--- SECTION 1 : DÉTECTION DE LA PLATEFORME
+-- SECTION 1 : SHELL PAR DÉFAUT
 ---------------------------------------
-local is_windows = wezterm.target_triple:find('windows') ~= nil
-local is_linux   = wezterm.target_triple:find('linux')   ~= nil
-
----------------------------------------
--- SECTION 2 : SHELL & PROGRAMME PAR DÉFAUT
----------------------------------------
-local launch_menu = {}
-
-if is_windows then
-  table.insert(launch_menu, { label = 'Linux (WSL)',  args = { 'wsl.exe' } })
-  table.insert(launch_menu, { label = 'Git Bash',     args = { 'C:\\Program Files\\Git\\bin\\bash.exe', '--login' } })
-  table.insert(launch_menu, { label = 'PowerShell',   args = { 'powershell.exe', '-NoLogo' } })
-  config.default_prog = { 'wsl.exe' }
-end
-
-if is_linux then
-  config.default_prog = { '/bin/zsh' }
-end
-
-config.launch_menu = launch_menu
+config.default_prog = { '/bin/zsh' }
 
 ---------------------------------------
--- SECTION 3 : POLICE
+-- SECTION 2 : POLICE
 ---------------------------------------
 -- JetBrains Mono comme police principale
 -- FiraMono Nerd Font en fallback pour les glyphes Nerd Font (starship, eza…)
@@ -37,7 +18,7 @@ config.font = wezterm.font_with_fallback {
 config.font_size = 11.0
 
 ---------------------------------------
--- SECTION 4 : THÈME & BASCULE LIGHT/DARK
+-- SECTION 3 : THÈME & BASCULE LIGHT/DARK
 ---------------------------------------
 local theme_dark  = 'Night Owl (Gogh)'
 local theme_light = 'One Light (Gogh)'
@@ -58,38 +39,39 @@ wezterm.on('toggle-theme', function(window)
 end)
 
 ---------------------------------------
--- SECTION 5 : TERMINAL & COMPATIBILITÉ TMUX
+-- SECTION 4 : TERMINAL (TERM)
 ---------------------------------------
--- Utilise wezterm si le terminfo est disponible, sinon xterm-256color
--- Détection côté Lua : on tente une commande shell
-local terminfo_wezterm = os.execute('infocmp wezterm > /dev/null 2>&1')
-if terminfo_wezterm then
+-- Utilise 'wezterm' si le terminfo est installé (voir install-wezterm.sh),
+-- sinon retombe sur xterm-256color.
+-- Le test est fait côté Lua en appelant infocmp via le shell.
+if os.execute('infocmp wezterm > /dev/null 2>&1') then
   config.term = 'wezterm'
 else
   config.term = 'xterm-256color'
 end
 
 ---------------------------------------
--- SECTION 6 : APPARENCE
+-- SECTION 5 : APPARENCE
 ---------------------------------------
 config.window_background_opacity = 0.95
 
--- Décore la fenêtre selon la plateforme
-if is_linux then
-  -- Laisse le gestionnaire de fenêtres gérer les décorations
-  config.window_decorations = 'NONE'
-end
+-- Barre de titre + poignées de redimensionnement fournies par le système
+-- ('NONE' supprimerait aussi le redimensionnement à la souris)
+config.window_decorations = 'TITLE | RESIZE'
 
 -- Padding intérieur
 config.window_padding = {
   left = 4, right = 4, top = 4, bottom = 4,
 }
 
--- Scrollback
+-- Historique de défilement
 config.scrollback_lines = 10000
 
+-- Pas de barre de défilement (tmux gère déjà son propre scrollback)
+config.enable_scroll_bar = false
+
 ---------------------------------------
--- SECTION 7 : KEYBINDS
+-- SECTION 6 : RACCOURCIS CLAVIER
 ---------------------------------------
 config.keys = {
   -- Bascule light/dark (vidéoprojecteur)
@@ -98,23 +80,26 @@ config.keys = {
     mods = 'NONE',
     action = wezterm.action.EmitEvent 'toggle-theme',
   },
-  -- Lance le menu de lancement (fuzzy)
-  {
-    key = 'L',
-    mods = 'ALT',
-    action = wezterm.action.ShowLauncherArgs {
-      flags = 'FUZZY|LAUNCH_MENU_ITEMS',
-    },
-  },
+  -- Saute au prompt précédent / suivant (nécessite l'intégration shell,
+  -- voir .shellrc/zshrc.d/99-wezterm.zsh)
   { key = 'UpArrow',   mods = 'CTRL|SHIFT', action = wezterm.action.ScrollToPrompt(-1) },
   { key = 'DownArrow', mods = 'CTRL|SHIFT', action = wezterm.action.ScrollToPrompt(1)  },
 }
 
 ---------------------------------------
--- SECTION 8 : SOURIS
+-- SECTION 7 : SOURIS
 ---------------------------------------
--- Clic milieu → colle depuis le presse-papiers
+-- Copie à la sélection : au relâchement du bouton gauche, la sélection (1 clic
+-- = glisser, 2 = mot, 3 = ligne) va dans le presse-papiers ET la sélection
+-- primaire. Sous tmux (souris active), c'est tmux qui sélectionne ; Maj + glisser
+-- rend la main à WezTerm.
+local copy_on_select = wezterm.action.CompleteSelection 'ClipboardAndPrimarySelection'
+
 config.mouse_bindings = {
+  { event = { Up = { streak = 1, button = 'Left' } }, mods = 'NONE', action = copy_on_select },
+  { event = { Up = { streak = 2, button = 'Left' } }, mods = 'NONE', action = copy_on_select },
+  { event = { Up = { streak = 3, button = 'Left' } }, mods = 'NONE', action = copy_on_select },
+  -- Clic milieu : colle le presse-papiers
   {
     event  = { Down = { streak = 1, button = 'Middle' } },
     mods   = 'NONE',
@@ -122,22 +107,14 @@ config.mouse_bindings = {
   },
 }
 
--- Copie automatique à la sélection (équivalent copy-on-select)
+-- Caractères qui délimitent un « mot » lors d'un double-clic de sélection
 config.selection_word_boundary = ' \t\n{}[]()"\',;:'
 
 ---------------------------------------
--- SECTION 9 : INTÉGRATION TMUX
+-- SECTION 8 : ENCODAGE CLAVIER
 ---------------------------------------
--- WezTerm détecte automatiquement tmux et adapte certains comportements.
--- On désactive les features WezTerm qui entrent en conflit avec tmux :
-
--- Pas de scroll natif WezTerm si tmux gère le scrollback
-config.enable_scroll_bar = false
-
-
----------------------------------------
--- SECTION 10 : 
----------------------------------------
+-- Active l'encodage CSI-u : permet aux applications (vim, tmux…) de
+-- distinguer des combinaisons comme Ctrl+Maj+lettre ou Ctrl+I / Tab.
 config.enable_csi_u_key_encoding = true
 
 return config
