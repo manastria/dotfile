@@ -81,7 +81,7 @@ set -euo pipefail
 # Constantes
 # -----------------------------------------------------------------------------
 readonly DEFAULT_SIZE="1G"
-readonly DEFAULT_LEVEL=3
+readonly DEFAULT_LEVEL=8
 readonly DEFAULT_REDUNDANCY=10
 readonly DIR_SUFFIX=".split"
 readonly SPLIT_SUFFIX_LEN=3     # .001 à .999 : jusqu'à 999 volumes
