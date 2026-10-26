@@ -20,10 +20,42 @@ zenv
 # Lancer zsh avec un profil
 zenv simple
 
-# Lancer zsh avec un profil dans tmux
+# Lancer zsh avec un profil dans tmux (session « main » créée ou reprise)
 zenv simple --tmux
 zenv simple -t
+
+# Session nommée (-s implique --tmux)
+zenv simple -s projet
+
+# Reprendre une session en détachant les autres clients
+zenv simple -t -d
 ```
+
+### Options de `zenv`
+
+| Option              | Défaut | Description                                                        |
+| ------------------- | ------ | ------------------------------------------------------------------ |
+| `--tmux`, `-t`      | non    | Lance le profil dans tmux au lieu d'un simple `zsh -i`.            |
+| `--session`, `-s`   | `main` | Nom de la session tmux. Implique `--tmux`. `.` et `:` interdits.   |
+| `--detach`, `-d`    | non    | Détache les autres clients de la session (`tmux new -A -D`).       |
+
+### Sessions tmux
+
+`zenv --tmux` exécute `tmux new-session -A -s <nom>` : la session est **créée
+si elle n'existe pas, reprise sinon**. Relancer `zsh-daily` après une
+déconnexion ou depuis un autre terminal retrouve donc la session `main`.
+
+- Le profil est transmis à la session par `-e ZSH_PROFILE=<profil>`
+  (tmux ≥ 3.2), y compris quand un serveur tmux tourne déjà. Avec un tmux plus
+  ancien, il n'est pris en compte que si le serveur démarre à ce moment-là.
+- Quand on reprend une session existante, **son profil d'origine est conservé** :
+  `zsh-remote` rattaché à une session `main` créée par `zsh-daily` ouvre
+  `main` telle quelle. Pour avoir un autre profil, utiliser une autre session :
+  `zsh-remote -s ssh`.
+- Lancé depuis l'intérieur de tmux, `zenv` ne crée pas de tmux imbriqué : il
+  crée la session en arrière-plan si besoin puis y **bascule**
+  (`switch-client`).
+- Les alias acceptent les options en plus : `zsh-daily -s projet`.
 
 ### Alias prédéfinis
 
@@ -98,7 +130,7 @@ zssh
 | ----------------- | ---------------------- | -------------------------------------- |
 | Cible             | Machine **locale**     | Machine **distante** (via SSH)         |
 | Commande          | `zenv ssh --tmux`      | `ssh -t … tmux new-session -A -s main` |
-| Rattachement tmux | Non (nouvelle session) | Oui (`-A` : attache si existante)      |
+| Rattachement tmux | Oui (`-A`, session `main` par défaut) | Oui (`-A` : attache si existante) |
 
 ## Maintenance
 
@@ -153,8 +185,8 @@ remplacer le fichier.
 
 ```
 bash/zsh
-  └─ zenv <profil> [--tmux]
-       └─ TERM=xterm-256color ZSH_PROFILE=<profil> [tmux | zsh -i]
+  └─ zenv <profil> [--tmux] [--session nom]
+       └─ TERM=xterm-256color ZSH_PROFILE=<profil> [tmux new -A -s <nom> -e ZSH_PROFILE=<profil> | zsh -i]
             └─ .zshrc
                  ├─ base       → .zsh/config/zshrc.base
                  ├─ light      → .zsh/config/zshrc.light
