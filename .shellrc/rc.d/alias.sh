@@ -10,6 +10,8 @@
 alias ls='ls -N --show-control-chars --color=auto --classify --group-directories-first'
 alias df="df -x tmpfs -x devtmpfs --human-readable --output=source,fstype,size,used,avail,pcent,itotal,iused,iavail,ipcent"
 alias lsblkf='lsblk -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT,UUID,LABEL'
+# Disques SATA/USB uniquement (-I 8 = majeur SCSI), avec usage et espace libre
+alias lsd='lsblk -o NAME,MOUNTPOINT,FSTYPE,LABEL,SIZE,FSUSE%,FSAVAIL,TRAN,TYPE,UUID,MAJ:MIN -I 8'
 
 # --- Configuration des Alias de fichiers ---
 
