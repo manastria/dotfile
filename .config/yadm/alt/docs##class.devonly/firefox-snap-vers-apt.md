@@ -16,7 +16,7 @@
 
 Fait basculer un poste Debian/Ubuntu où Firefox est installé en Snap vers le paquet `.deb` publié directement par Mozilla, en configurant le dépôt APT officiel (clé signée, épinglage `Pin-Priority: 1000`) puis en installant `firefox` par ce canal.
 
-Il diffère de [`switch-to-networkmanager.sh`](../.local/bin/switch-to-networkmanager.sh) (bascule d'une brique système différente, netplan/systemd-networkd) : ici, la bascule concerne uniquement le paquet Firefox et son mode de confinement, pas la pile réseau.
+Il diffère de [`switch-to-networkmanager.sh`](../.local/bin/switch-to-networkmanager.sh) (bascule d'une brique système différente, netplan/NetworkManager) : ici, la bascule concerne uniquement le paquet Firefox et son mode de confinement, pas la pile réseau.
 
 Le script signale aussi, sans agir dessus, le cas où KeePassXC lui-même est installé en Snap sur le poste — cause possible d'instabilité résiduelle de la messagerie native même après la bascule de Firefox.
 

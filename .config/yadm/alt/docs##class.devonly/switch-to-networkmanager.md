@@ -1,4 +1,12 @@
-# `switch-to-networkmanager` — Basculer vers NetworkManager sur Ubuntu/XUbuntu
+# `switch-to-networkmanager.sh` — Laisser NetworkManager gérer le réseau (Ubuntu/Xubuntu)
+
+> Script : [`.local/bin/switch-to-networkmanager.sh`](../.local/bin/switch-to-networkmanager.sh)
+
+## En bref
+
+> Paragraphe de rappel, à coller tel quel dans le mémo.
+
+`switch-to-networkmanager.sh` réduit la configuration netplan d'un Ubuntu/Xubuntu à `renderer: NetworkManager`, afin que les réglages faits dans `nmtui`, `nmcli` ou l'applet réseau **survivent** au redémarrage. Il sert quand une IPv4 passée en manuel « repasse toute seule en DHCP » : la cause est un `dhcp4: true` laissé par l'installeur dans `/etc/netplan/00-installer-config.yaml`, que netplan fusionne avec le réglage de NetworkManager. Le script ne configure **aucune** adresse : il remet NetworkManager aux commandes, et l'IP statique se ressaisit ensuite dans `nmtui`. Il sauvegarde `/etc/netplan` dans `/root/netplan-backup-<date>.tar.gz`, met les autres `*.yaml` de côté en `*.yaml.disabled-<date>` (rien n'est supprimé), puis lance `netplan apply`. Il s'utilise sans argument (il se relance seul avec `sudo`) et peut être relancé sans risque : s'il n'y a rien à faire, il le dit et s'arrête.
 
 ---
 
@@ -6,43 +14,90 @@
 
 ### Description
 
-`switch-to-networkmanager.sh` configure NetworkManager comme unique gestionnaire réseau sur un système Ubuntu/XUbuntu utilisant netplan. Il remplace la configuration netplan existante par un fichier minimal pointant vers NetworkManager, désactive `systemd-networkd`, et applique la configuration.
+Sur Ubuntu, netplan lit **tous** les `/etc/netplan/*.yaml` dans l'ordre alphabétique et les **fusionne par identifiant d'interface**. Un poste installé avec subiquity contient typiquement :
 
-Le script commence par réinstaller netplan pour corriger l'erreur `ModuleNotFoundError: No module named 'netplan_cli.cli.core'` qui apparaît sur certaines machines après une mise à jour partielle. Il sauvegarde ensuite l'état initial avant toute modification, ce qui permet une restauration complète si nécessaire.
+| Fichier | Origine | Contenu |
+| ------- | ------- | ------- |
+| `00-installer-config.yaml` | installeur | `enp0s3` avec `dhcp4: true` |
+| `01-network-manager-all.yaml` | paquet bureau | `renderer: NetworkManager` seul |
+| `90-NM-<uuid>.yaml` | NetworkManager | écrit quand on modifie dans `nmtui` un profil `netplan-*` |
+
+Quand on passe l'IPv4 en manuel dans `nmtui`, NetworkManager écrit la nouvelle adresse dans `90-NM-<uuid>.yaml` mais **n'y ajoute pas `dhcp4: false`**, car c'est la valeur par défaut. La fusion conserve donc le `dhcp4: true` de `00-installer-config.yaml` : on obtient DHCP **plus** l'adresse saisie, et la connexion semble être revenue en automatique.
+
+Le script supprime la cause : il ne laisse que `01-network-manager-all.yaml`. Plus aucun profil `netplan-<interface>` n'est généré dans `/run/NetworkManager/`, et les profils créés ensuite dans `nmtui` sont de vrais profils NetworkManager, stockés dans `/etc/NetworkManager/system-connections/`.
+
+Il diffère d'une édition manuelle du YAML : ici on abandonne netplan comme source de la configuration des interfaces, on ne la corrige pas.
 
 ---
 
 ### Prérequis
 
-| Élément | Détail |
-| ------- | ------ |
-| Distribution | Ubuntu ou XUbuntu (netplan requis) |
-| NetworkManager | Doit être installé (`apt install network-manager`) |
-| Droits | Root — le script se relance automatiquement via `sudo` si nécessaire |
-| Shell | `bash` obligatoire |
+| Outil | Rôle | Vérification |
+| ----- | ---- | ------------ |
+| `netplan` (paquet `netplan.io`) | Application de la configuration | `command -v netplan` |
+| `nmcli` (paquet `network-manager`) | Présence de NetworkManager | `command -v nmcli` |
+| `sudo` | Élévation de privilèges (le script se relance seul) | `sudo -v` |
 
 ---
 
 ### Syntaxe
 
-```bash
-sudo bash switch-to-networkmanager.sh
-# ou simplement (le script se relance seul avec sudo) :
-bash switch-to-networkmanager.sh
 ```
+switch-to-networkmanager.sh [-h]
+```
+
+| Option | Argument | Défaut | Description |
+| ------ | -------- | ------ | ----------- |
+| `-h`, `--help` | — | — | Affiche l'en-tête manpage du script |
+
+Aucun autre paramètre : le script fait toujours la même chose.
 
 ---
 
 ### Exemples d'utilisation
 
 ```bash
-# Lancer depuis le répertoire courant
-bash ~/.local/bin/switch-to-networkmanager.sh
+# Basculer, puis ressaisir l'IP statique
+switch-to-networkmanager.sh
+nmtui
 
-# Vérifier le résultat
-networkctl status          # doit indiquer "unmanaged" ou absent
-nmcli general status       # doit afficher "connected"
+# Vérifier le résultat : le profil doit venir de /etc/NetworkManager, pas de /run
+nmcli -f NAME,FILENAME connection show
+ls /etc/netplan/
+
+# Restaurer l'état d'avant
+sudo tar -xzf /root/netplan-backup-20261029-101500.tar.gz -C /etc
+sudo netplan apply
+
+# Réactiver un seul fichier mis de côté
+sudo mv /etc/netplan/00-installer-config.yaml.disabled-20261029-101500 \
+        /etc/netplan/00-installer-config.yaml
+sudo netplan apply
 ```
+
+**Exemple de sortie** (premier passage, trois YAML présents) :
+
+```
+=== Bascule vers NetworkManager ===
+
+[INFO]      Sauvegarde de /etc/netplan -> /root/netplan-backup-20261029-101500.tar.gz
+[INFO]      Écriture de /etc/netplan/01-network-manager-all.yaml
+[INFO]      Mis de côté : 00-installer-config.yaml -> 00-installer-config.yaml.disabled-20261029-101500
+[INFO]      Mis de côté : 90-NM-1eef7e45-3b9d-3043-bee3-fc5925c90273.yaml -> 90-NM-1eef7e45-3b9d-3043-bee3-fc5925c90273.yaml.disabled-20261029-101500
+[INFO]      Application de la configuration netplan
+[OK]        NetworkManager gère maintenant le réseau.
+[INFO]      Sauvegarde : /root/netplan-backup-20261029-101500.tar.gz
+[ATTENTION] Les réglages des anciens YAML (IP statique, etc.) ne sont pas repris.
+[INFO]      Configurez la connexion avec : nmtui
+```
+
+Second passage :
+
+```
+[OK]        Déjà conforme : seul /etc/netplan/01-network-manager-all.yaml est présent.
+```
+
+> Ces sorties reprennent les messages du script (testé dans un répertoire factice, avec de faux `netplan`/`nmcli`) ; elles n'ont pas été relevées sur une VM Xubuntu réelle.
 
 ---
 
@@ -50,36 +105,10 @@ nmcli general status       # doit afficher "connected"
 
 | Risque | Contexte |
 | ------ | -------- |
-| Coupure réseau temporaire | Inévitable pendant `netplan apply` — particulièrement critique en SSH |
-| Perte de configuration réseau | Si les anciens fichiers YAML contenaient des adresses statiques non reproduites dans NetworkManager |
+| Perte de la configuration réseau | L'IP statique des anciens YAML n'est pas reprise : elle est à ressaisir dans `nmtui`. Le profil de remplacement est un « Wired connection » en DHCP. |
+| Coupure réseau brève | Pendant `netplan apply`. En SSH, la session peut tomber : à lancer sur la console de préférence. |
 
-Si le script est lancé en SSH, `netplan try` est préféré à `netplan apply` : il effectue un rollback automatique après 120 secondes si la connexion n'est pas confirmée.
-
----
-
-### Restauration d'urgence
-
-**Restaurer la configuration netplan complète :**
-
-```bash
-tar -xzf /root/netplan-backup-YYYYmmdd-HHMMSS.tar.gz -C /
-netplan apply
-```
-
-**Réactiver un seul fichier YAML désactivé :**
-
-```bash
-mv /etc/netplan/fichier.yaml.disabled-YYYYmmdd-HHMMSS /etc/netplan/fichier.yaml
-netplan apply
-```
-
-Les archives sont dans `/root/` avec un nom horodaté (`netplan-backup-YYYYmmdd-HHMMSS.tar.gz`).
-
----
-
-### Variables d'environnement
-
-Aucune.
+Le script n'utilise **pas** `netplan try` : son rollback ne rétablit pas les fichiers déjà renommés, et il exige une confirmation interactive. La restauration se fait avec la sauvegarde (voir exemples).
 
 ---
 
@@ -87,8 +116,9 @@ Aucune.
 
 | Code | Signification |
 | ---- | ------------- |
-| 0 | Configuration appliquée avec succès |
-| 1 | Shell non-bash, ou erreur lors de l'exécution (`set -euo pipefail`) |
+| `0` | Configuration appliquée, ou déjà conforme |
+| `1` | `netplan` ou `nmcli` absent, échec de `netplan apply`, NetworkManager inactif après application |
+| `2` | Option inconnue |
 
 ---
 
@@ -96,58 +126,74 @@ Aucune.
 
 ### Architecture interne
 
-Le script s'exécute en 5 étapes séquentielles avec `set -euo pipefail` (arrêt immédiat sur erreur) :
-
-| Étape | Action |
-| ----- | ------ |
-| 1 | Réinstallation de `netplan.io` et `python3-netplan` — corrige `ModuleNotFoundError: No module named 'netplan_cli.cli.core'` |
-| 2 | Sauvegarde de `/etc/netplan/` dans une archive `.tar.gz` horodatée dans `/root/` |
-| 3 | Écriture de `/etc/netplan/01-network-manager-all.yaml` (fichier minimal `renderer: NetworkManager`) |
-| 4 | Renommage des anciens fichiers `.yaml` en `.yaml.disabled-<timestamp>` (pas de suppression) |
-| 5 | Désactivation de `systemd-networkd.service` et `systemd-networkd.socket` (échec ignoré si absent) |
-| 6 | Application via `netplan try` (si disponible) ou `netplan apply`, puis `systemctl restart NetworkManager` |
-
-### Élévation de privilèges
-
-Le script détecte l'absence de droits root et se relance lui-même :
-
-```bash
-if [ "$EUID" -ne 0 ]; then
-    exec sudo -E bash "$(readlink -f "$0")" "$@"
-fi
+```
+main
+├─ parse_args           →  -h / option inconnue (avant l'élévation : l'aide ne demande pas sudo)
+├─ ensure_root          →  Tier 1 : exec sudo "$(readlink -f "$0")" "$@"
+├─ check_prerequisites  →  netplan, nmcli, /etc/netplan
+├─ find_old_yaml        →  remplit OLD_YAML (tous les *.yaml sauf 01-network-manager-all.yaml)
+├─ already_configured   →  OLD_YAML vide et 01-… identique au contenu attendu → exit 0
+├─ backup_netplan       →  tar.gz de /etc/netplan dans /root
+├─ write_nm_yaml        →  01-network-manager-all.yaml, mode 600
+├─ disable_old_yaml     →  mv f f.disabled-<date>
+└─ apply_netplan        →  netplan apply, puis contrôle de NetworkManager
 ```
 
-`-E` préserve l'environnement de l'utilisateur courant. `readlink -f` résout les liens symboliques.
+---
 
-Le check bash (`$BASH_VERSION`) est placé **avant** le `set -euo pipefail` et avant la relance sudo, pour garantir un message d'erreur lisible si le script est appelé avec `sh`.
+### Détail des choix techniques
 
-### Stratégie de sauvegarde
+**Mettre de côté tous les autres YAML, `90-NM-*` compris**
+Retirer seulement `00-installer-config.yaml` suffirait à corriger le symptôme, mais le profil resterait géré par netplan (`netplan-enp0s3` dans `/run`) et NetworkManager continuerait d'écrire des `90-NM-*.yaml`. Le but du script est une configuration où `nmtui` fait foi ; il ne laisse donc que le fichier `renderer`.
 
-- **Archive complète** : `tar -czf /root/netplan-backup-$ts.tar.gz -C /etc netplan` — chemin relatif à `/etc`, ce qui permet un `tar -xzf … -C /` direct pour restaurer.
-- **Renommage horodaté** : les anciens YAML sont conservés sur place avec le suffixe `.disabled-$ts`, évitant l'écrasement de sauvegardes précédentes.
+**Renommer plutôt que supprimer**
+Netplan ignore tout fichier qui ne finit pas par `.yaml` : le suffixe `.disabled-<date>` désactive sans perdre, et l'horodatage évite d'écraser une mise de côté précédente. Doublé d'une archive complète, ce qui permet de revenir en arrière sans rien deviner.
 
-### Choix `netplan try` vs `netplan apply`
+**`netplan apply` et non `netplan try`**
+`netplan try` annule la configuration appliquée au bout de 120 s sans confirmation, mais **pas** les renommages de fichiers : on se retrouverait avec un état incohérent. Il est aussi interactif. Le script a été simplifié en conséquence.
 
-```bash
-if netplan help 2>/dev/null | grep -q '\btry\b'; then
-    netplan try
-else
-    netplan apply
-fi
+**Pas de réinstallation de `netplan.io`, pas de désactivation de `systemd-networkd`, pas de `systemctl restart NetworkManager`**
+Les versions précédentes les faisaient. La réinstallation corrigeait une erreur `ModuleNotFoundError: netplan_cli.cli.core` propre à une mise à jour partielle (et échoue hors ligne sous `set -e`). Avec `renderer: NetworkManager`, netplan ne génère rien pour `systemd-networkd`, donc le désactiver ne change rien ; et `netplan apply` recharge déjà NetworkManager. Si l'erreur `netplan_cli` réapparaît : `sudo apt-get install --reinstall netplan.io python3-netplan`.
+
+**`already_configured` compare le contenu, pas seulement l'existence**
+Un `01-network-manager-all.yaml` modifié à la main (par exemple un `ethernets:` ajouté) n'est pas considéré comme conforme et sera réécrit après sauvegarde.
+
+**`chmod 600` sur le YAML**
+Les versions récentes de netplan avertissent quand un fichier de `/etc/netplan/` est lisible par tous.
+
+**Pas de `nullglob` dans `find_old_yaml`**
+Le motif `*.yaml` reste littéral quand rien ne correspond ; le test `-e` l'écarte. Cela évite de modifier une option globale du shell.
+
+---
+
+### Dépendances externes
+
+```
+netplan.io       →  netplan apply
+network-manager  →  nmcli (présence), service NetworkManager
+systemd          →  systemctl is-active
+coreutils / tar  →  sauvegarde, mv, cmp, chmod
 ```
 
-`netplan try` met en place la configuration et attend une confirmation (`Enter`) dans un délai de 120 secondes. Sans confirmation, il effectue un rollback automatique — comportement de sécurité important lors d'une exécution en SSH.
-
-### Dépendances
-
-| Commande | Paquet | Rôle |
-| -------- | ------ | ---- |
-| `netplan` | `netplan.io` | Application de la configuration réseau |
-| `systemctl` | `systemd` | Désactivation de `systemd-networkd` |
-| `NetworkManager` | `network-manager` | Gestionnaire réseau cible |
-| `tar` | `tar` | Sauvegarde et restauration |
+---
 
 ### Points d'extension
 
-- Pour automatiser la confirmation de `netplan try` (cas CI/CD) : remplacer par `netplan apply` en passant une variable d'environnement.
-- Pour gérer des interfaces spécifiques (adresses statiques, VLAN), compléter `/etc/netplan/01-network-manager-all.yaml` avant le `netplan apply`.
+**Reprendre une IP statique dans un vrai profil NetworkManager** — à ajouter après `apply_netplan`, par exemple :
+
+```bash
+nmcli connection add type ethernet ifname enp0s3 con-name lan-static \
+    ipv4.method manual ipv4.addresses 192.168.1.50/24 \
+    ipv4.gateway 192.168.1.1 ipv4.dns 1.1.1.1
+```
+
+**Ne basculer que certains fichiers** — filtrer dans `find_old_yaml` (par exemple ne conserver que `00-installer-config.yaml` et `90-NM-*`) si d'autres YAML doivent subsister.
+
+---
+
+### Notes de maintenance
+
+- Le script ne reprend **aucun** réglage des anciens YAML ; il ne les analyse pas. C'est un choix (cas visé : postes étudiants où `nmtui` fait foi), pas un oubli.
+- Après la bascule, NetworkManager crée un profil en mémoire (« Wired connection 1 ») pour l'interface câblée ; il n'est enregistré dans `/etc/NetworkManager/system-connections/` qu'une fois modifié et validé dans `nmtui`.
+- Si cloud-init régénère `50-cloud-init.yaml` au démarrage (images cloud), le fichier reviendra : désactiver cloud-init côté réseau (`/etc/cloud/cloud.cfg.d/99-disable-network-config.cfg` avec `network: {config: disabled}`).
+- Les exemples de sortie de cette page n'ont pas été relevés sur une machine réelle (voir la note sous l'exemple).
