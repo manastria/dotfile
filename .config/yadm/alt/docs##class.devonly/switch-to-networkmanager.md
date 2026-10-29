@@ -85,6 +85,7 @@ sudo netplan apply
 [INFO]      Mis de côté : 00-installer-config.yaml -> 00-installer-config.yaml.disabled-20261029-101500
 [INFO]      Mis de côté : 90-NM-1eef7e45-3b9d-3043-bee3-fc5925c90273.yaml -> 90-NM-1eef7e45-3b9d-3043-bee3-fc5925c90273.yaml.disabled-20261029-101500
 [INFO]      Application de la configuration netplan
+[INFO]      Redémarrage de NetworkManager
 [OK]        NetworkManager gère maintenant le réseau.
 [INFO]      Sauvegarde : /root/netplan-backup-20261029-101500.tar.gz
 [ATTENTION] Les réglages des anciens YAML (IP statique, etc.) ne sont pas repris.
@@ -117,7 +118,7 @@ Le script n'utilise **pas** `netplan try` : son rollback ne rétablit pas les fi
 | Code | Signification |
 | ---- | ------------- |
 | `0` | Configuration appliquée, ou déjà conforme |
-| `1` | `netplan` ou `nmcli` absent, échec de `netplan apply`, NetworkManager inactif après application |
+| `1` | `netplan` ou `nmcli` absent, échec de `netplan apply`, NetworkManager inactif après son redémarrage |
 | `2` | Option inconnue |
 
 ---
@@ -136,7 +137,7 @@ main
 ├─ backup_netplan       →  tar.gz de /etc/netplan dans /root
 ├─ write_nm_yaml        →  01-network-manager-all.yaml, mode 600
 ├─ disable_old_yaml     →  mv f f.disabled-<date>
-└─ apply_netplan        →  netplan apply, puis contrôle de NetworkManager
+└─ apply_netplan        →  netplan apply, restart NetworkManager, puis contrôle qu'il est actif
 ```
 
 ---
@@ -152,8 +153,14 @@ Netplan ignore tout fichier qui ne finit pas par `.yaml` : le suffixe `.disabled
 **`netplan apply` et non `netplan try`**
 `netplan try` annule la configuration appliquée au bout de 120 s sans confirmation, mais **pas** les renommages de fichiers : on se retrouverait avec un état incohérent. Il est aussi interactif. Le script a été simplifié en conséquence.
 
-**Pas de réinstallation de `netplan.io`, pas de désactivation de `systemd-networkd`, pas de `systemctl restart NetworkManager`**
-Les versions précédentes les faisaient. La réinstallation corrigeait une erreur `ModuleNotFoundError: netplan_cli.cli.core` propre à une mise à jour partielle (et échoue hors ligne sous `set -e`). Avec `renderer: NetworkManager`, netplan ne génère rien pour `systemd-networkd`, donc le désactiver ne change rien ; et `netplan apply` recharge déjà NetworkManager. Si l'erreur `netplan_cli` réapparaît : `sudo apt-get install --reinstall netplan.io python3-netplan`.
+**`systemctl restart NetworkManager` après `netplan apply`**
+Constaté sur Xubuntu 26.04 : une fois les YAML réduits au seul `renderer`, aucune interface n'est déclarée et `netplan apply` laisse NetworkManager arrêté (le contrôle final échouait avec « NetworkManager n'est pas actif »). Le redémarrage explicite est donc nécessaire ; c'est aussi lui qui fait disparaître le profil `netplan-*` de `/run`.
+
+**Messages sur `systemd-networkd` pendant `netplan apply`**
+`systemd-networkd is not running` et `Unit dbus-org.freedesktop.network1.service not found` sont sans conséquence : netplan tente de recharger networkd, absent ou arrêté sur un poste Xubuntu. Ils n'interrompent pas le script.
+
+**Pas de réinstallation de `netplan.io`, pas de désactivation de `systemd-networkd`**
+Les versions précédentes les faisaient. La réinstallation corrigeait une erreur `ModuleNotFoundError: netplan_cli.cli.core` propre à une mise à jour partielle (et échoue hors ligne sous `set -e`). Avec `renderer: NetworkManager`, netplan ne génère rien pour `systemd-networkd`, donc le désactiver ne change rien. Si l'erreur `netplan_cli` réapparaît : `sudo apt-get install --reinstall netplan.io python3-netplan`.
 
 **`already_configured` compare le contenu, pas seulement l'existence**
 Un `01-network-manager-all.yaml` modifié à la main (par exemple un `ethernets:` ajouté) n'est pas considéré comme conforme et sera réécrit après sauvegarde.

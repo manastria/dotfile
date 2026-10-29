@@ -154,9 +154,14 @@ disable_old_yaml() {
 
 apply_netplan() {
     info "Application de la configuration netplan"
+    # Les messages sur systemd-networkd (absent ou arrêté) sont sans gravité
     netplan apply
+    # netplan apply peut laisser NetworkManager arrêté quand aucune interface
+    # n'est déclarée dans les YAML : on le (re)démarre explicitement
+    info "Redémarrage de NetworkManager"
+    systemctl restart NetworkManager
     systemctl is-active --quiet NetworkManager \
-        || die "NetworkManager n'est pas actif après netplan apply."
+        || die "NetworkManager n'est pas actif (voir : systemctl status NetworkManager)."
 }
 
 # -----------------------------------------------------------------------------
