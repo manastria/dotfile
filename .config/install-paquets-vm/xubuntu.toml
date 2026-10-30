@@ -12,7 +12,8 @@ nom = "graphiques"
 si = { bureau = ["kubuntu", "xubuntu", "lubuntu", "ubuntu"] }
 paquets = [
     "terminator",
-    "wireshark"
+    "wireshark",
+    "tshark"
 ]
 
 [[groupe]]
