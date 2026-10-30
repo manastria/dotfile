@@ -6,7 +6,7 @@
 
 > Paragraphe de rappel, à coller tel quel dans le mémo.
 
-`firefox-snap-vers-apt.sh` bascule Firefox du paquet Snap vers le `.deb` officiel publié par Mozilla sur `packages.mozilla.org`. La raison : la sandbox du Snap bloque la messagerie native que l'extension KeePassXC-Browser utilise pour parler à KeePassXC, alors que le paquet `.deb` n'a pas cette limitation. Le script ajoute le dépôt APT de Mozilla (clé de signature vérifiée par empreinte), installe le paquet `firefox`, puis retire le Snap s'il était présent. Il ne fait **pas** de sauvegarde ni de reprise des profils Firefox : chaque utilisateur repart avec un profil vide sous `~/.mozilla/firefox/`. Il se relance automatiquement en root si besoin (accès à `/etc/apt` requis, pas besoin de taper `sudo` soi-même) et peut être relancé sans risque sur un poste déjà migré.
+`firefox-snap-vers-apt.sh` bascule Firefox du paquet Snap vers le `.deb` officiel publié par Mozilla sur `packages.mozilla.org`. La raison : la sandbox du Snap bloque la messagerie native que l'extension KeePassXC-Browser utilise pour parler à KeePassXC, alors que le paquet `.deb` n'a pas cette limitation. Le script ajoute le dépôt APT de Mozilla (clé de signature vérifiée par empreinte), installe les paquets `firefox` et `firefox-l10n-fr` (langue française, du même dépôt : surtout pas le `firefox-locale-fr` d'Ubuntu, incompatible avec le `.deb` Mozilla), puis retire le Snap s'il était présent. Il ne fait **pas** de sauvegarde ni de reprise des profils Firefox : chaque utilisateur repart avec un profil vide sous `~/.mozilla/firefox/`. Il se relance automatiquement en root si besoin (accès à `/etc/apt` requis, pas besoin de taper `sudo` soi-même) et peut être relancé sans risque sur un poste déjà migré.
 
 ---
 
@@ -14,7 +14,7 @@
 
 ### Description
 
-Fait basculer un poste Debian/Ubuntu où Firefox est installé en Snap vers le paquet `.deb` publié directement par Mozilla, en configurant le dépôt APT officiel (clé signée, épinglage `Pin-Priority: 1000`) puis en installant `firefox` par ce canal.
+Fait basculer un poste Debian/Ubuntu où Firefox est installé en Snap vers le paquet `.deb` publié directement par Mozilla, en configurant le dépôt APT officiel (clé signée, épinglage `Pin-Priority: 1000`) puis en installant `firefox` et son paquet de langue `firefox-l10n-fr` par ce canal.
 
 Il diffère de [`switch-to-networkmanager.sh`](../.local/bin/switch-to-networkmanager.sh) (bascule d'une brique système différente, netplan/NetworkManager) : ici, la bascule concerne uniquement le paquet Firefox et son mode de confinement, pas la pile réseau.
 
@@ -70,6 +70,8 @@ décocher puis recocher la case Firefox pour régénérer le fichier de
 messagerie native, puis relancer la connexion depuis l'extension.
 ```
 
+Le script ne suppose pas que Firefox soit en Snap : sur un poste sans aucun Firefox, il installe directement le `.deb` Mozilla (`FIREFOX_SNAP=0`, pas de retrait de Snap). Il peut donc servir d'installateur de Firefox, et `firefox` n'a pas à figurer dans le profil `install-paquets-vm`.
+
 Relancé sur un poste déjà migré, le script saute simplement l'étape de retrait du Snap (`FIREFOX_SNAP=0`) et réinstalle/confirme le paquet `.deb`.
 
 ### Codes de retour
@@ -90,7 +92,7 @@ Script linéaire, sans `main()` ni fonctions : les étapes s'enchaînent au fil 
 1. Auto-relance en root (Tier 1) : `[ "$(id -u)" -ne 0 ] && exec sudo "$(readlink -f "$0")" "$@"`.
 2. État du poste : `snap list firefox` (fixe `FIREFOX_SNAP`), `snap list keepassxc` (avertissement informatif seulement).
 3. Ajout du dépôt Mozilla : `install -d` du dossier de clés, téléchargement de la clé (`wget | tee`), vérification de son empreinte via `gpg --import-show`, écriture de `sources.list.d/mozilla.list` et du pin `preferences.d/mozilla` (priorité 1000).
-4. `apt update` puis `apt install -y --allow-downgrades firefox`.
+4. `apt update` puis `apt install -y --allow-downgrades firefox firefox-l10n-fr`.
 5. Si `FIREFOX_SNAP=1` : `snap remove --purge firefox`.
 6. Message final : procédure de reconnexion de la messagerie native KeePassXC.
 
@@ -103,6 +105,8 @@ Script linéaire, sans `main()` ni fonctions : les étapes s'enchaînent au fil 
 **`GNUPGHOME` jetable pour la vérification d'empreinte.** `gpg -n` (`--dry-run`, utilisé pour ne rien modifier au trousseau) refuse de **créer** son répertoire de configuration s'il n'existe pas encore — il échoue alors avec `Fatal: <homedir> : le répertoire n'existe pas.` C'est systématiquement le cas de `/root/.gnupg` au premier lancement du script via `sudo` (root n'a jamais utilisé `gpg` sur la machine). Le symptôme observé était trompeur : `gpg` n'affiche que la ligne `pub ...` avant de mourir, sans jamais imprimer l'empreinte ; combiné à `2>/dev/null` (qui masque le vrai message d'erreur) et à `set -o pipefail` + `set -e` (qui propagent le code d'échec de `gpg` à travers le pipe `| awk` puis à l'affectation `FINGERPRINT_OBTENUE=$(...)`), le script s'arrêtait juste après `== Ajout du dépôt APT officiel de Mozilla ==`, sans aucun message exploitable. Fix : un `GNUPGHOME` créé par `mktemp -d` (nettoyé par un `trap ... EXIT`) est passé explicitement via `--homedir`, indépendamment de tout état préexistant du compte root.
 
 **`--allow-downgrades` sur `apt install`.** Le paquet `firefox` transitionnel d'Ubuntu (celui qui redirige vers le Snap) porte un epoch `1:` (ex. `1:1snap1-0ubuntu8`), qui le fait toujours l'emporter, en comparaison de versions dpkg, sur une vraie version Mozilla sans epoch (ex. `155.0.1~build1`) — quel que soit le pin. C'est le mécanisme volontaire par lequel Ubuntu pousse ses utilisateurs vers Snap. Sans `--allow-downgrades`, `apt install -y` refuse ce qu'il perçoit comme une rétrogradation, avec `Erreur : Des paquets ont été rétrogradés et -y a été employé sans --allow-downgrades.` — et ce, systématiquement, pour n'importe quel poste ciblé par ce script (puisque la cible même du script est un poste avec Firefox en Snap).
+
+**`firefox-l10n-fr` et non `firefox-locale-fr`.** Le `firefox-locale-fr` d'Ubuntu est un paquet transitionnel qui dépend de `firefox (>= 1:1snap1-…)`. Le `.deb` Mozilla (`159.0~build1`, sans epoch) ne satisfait jamais cette contrainte : tout `apt install` qui demande `firefox-locale-fr` échoue ensuite avec `Dépend: firefox (>= 1:1snap1-0ubuntu9.1) mais 159.0~build1 devra être installé` (constaté lors d'un `apt-get install -y tshark firefox-locale-fr` par `install-paquets-vm.py`). Le dépôt Mozilla publie ses propres langues sous `firefox-l10n-<code>` (architecture `all`, dépendance stricte sur la même version de `firefox`) : le script installe `firefox-l10n-fr` en même temps que `firefox`. Le profil `xubuntu.toml` ne demande donc plus `firefox-locale-fr` : avec le Snap, la langue est déjà embarquée.
 
 **Empreinte de clé codée en dur (`FINGERPRINT_ATTENDUE`).** Comparaison en clair plutôt que rejet automatique en cas de désaccord : un changement d'affichage `gpg` selon la version installée ne doit pas bloquer un poste à tort. En cas de non-correspondance, le script affiche un avertissement et laisse l'opérateur comparer les deux lignes à l'œil, plutôt que d'échouer — arbitrage documenté dans le code même (lignes 71-75).
 

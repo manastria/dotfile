@@ -10,6 +10,10 @@
 #
 # Usage : firefox-snap-vers-apt.sh (relance automatique avec sudo)
 #
+# Fonctionne aussi sans Firefox en Snap (aucun Firefox, ou simple paquet
+# transitionnel Ubuntu) : le .deb Mozilla est alors installé directement,
+# l'étape de retrait du Snap est sautée.
+#
 # Idempotent : peut être relancé sans risque sur un poste déjà migré.
 # Les profils Firefox ne sont pas repris depuis le Snap (nouveau profil
 # vide sous ~/.mozilla/firefox/ pour chaque utilisateur) — sans
@@ -95,7 +99,12 @@ apt update
 # porte un epoch "1:" qui le fait toujours gagner, en version, face au vrai
 # paquet Mozilla (ex. 1:1snap1-0ubuntu8 > 155.0.1~build1) : le pin à lui
 # seul ne suffit pas, --allow-downgrades est nécessaire pour l'installer.
-apt install -y --allow-downgrades firefox
+#
+# firefox-l10n-fr (langue française) vient du même dépôt Mozilla : le
+# firefox-locale-fr d'Ubuntu dépend de « firefox (>= 1:1snap1-...) », que le
+# .deb Mozilla (sans epoch) ne peut pas satisfaire, ce qui bloque ensuite tout
+# « apt install » qui le demande.
+apt install -y --allow-downgrades firefox firefox-l10n-fr
 
 if [[ "$FIREFOX_SNAP" -eq 1 ]]; then
     echo
