@@ -8,7 +8,7 @@
 
 > Paragraphe de rappel, à coller tel quel dans le mémo.
 
-`backup-projets.sh` recopie sur une clé USB tous les projets listés dans `~/.config/backup-projets/projets.conf` — c'est le dernier geste avant d'éteindre : si un commit n'a pas été poussé, ou pas même fait, le travail est malgré tout sur la clé pour le cours du lendemain. La copie est un **miroir incrémental** : seuls les fichiers modifiés depuis la veille sont transférés, les `.git` sont conservés et les `node_modules`, `.venv`, `target` et consorts sont écartés comme le fait `pack-project.sh`. Contrairement à ce dernier, le résultat n'est pas une archive mais une arborescence directement ouvrable depuis n'importe quel poste de la salle, et clonable par un `git clone` depuis la clé. Chaque projet est aussi inspecté côté Git, **sans accès réseau**, pour signaler dans le récapitulatif ce qui n'a pas été publié. La clé est reconnue à un fichier marqueur déposé une fois pour toutes par `--init`, ce qui la rend insensible à la lettre de lecteur attribuée par Windows ; le script refuse par ailleurs d'écrire sur un `/mnt/<lettre>` que WSL n'a pas monté, ou monté sans `uid=`, deux pièges classiques qui, l'un, remplit le disque virtuel sans rien déposer sur la clé, l'autre, fait tout recopier à chaque passe. Au quotidien, deux options suffisent : `--dry-run` pour vérifier avant, et `--archive` pour ajouter un instantané `.tar.zst` horodaté quand on veut pouvoir revenir en arrière.
+`backup-projets.sh` recopie sur une clé USB tous les projets listés dans `~/.config/backup-projets/projets.conf` — c'est le dernier geste avant d'éteindre : si un commit n'a pas été poussé, ou pas même fait, le travail est malgré tout sur la clé pour le cours du lendemain. La copie est un **miroir incrémental** : seuls les fichiers modifiés depuis la veille sont transférés, les `.git` sont conservés et les `node_modules`, `.venv`, `target` et consorts sont écartés comme le fait `pack-project.sh`. Contrairement à ce dernier, le résultat n'est pas une archive mais une arborescence directement ouvrable depuis n'importe quel poste de la salle, et clonable par un `git clone` depuis la clé ; seuls font exception les projets marqués `@` dans la configuration, ceux qui contiennent des données personnelles, qui partent en archive chiffrée par `age` et jamais en clair. Chaque projet est aussi inspecté côté Git, **sans accès réseau**, pour signaler dans le récapitulatif ce qui n'a pas été publié. La clé est reconnue à un fichier marqueur déposé une fois pour toutes par `--init`, ce qui la rend insensible à la lettre de lecteur attribuée par Windows ; le script refuse par ailleurs d'écrire sur un `/mnt/<lettre>` que WSL n'a pas monté, ou monté sans `uid=`, deux pièges classiques qui, l'un, remplit le disque virtuel sans rien déposer sur la clé, l'autre, fait tout recopier à chaque passe. Au quotidien, deux options suffisent : `--dry-run` pour vérifier avant, et `--archive` pour ajouter un instantané `.tar.zst` horodaté quand on veut pouvoir revenir en arrière.
 
 ---
 
@@ -33,6 +33,10 @@ Ce que le script fait, projet par projet :
 3. **archive** en option le résultat dans `<clé>/backup-projets/archives/<nom>_AAAAMMJJ_HHMM.tar.zst`, en ne gardant que les *N* dernières ;
 4. **rapporte** l'ensemble dans un tableau à l'écran et dans `<clé>/backup-projets/DERNIERE-SAUVEGARDE.txt`, lisible depuis le Bloc-notes du poste de la classe.
 
+Un projet contenant des **données personnelles** se marque `@` dans la configuration. L'étape 2 est alors remplacée : aucun miroir, mais une archive unique `<clé>/backup-projets/chiffre/<nom>.tar.zst.age`, produite directement depuis la source et chiffrée par `age` pour une clé publique. Une clé perdue ne révèle donc que le nom du projet, la taille de l'archive et sa date. En échange, les fichiers ne s'ouvrent plus directement depuis la clé, et l'archive est réécrite en entier à chaque passe.
+
+Si le chiffrement est impossible — `age` absent, clé publique introuvable ou invalide — le projet passe en `ÉCHEC`. Il n'est **jamais** copié en clair, et les autres projets partent normalement.
+
 Les **liens symboliques cassés** de la source ne font pas échouer la sauvegarde. Ils sont exclus et signalés dans le récapitulatif : un lien mort ne contient aucune donnée, il n'y a rien à sauvegarder et rien à perdre.
 
 Un **Ctrl+C** arrête toute la sauvegarde, pas seulement la copie en cours : le script affiche le récapitulatif partiel de ce qui est passé, nomme le projet qui était en cours de copie — son miroir est donc incomplet — et sort en code `130`. Aucun rapport n'est écrit sur le support dans ce cas : celui de la sauvegarde précédente, qui décrit une passe complète, reste plus honnête qu'un rapport tronqué qui se ferait passer pour la dernière en date.
@@ -50,8 +54,11 @@ CLÉ/
     │   │   ├── .git/                      → git clone possible depuis la clé
     │   │   └── …
     │   └── dotfile/
+    ├── chiffre/                           projets marqués « @ »
+    │   └── etud-liste.tar.zst.age         illisible sans la clé privée
     ├── archives/                          seulement avec --archive
-    │   └── gclasse_20260829_1830.tar.zst
+    │   ├── gclasse_20260829_1830.tar.zst
+    │   └── etud-liste_20260829_1830.tar.zst.age
     └── DERNIERE-SAUVEGARDE.txt            récapitulatif de la dernière passe
 ```
 
@@ -62,7 +69,9 @@ CLÉ/
 | `rsync` | copie incrémentale (3.1 minimum pour `--info=progress2`) | `rsync --version` |
 | `numfmt` | volumes lisibles dans le récapitulatif (coreutils) | `numfmt --version` |
 | `git` | colonne d'état de publication ; facultatif, `-G` s'en passe | `git --version` |
-| `tar`, `zstd` | uniquement pour `--archive` | `zstd --version` |
+| `tar`, `zstd` | pour `--archive` et les projets `@` | `zstd --version` |
+| `age` | uniquement pour les projets `@` | `age --version` |
+| une clé publique | fichier de destinataires des projets `@` | `ls ~/.config/backup-projets/destinataires.txt` |
 | une clé **montée** | sous WSL, un lecteur branché après le démarrage ne l'est pas | `stat -c %m /mnt/h` doit rendre `/mnt/h`, pas `/` |
 | montée avec **votre identité** | sans `uid=`, les fichiers appartiennent à root et leur date est verrouillée | `ls -lna /mnt/h` doit montrer votre UID, pas `0` |
 | une clé préparée | fichier marqueur `.backup-projets` à sa racine | `backup-projets.sh --init /mnt/e` |
@@ -73,7 +82,7 @@ Le script **refuse de s'exécuter en root** : le miroir doit appartenir à l'uti
 ### Syntaxe
 
 ```bash
-backup-projets.sh [-c FICHIER] [-d DIR] [-o MOTIF] [-a] [-k N] [-n] [-G] [-L] [-q] [-h]
+backup-projets.sh [-c FICHIER] [-d DIR] [-o MOTIF] [-a] [-k N] [-r FICHIER] [-n] [-G] [-L] [-q] [-h]
 backup-projets.sh --init POINT_DE_MONTAGE
 ```
 
@@ -82,8 +91,9 @@ backup-projets.sh --init POINT_DE_MONTAGE
 | `-c`, `--config` | `FICHIER` | `~/.config/backup-projets/projets.conf` | Liste des projets. Variable `BACKUP_PROJETS_CONF` équivalente. |
 | `-d`, `--dest` | `DIR` | détection par marqueur | Destination explicite. Variable `BACKUP_PROJETS_DEST` équivalente. |
 | `-o`, `--only` | `MOTIF` | tous | Ne traiter que les projets dont le nom sur la clé correspond au motif glob. Répétable. |
-| `-a`, `--archive` | — | non | Créer aussi une archive `.tar.zst` horodatée par projet. |
+| `-a`, `--archive` | — | non | Créer aussi une archive `.tar.zst` horodatée par projet (`.tar.zst.age` pour un projet `@`, qui reste chiffré). |
 | `-k`, `--keep` | `N` | `3` | Archives conservées par projet. Sans effet sans `-a`. |
+| `-r`, `--recipients` | `FICHIER` | `~/.config/backup-projets/destinataires.txt` | Clés publiques `age` des projets `@`, une par ligne. Variable `BACKUP_PROJETS_RECIPIENTS` équivalente. |
 | `-n`, `--dry-run` | — | non | Simulation : n'écrit rien sur la clé, pas même les répertoires. |
 | `-G`, `--no-git` | — | non | Ne pas inspecter l'état Git. Utile sur un gros dépôt monté en 9p. |
 | `-L`, `--deref` | — | auto | Remplacer les liens symboliques par leur cible. Activé d'office si la clé ne sait pas en stocker. |
@@ -105,8 +115,11 @@ Une entrée par ligne, `#` pour les commentaires :
 | `~/projets/*` | glob : chaque sous-répertoire devient un projet |
 | `/chemin/projet\|autre-nom` | impose le nom du répertoire sur la clé |
 | `!/chemin/motif` | exclusion (motif glob), valable où qu'elle soit écrite dans le fichier |
+| `@/chemin/motif` | chiffrement (motif glob), valable où qu'il soit écrit dans le fichier |
 
-Le `~` de tête est développé ; rien d'autre ne l'est, le fichier n'étant jamais évalué par le shell. Les lignes nommées sont traitées avant les globs, si bien qu'un nom explicite l'emporte sur le nom déduit du glob qui ramènerait le même répertoire.
+Le `~` de tête est développé ; rien d'autre ne l'est, le fichier n'étant jamais évalué par le shell. Il n'y a donc rien à échapper : `/mnt/f/Cisco Activités` s'écrit tel quel, alors que `/mnt/f/Cisco\ Activités` désignerait un dossier contenant réellement une barre oblique inverse. Les lignes nommées sont traitées avant les globs, si bien qu'un nom explicite l'emporte sur le nom déduit du glob qui ramènerait le même répertoire.
+
+Une ligne `@` ne **liste** pas le projet : elle change la façon de sauvegarder un projet ramené par une autre ligne, typiquement `~/projets/*`. Si aucun projet ne correspond, le script s'arrête en code `2` avant toute copie, car une faute de frappe laisserait partir en clair le projet à protéger. Une exclusion `!` l'emporte sur `@`.
 
 ### Exemples d'utilisation
 
@@ -261,13 +274,81 @@ ls /mnt/e/backup-projets/miroir/gclasse/
 git clone /mnt/e/backup-projets/miroir/gclasse ~/projets/gclasse
 ```
 
+#### Chiffrer un projet
+
+Préparation, une seule fois :
+
+```bash
+sudo apt install age
+
+# Paire de clés. Passphrase laissée vide = age en génère une solide et l'affiche.
+# La clé privée n'est écrite que chiffrée par cette passphrase.
+age-keygen | age -p > ~/.config/backup-projets/identite.age
+
+# Enregistrer la clé publique affichée (« Public key: age1… »)
+echo age1… > ~/.config/backup-projets/destinataires.txt
+
+# Pour pouvoir restaurer depuis n'importe quel poste : la clé privée voyage
+# avec la sauvegarde, et tout repose alors sur la solidité de la passphrase
+cp ~/.config/backup-projets/identite.age /mnt/e/backup-projets/
+```
+
+La passphrase est à ranger dans un gestionnaire de mots de passe : sans elle, les archives sont irrécupérables.
+
+Marquer ensuite le projet dans `projets.conf` :
+
+```text
+~/projets/*
+@~/projets/etud-liste
+```
+
+Sortie réelle, sur une clé USB, pour deux projets totalisant 997 fichiers :
+
+```text
+PROJET      COPIE       GIT            DÉTAIL
+---------------------------------------------------------------
+assiduite   CHIFFRÉ     publié         archive 568,9Kio
+etud-liste  CHIFFRÉ     sans upstream  archive 30,3Mio
+```
+
+Sans clé publique, le projet échoue au lieu de partir en clair, et la passe continue :
+
+```text
+assiduite   ÉCHEC       -    non sauvegardé : clé publique introuvable (/home/jpdemory/.config/backup-projets/destinataires.txt)
+dotfile     OK          -    4 fichier(s), 59,6Kio | 8s
+etud-liste  ÉCHEC       -    non sauvegardé : clé publique introuvable (/home/jpdemory/.config/backup-projets/destinataires.txt)
+```
+
+Une faute de frappe sur la marque arrête tout avant la première copie :
+
+```text
+[ERREUR]    Marque de chiffrement sans projet correspondant : « @/home/jpdemory/projets/etud-lste ». Rien n'a été copié.
+```
+
+Un projet copié en clair avant d'être marqué laisse son miroir sur la clé. Le script le signale à chaque passe et n'y touche pas :
+
+```text
+[ATTENTION] Copie(s) en clair d'un projet à chiffrer encore présente(s) sur le support :
+            /mnt/h/backup-projets/miroir/etud-liste
+[ATTENTION] À supprimer à la main. Sur une clé, un effacement ne rend pas les données irrécupérables.
+```
+
+Restaurer un projet chiffré, dans un répertoire dédié : l'archive contient le contenu du projet, sans répertoire englobant.
+
+```bash
+mkdir -p ~/restauration/etud-liste
+age -d -i ~/.config/backup-projets/identite.age \
+    /mnt/e/backup-projets/chiffre/etud-liste.tar.zst.age \
+    | tar --zstd -xf - -C ~/restauration/etud-liste
+```
+
 ### Codes de retour
 
 | Code | Signification |
 | ---- | ------------- |
 | `0` | Tous les projets ont été sauvegardés. |
-| `1` | Sauvegarde non garantie : au moins un projet en échec, absent, partiellement copié ou dont la source a disparu, ou un prérequis manquant (`rsync` absent, support non inscriptible). |
-| `2` | Erreur d'usage : option inconnue, configuration illisible ou vide, support de destination introuvable, ambigu, non monté, ou incapable de dater les fichiers. |
+| `1` | Sauvegarde non garantie : au moins un projet en échec, absent, partiellement copié, impossible à chiffrer ou dont la source a disparu, ou un prérequis manquant (`rsync` absent, support non inscriptible). |
+| `2` | Erreur d'usage : option inconnue, configuration illisible ou vide, motif `@` sans projet correspondant, support de destination introuvable, ambigu, non monté, ou incapable de dater les fichiers. |
 | `130` | Interrompu au clavier (Ctrl+C). Récapitulatif partiel affiché, aucun rapport écrit sur le support. |
 
 L'état Git n'entre **pas** dans le code de retour : un projet non publié est une sauvegarde réussie, c'est même la raison d'être du script. Pour un code de retour qui réagit à l'état de publication, enchaîner avec [`check-git-sync.sh`](../.local/bin/check-git-sync.sh).
@@ -283,9 +364,9 @@ L'état Git n'entre **pas** dans le code de retour : un projet non publié est u
 1. `parse_args` puis `check_not_root` — le refus de root vient avant tout le reste, y compris `--init`.
 2. `init_dest` et sortie immédiate si `--init` a été demandé.
 3. `check_deps` — `rsync` et `numfmt` sont obligatoires ; l'absence de `git` dégrade silencieusement vers `-G`, celle de `zstd` n'est fatale qu'avec `-a`.
-4. `load_config` → `resolve_projects` — lecture du fichier vers `SPEC_PATH`/`SPEC_LABEL`/`EXCLUDE_PATTERNS`, puis résolution des globs et des collisions de noms vers `PROJ_PATH`/`PROJ_LABEL`.
-5. `prepare_dest` → `setup_workdir` — détection ou validation de la destination, sonde de liens symboliques, contrôle d'espace, répertoire temporaire avec `trap`.
-6. Boucle sur les projets : `git_state`, `sync_project`, `archive_project`, accumulation dans les tableaux `R_*` ; puis `render_table`, `write_report`, `warn_orphans` et calcul du code de sortie.
+4. `load_config` → `resolve_projects` — lecture du fichier vers `SPEC_PATH`/`SPEC_LABEL`/`EXCLUDE_PATTERNS`/`ENCRYPT_PATTERNS`, puis résolution des globs et des collisions de noms vers `PROJ_PATH`/`PROJ_LABEL`. `check_encrypt_patterns` contrôle les marques `@` sur la liste complète, avant le filtrage `--only`.
+5. `check_encryption` → `prepare_dest` → `setup_workdir` — état du chiffrement dans `HAS_ENCRYPTED`/`CRYPT_ERROR`, détection ou validation de la destination, sonde de liens symboliques, contrôle d'espace, répertoire temporaire avec `trap`.
+6. Boucle sur les projets : `git_state`, puis `encrypt_project` et `snapshot_encrypted` pour un projet `@`, `sync_project` et `archive_project` pour les autres, accumulation dans les tableaux `R_*` ; puis `render_table`, `write_report`, `warn_orphans`, `warn_clear_copies` et calcul du code de sortie.
 
 Les fonctions d'analyse communiquent par variables globales (`CUR_STATE`, `CUR_DETAIL`, `GIT_LABEL`, `GIT_SEV`) : une fonction bash ne rend qu'un entier, et sérialiser un tuple à travers `stdout` obligerait à re-parser une chaîne à chaque appel. C'est la convention déjà retenue par [`check-git-sync.sh`](../.local/bin/check-git-sync.sh).
 
@@ -293,7 +374,7 @@ Les fonctions d'analyse communiquent par variables globales (`CUR_STATE`, `CUR_D
 
 **Miroir plutôt qu'archive.** Une archive `.tar.zst` de la liste complète relit l'intégralité des sources à chaque lancement. Mesuré sur cette machine, un projet sur `/mnt/f` se lit à ~19 Mo/s (montage 9p) contre ~97 Mo/s sur `ext4` : quelques giga-octets de cours coûtent alors plusieurs minutes, chaque soir, même sans avoir rien modifié. Le miroir ramène les passes suivantes au différentiel — deux secondes en pratique. Accessoirement, sur le poste de la classe, une arborescence s'ouvre sans rien décompresser.
 
-**`--delete-excluded` avec un garde-fou.** Le miroir est un vrai miroir : ce qui disparaît de la source disparaît de la clé, sans quoi il accumulerait indéfiniment des fichiers renommés. D'où un risque précis : un disque Windows non monté laisse un point de montage **vide**, et `rsync --delete` effacerait alors la sauvegarde du projet — exactement au moment où elle est le plus utile. `sync_project` refuse donc toute source dont `ls -A` ne rend rien, et laisse le miroir intact.
+**`--delete-excluded` avec un garde-fou.** Le miroir est un vrai miroir : ce qui disparaît de la source disparaît de la clé, sans quoi il accumulerait indéfiniment des fichiers renommés. D'où un risque précis : un disque Windows non monté laisse un point de montage **vide**, et `rsync --delete` effacerait alors la sauvegarde du projet — exactement au moment où elle est le plus utile. `check_source` refuse donc toute source dont `ls -A` ne rend rien, et laisse le miroir intact. Le même contrôle protège l'archive chiffrée, qu'une archive vide remplacerait.
 
 Encore faut-il ne pas crier au loup : un glob `~/projets/*` finit toujours par ramener un répertoire réellement vide. Le script tranche en comparant à l'état du miroir — source vide **et** miroir peuplé signale un disque disparu (rouge, code `1`) ; source vide et miroir vide ou inexistant n'est qu'une remarque (jaune, sans effet sur le code de retour). C'est le rôle de `CUR_SEV` : l'état affiché et la gravité réelle sont deux choses distinctes, et seule la seconde est comptée à la fin.
 
@@ -303,7 +384,30 @@ Encore faut-il ne pas crier au loup : un glob `~/projets/*` finit toujours par r
 
 **Aucun accès réseau.** `git_state` compare `HEAD` à `@{u}` sans `fetch`. La sauvegarde doit fonctionner sur un réseau capricieux ou absent, et le script ne cherche pas à savoir si le distant a bougé : uniquement si des commits locaux risquent de n'exister nulle part ailleurs. Un `fetch` bloquant sur une authentification expirée, un soir de départ, serait le pire des comportements. Le diagnostic complet reste le rôle de `check-git-sync.sh`.
 
-**Archives construites depuis le miroir.** `archive_project` lit `MIRROR_ROOT`, jamais la source. Le miroir est déjà expurgé des artefacts de développement, et il est local au support : relire un giga-octet à travers un montage 9p une seconde fois coûterait une minute pour un résultat identique.
+**Archives construites depuis le miroir.** `archive_project` lit `MIRROR_ROOT`, jamais la source. Le miroir est déjà expurgé des artefacts de développement, et il est local au support : relire un giga-octet à travers un montage 9p une seconde fois coûterait une minute pour un résultat identique. Les projets `@` sont l'exception : ils n'ont pas de miroir, et `snapshot_encrypted` copie simplement l'archive chiffrée du jour.
+
+**`age` en clé publique.** La sauvegarde est un geste du soir, sans surveillance : elle ne doit réclamer aucun secret. `age -R` chiffre avec la seule clé publique, si bien que rien de ce qui sert à chiffrer ne permet de déchiffrer, ni sur la machine ni sur la clé. Les autres candidats ont été écartés pour des raisons précises :
+
+| Outil | Motif du rejet |
+| ----- | -------------- |
+| `openssl enc` | pas de mode authentifié : une archive altérée n'est pas détectée de façon fiable ; passphrase à fournir à chaque passe |
+| `gpg -c` | passphrase à chaque passe, ou stockée dans un fichier en clair ; le mode clé publique impose de gérer un trousseau |
+| `gocryptfs -reverse` | seul à conserver l'incrémental, mais dépend de FUSE, et sa passphrase est demandée au montage |
+| VeraCrypt | conteneur à gérer, installation lourde sur les postes |
+
+**Archive complète plutôt que miroir chiffré.** L'archive est réécrite en entier à chaque passe. C'est accepté parce que les projets concernés sont petits : 1,2 s mesurée pour `etud-liste` et `assiduite` réunis, de `ext4` vers une clé USB. Le coût ne deviendrait gênant que sur un projet de plusieurs giga-octets (voir *Points d'extension*).
+
+**Rien en clair, jamais sur le support.** `encrypt_project` part de la source et enchaîne `tar | zstd | age` dans un tube, sans fichier intermédiaire ni sur la clé ni dans `TMP_DIR`. Passer par le miroir aurait été plus simple, mais toute copie lisible déposée sur une mémoire flash y reste récupérable après effacement : la répartition d'usure ne garantit pas la réécriture des mêmes cellules.
+
+**Une marque sans correspondance arrête tout.** Le script privilégie d'ordinaire la continuité : un projet en échec n'empêche pas les suivants. Ici c'est l'inverse, parce que l'erreur est irréversible : avec `@~/projets/etud-lste`, le glob `~/projets/*` enverrait le vrai projet en clair sur la clé, et un simple avertissement arriverait après la fuite. `check_encrypt_patterns` s'exécute donc avant la première écriture, sur la liste complète. Le même arrêt couvre un dossier sensible situé **dans** un projet listé : le motif ne correspond à aucun projet, le problème est signalé au lieu d'être ignoré.
+
+**Échec plutôt que dégradation.** `check_encryption` ne quitte pas : elle conserve le motif dans `CRYPT_ERROR`, et `encrypt_project` fait échouer chaque projet concerné. Les autres projets sont ainsi sauvegardés le soir où `age` manque, et les projets sensibles ne sont jamais rabattus sur le miroir.
+
+**`-C "$src" .` plutôt que le nom du répertoire.** Archiver `./etud-liste` depuis le parent donnerait un répertoire englobant à l'extraction, mais soumettrait ce nom aux exclusions : un projet appelé `build` ou `target` produirait une archive vide, sans la moindre erreur. `rsync`, avec `src/`, a le même comportement que `-C src .`.
+
+**Écriture dans un `.part`.** L'archive n'est renommée qu'une fois les trois commandes du tube terminées avec succès. Un échec ou un Ctrl+C laisse donc l'archive précédente intacte, alors qu'une redirection directe l'aurait tronquée dès l'ouverture.
+
+**Le journal de `tar` reste à l'écran.** Il cite des noms de fichiers, et un nom de fichier peut être une donnée personnelle. La colonne `DÉTAIL`, recopiée en clair dans `DERNIERE-SAUVEGARDE.txt`, ne porte donc que les codes de retour.
 
 **Rotation par tri lexicographique.** `rotate_archives` trie sur le **nom** de fichier, pas sur la date d'inode : l'horodatage `AAAAMMJJ_HHMM` se trie lexicographiquement comme chronologiquement, et les dates de fichiers d'un système FAT sont trop peu fiables (fuseau, granularité) pour arbitrer une suppression.
 
@@ -344,10 +448,11 @@ D'où le second chemin, celui qui porte réellement l'arrêt : `rsync` rend **20
 | `rsync` | 3.1 | `--info=progress2` (barre de progression consolidée) et `--delete-excluded` |
 | `coreutils` | — | `numfmt`, `timeout`, `df --output`, `stat -c` |
 | `git` | 1.8 | `rev-parse --abbrev-ref --symbolic-full-name '@{u}'` |
-| `tar` (GNU) | — | motifs `--exclude` sur le nom de base, `--ignore-failed-read` |
+| `tar` (GNU) | — | motifs `--exclude` sur le nom de base, `--ignore-failed-read` ; `--zstd` (1.31) à la restauration |
 | `zstd` | 1.3 | `--long`, `-T0` |
+| `age` | 1.0 | `--recipients-file`, identité protégée par passphrase ; testé en 1.1.1 |
 
-`git`, `tar` et `zstd` ne sont requis que pour les fonctions qu'ils servent ; le script dégrade ou échoue explicitement dans `check_deps`.
+`git`, `tar`, `zstd` et `age` ne sont requis que pour les fonctions qu'ils servent ; le script dégrade ou échoue explicitement dans `check_deps` et `check_encryption`.
 
 ### Points d'extension
 
@@ -371,6 +476,16 @@ Le code 25 n'est pas traité aujourd'hui et tomberait dans la branche `ÉCHEC`, 
 
 **Élargir la recherche de la clé.** `detect_dest` balaie `/media/$USER/*`, `/run/media/$USER/*`, `/media/*` et `/mnt/*`. Ajouter un emplacement revient à compléter cette liste, en pensant à la clause `case` qui écarte `/mnt/wsl` et `/mnt/wslg`.
 
+**Ajouter une clé de secours.** `destinataires.txt` accepte une clé publique par ligne, et chacune pourra déchiffrer seule. Aucune modification du script n'est nécessaire, mais les archives existantes ne deviennent lisibles par la nouvelle clé qu'à la passe suivante.
+
+**Ne pas réécrire une archive inchangée.** Utile si un projet de plusieurs giga-octets devient `@`. Il faudrait comparer une empreinte des métadonnées à celle de la passe précédente, en y incluant les clés publiques pour qu'un changement de clé force la réécriture :
+
+```bash
+empreinte="$( { find "$src" -printf '%P %s %T@\n' | sort; cat "$RECIPIENTS"; } | sha256sum )"
+```
+
+L'empreinte serait à stocker à côté de l'archive, et non sur la machine : sinon, une clé neuve serait jugée à jour alors qu'elle n'a pas d'archive.
+
 ### Notes de maintenance
 
 - **`--dry-run` n'écrit rien**, pas même les répertoires du miroir : les `mkdir` sont conditionnés. Seule exception assumée, la sonde `detect_deref` crée puis supprime un lien à la racine du support, pour que la simulation reflète le comportement réel.
@@ -386,4 +501,11 @@ Le code 25 n'est pas traité aujourd'hui et tomberait dans la branche `ÉCHEC`, 
 - **`stat -c %m` est le seul juge du montage.** `findmnt -T` donnerait la même information mais n'est pas garanti partout ; `mountpoint` échouerait sur un sous-répertoire d'un montage légitime, comme `--dest /mnt/g/sauvegardes`. Toute évolution de ce contrôle doit continuer à accepter un sous-répertoire d'un vrai montage et à refuser un `/mnt/<lettre>` fantôme.
 - **La gravité d'un projet est portée par `CUR_SEV`/`R_SEV`**, pas par le libellé de la colonne `COPIE` : deux situations peuvent afficher `VIDE` sans peser pareil sur le code de retour. Ajouter un état, c'est lui attribuer une sévérité — `2` pour « la sauvegarde de ce projet n'est pas garantie », `1` pour une remarque.
 - **Deux projets homonymes** sont désambiguïsés automatiquement par le nom de leur répertoire parent, avec un avertissement. Le miroir change alors de nom, donc l'ancien apparaîtra en orphelin à la passe suivante : mieux vaut fixer un nom explicite dans la configuration.
-- **Le fichier `~/.config/backup-projets/projets.conf` n'est pas versionné** dans le dépôt, seul l'exemple `.sample` l'est — même convention que `usb-mount`. Il contient des chemins propres à la machine.
+- **Le fichier `~/.config/backup-projets/projets.conf` n'est pas versionné** dans le dépôt, seul l'exemple `.sample` l'est — même convention que `usb-mount`. Il contient des chemins propres à la machine. Il en va de même de `destinataires.txt` et `identite.age`.
+- **Une ligne `@` lue par une version antérieure du script fuit en silence.** Celle-ci la prend pour un chemin inexistant, signale un projet `ABSENT`, et le glob recopie le vrai projet en clair. Déployer le script **avant** de reporter la configuration sur une autre machine.
+- **`archive_project` ne doit jamais traiter un projet `@`.** Il lit le miroir : un reste de miroir en clair deviendrait une nouvelle archive en clair. C'est `main()` qui aiguille vers `snapshot_encrypted`.
+- **`warn_clear_copies` est le seul signal d'un reste en clair.** `warn_orphans` ne voit pas ce miroir, puisque le projet figure dans la liste. Le script ne le supprime pas : ce serait la dernière copie si l'archive s'avérait inutilisable.
+- **`--dry-run` ne valide pas les clés publiques.** Il vérifie la présence d'`age` et du fichier, mais une clé mal formée n'est détectée qu'à la vraie passe, par `age` lui-même. Le contrôle est délégué à dessein : un format `age1…` analysé par le script ignorerait les autres types de destinataires.
+- **Un projet qui quitte `@` garde son archive dans `chiffre/`.** Elle n'est ni supprimée ni signalée : sans danger, mais elle ne sera plus mise à jour.
+- **`tar` code 1 est bénin**, comme `rsync` code 24 : un fichier a changé pendant sa lecture, et l'archive reste valide. Les codes 130 et 143 sont testés sur **chacune** des trois commandes du tube, le signal pouvant n'atteindre que l'une d'elles.
+- **Pour tester une interruption depuis un script**, activer `set -m` : sans contrôle de tâches, une tâche de fond démarre avec SIGINT ignoré, de façon héritée et non rattrapable par un `trap`. Le signal semble alors sans effet, et l'on croit à tort à un défaut du script.

@@ -4,7 +4,7 @@
 #
 # SYNOPSIS
 #     backup-projets.sh [-c FICHIER] [-d DIR] [-o MOTIF] [-a] [-k N]
-#                       [-n] [-G] [-L] [-q] [-h]
+#                       [-r FICHIER] [-n] [-G] [-L] [-q] [-h]
 #     backup-projets.sh --init POINT_DE_MONTAGE
 #
 # DESCRIPTION
@@ -48,6 +48,14 @@
 #     par projet — un instantané figé, auquel se raccrocher si un fichier est
 #     abîmé côté source et que le miroir a déjà répercuté les dégâts.
 #
+#     Un projet contenant des données personnelles se marque « @ » dans la
+#     configuration. Il ne passe alors jamais par le miroir : une archive
+#     .tar.zst.age unique est produite directement depuis la source, chiffrée
+#     par age pour les clés publiques du fichier de destinataires. Chiffrer
+#     ne demande aucune passphrase, et rien de lisible n'atteint la clé ;
+#     seule la restauration réclame la clé privée. Si le chiffrement est
+#     impossible, le projet passe en échec : il n'est jamais copié en clair.
+#
 # CONFIGURATION
 #     Fichier ~/.config/backup-projets/projets.conf (voir -c), une entrée par
 #     ligne, « # » pour les commentaires :
@@ -56,10 +64,15 @@
 #         /mnt/f/_Obsidian/gclasse         un chemin précis
 #         /mnt/f/_Obsidian/quatro|quatro-win   nom explicite sur la clé
 #         !~/projets/gclasse-quartz        exclusion (motif glob)
+#         @~/projets/etud-liste            chiffrement (motif glob)
 #
 #     Le nom du répertoire sur la clé est le nom de base du projet, sauf
-#     mention après une barre verticale. Les exclusions « ! » s'appliquent
-#     aux chemins résolus, quel que soit leur ordre dans le fichier.
+#     mention après une barre verticale. Les exclusions « ! » et les marques
+#     de chiffrement « @ » s'appliquent aux chemins résolus, quel que soit
+#     leur ordre dans le fichier. Une exclusion l'emporte sur « @ ». Un motif
+#     « @ » ne liste pas le projet : si aucun projet ne lui correspond, le
+#     script s'arrête avant toute copie, car une faute de frappe laisserait
+#     partir en clair le projet que la ligne devait protéger.
 #
 # OPTIONS
 #     -c, --config FICHIER  Liste des projets (défaut :
@@ -71,6 +84,9 @@
 #     -a, --archive         Créer aussi une archive .tar.zst par projet.
 #     -k, --keep N          Nombre d'archives conservées par projet
 #                           (défaut : 3). Sans effet sans -a.
+#     -r, --recipients FICHIER
+#                           Clés publiques age des projets « @ » (défaut :
+#                           ~/.config/backup-projets/destinataires.txt).
 #     -n, --dry-run         Simulation : affiche ce qui serait transféré,
 #                           n'écrit rien sur la clé.
 #     -G, --no-git          Ne pas inspecter l'état Git des projets (plus
@@ -107,14 +123,26 @@
 #     # Enchaînement avec l'état de synchronisation des dépôts
 #     backup-projets.sh && check-git-sync.sh ~/projets
 #
+#     # Préparation du chiffrement, une seule fois : note la clé publique
+#     # affichée, puis enregistre-la dans le fichier de destinataires
+#     age-keygen | age -p > ~/.config/backup-projets/identite.age
+#     echo age1… > ~/.config/backup-projets/destinataires.txt
+#
+#     # Restaurer un projet chiffré depuis la clé
+#     mkdir -p ~/restauration/etud-liste
+#     age -d -i ~/.config/backup-projets/identite.age \
+#         /mnt/e/backup-projets/chiffre/etud-liste.tar.zst.age \
+#         | tar --zstd -xf - -C ~/restauration/etud-liste
+#
 # EXIT CODES
 #     0   Tous les projets ont été sauvegardés.
-#     1   Sauvegarde non garantie : au moins un projet en échec, ou un
-#         prérequis manquant (rsync absent, support non inscriptible).
-#         L'état Git n'entre pas dans ce calcul : un projet non publié est
-#         une sauvegarde réussie.
+#     1   Sauvegarde non garantie : au moins un projet en échec (chiffrement
+#         impossible compris), ou un prérequis manquant (rsync absent, support
+#         non inscriptible). L'état Git n'entre pas dans ce calcul : un projet
+#         non publié est une sauvegarde réussie.
 #     2   Erreur d'usage : option inconnue, configuration illisible ou vide,
-#         support de destination introuvable, ambigu, ou non monté.
+#         motif « @ » sans projet correspondant, support de destination
+#         introuvable, ambigu, ou non monté.
 #   130   Interrompu au clavier (Ctrl+C). Un seul Ctrl+C arrête toute la
 #         sauvegarde, pas seulement la copie en cours. Le récapitulatif
 #         partiel est affiché ; aucun rapport n'est écrit sur le support.
@@ -124,10 +152,12 @@ set -euo pipefail
 # Constantes
 # -----------------------------------------------------------------------------
 readonly DEFAULT_CONF="${HOME}/.config/backup-projets/projets.conf"
+readonly DEFAULT_RECIPIENTS="${HOME}/.config/backup-projets/destinataires.txt"
 readonly MARKER=".backup-projets"
 readonly BACKUP_DIRNAME="backup-projets"
 readonly MIRROR_DIRNAME="miroir"
 readonly ARCHIVE_DIRNAME="archives"
+readonly CRYPT_DIRNAME="chiffre"
 readonly REPORT_NAME="DERNIERE-SAUVEGARDE.txt"
 readonly DEFAULT_KEEP=3
 readonly ZSTD_LEVEL="${PACK_ZSTD_LEVEL:-3}"
@@ -184,6 +214,7 @@ usage_error() { error "$*"; echo "Essayez : $(basename "$0") --help" >&2; exit 2
 # -----------------------------------------------------------------------------
 CONF="${BACKUP_PROJETS_CONF:-$DEFAULT_CONF}"
 DEST_ROOT="${BACKUP_PROJETS_DEST:-}"
+RECIPIENTS="${BACKUP_PROJETS_RECIPIENTS:-$DEFAULT_RECIPIENTS}"
 DO_ARCHIVE="no"
 KEEP="$DEFAULT_KEEP"
 DRY_RUN="no"
@@ -202,6 +233,7 @@ parse_args() {
             -d|--dest)    DEST_ROOT="${2:-}"; shift 2 ;;
             -o|--only)    ONLY_PATTERNS+=("${2:-}"); shift 2 ;;
             -k|--keep)    KEEP="${2:-}"; shift 2 ;;
+            -r|--recipients) RECIPIENTS="${2:-}"; shift 2 ;;
             -a|--archive) DO_ARCHIVE="yes"; shift ;;
             -n|--dry-run) DRY_RUN="yes"; shift ;;
             -G|--no-git)  DO_GIT="no"; shift ;;
@@ -251,7 +283,7 @@ check_deps() {
 # -----------------------------------------------------------------------------
 # Configuration
 # -----------------------------------------------------------------------------
-declare -a SPEC_PATH=() SPEC_LABEL=() EXCLUDE_PATTERNS=()
+declare -a SPEC_PATH=() SPEC_LABEL=() EXCLUDE_PATTERNS=() ENCRYPT_PATTERNS=()
 
 # Développe un « ~ » de tête. Volontairement limité à ce seul cas : évaluer
 # la ligne (eval, guillemets) exposerait le fichier de configuration à une
@@ -290,6 +322,11 @@ load_config() {
             continue
         fi
 
+        if [[ "$line" == '@'* ]]; then
+            ENCRYPT_PATTERNS+=("$(expand_tilde "$(trim "${line#@}")")")
+            continue
+        fi
+
         # La barre verticale sépare le chemin de son nom sur la clé. Ce
         # séparateur plutôt qu'une espace : les chemins Windows en
         # contiennent régulièrement (« Atomic Thinking - Obsidian Expert »).
@@ -321,6 +358,32 @@ is_excluded() {
         [[ "$path" == $pattern ]] && return 0
     done
     return 1
+}
+
+is_encrypted() {
+    local path="$1" pattern
+    for pattern in ${ENCRYPT_PATTERNS[@]+"${ENCRYPT_PATTERNS[@]}"}; do
+        [[ "$path" == $pattern ]] && return 0
+    done
+    return 1
+}
+
+# Une marque « @ » sans projet correspondant est presque toujours une faute de
+# frappe, et la conséquence serait grave : le glob « ~/projets/* » ramènerait
+# le vrai projet, qui partirait en clair sur la clé. Une copie ne se rattrape
+# pas, d'où l'arrêt avant la première écriture plutôt qu'un simple
+# avertissement. Un projet exclu par « ! » ne part nulle part : rien à bloquer.
+check_encrypt_patterns() {
+    local pattern path found
+    for pattern in ${ENCRYPT_PATTERNS[@]+"${ENCRYPT_PATTERNS[@]}"}; do
+        found="no"
+        for path in ${PROJ_PATH[@]+"${PROJ_PATH[@]}"}; do
+            [[ "$path" == $pattern ]] && { found="yes"; break; }
+        done
+        [[ "$found" == "yes" ]] && continue
+        is_excluded "$pattern" && continue
+        usage_error "Marque de chiffrement sans projet correspondant : « @${pattern} ». Rien n'a été copié."
+    done
 }
 
 matches_only() {
@@ -407,6 +470,10 @@ resolve_projects() {
     done
     done
     shopt -u nullglob
+
+    # Avant --only : la marque se vérifie sur toute la liste, sans quoi une
+    # passe ciblée sur un autre projet la signalerait à tort.
+    check_encrypt_patterns
 
     # Filtrage --only après résolution, pour que le motif porte sur le nom
     # tel qu'il apparaîtra sur la clé.
@@ -606,10 +673,12 @@ prepare_dest() {
     BACKUP_ROOT="${DEST_ROOT}/${BACKUP_DIRNAME}"
     MIRROR_ROOT="${BACKUP_ROOT}/${MIRROR_DIRNAME}"
     ARCHIVE_ROOT="${BACKUP_ROOT}/${ARCHIVE_DIRNAME}"
+    CRYPT_ROOT="${BACKUP_ROOT}/${CRYPT_DIRNAME}"
 
     if [[ "$DRY_RUN" == "no" ]]; then
         mkdir -p "$MIRROR_ROOT"
         [[ "$DO_ARCHIVE" == "yes" ]] && mkdir -p "$ARCHIVE_ROOT"
+        [[ "$HAS_ENCRYPTED" == "yes" ]] && mkdir -p "$CRYPT_ROOT"
     fi
 
     [[ "$DEREF" == "auto" ]] && detect_deref
@@ -708,6 +777,7 @@ TMP_DIR=""
 
 cleanup() {
     [[ -n "$TMP_DIR" && -d "$TMP_DIR" ]] && rm -rf "$TMP_DIR"
+    [[ -n "$CURRENT_PART" ]] && rm -f "$CURRENT_PART"
     return 0
 }
 
@@ -727,6 +797,39 @@ CUR_COLOR="$GREEN"
 CUR_DETAIL=""
 CUR_SEV=0
 
+# Contrôle commun au miroir et à l'archive chiffrée. Rend 1 après avoir
+# renseigné CUR_* si la source n'est pas exploitable.
+#
+# Garde-fou contre le pire scénario : un disque Windows non monté laisse un
+# point de montage vide. Avec --delete, rsync viderait alors le miroir de tout
+# le projet, et une archive vide remplacerait la dernière archive chiffrée :
+# dans les deux cas, c'est la sauvegarde elle-même qui disparaîtrait.
+#
+# Encore faut-il distinguer ce cas d'un répertoire réellement vide, qu'un glob
+# « ~/projets/* » ramène tôt ou tard : il n'y a alors rien à sauver, et faire
+# échouer la passe entière pour ça serait une fausse alerte.
+check_source() {
+    local src="$1" has_copy="$2" detail="$3"
+
+    if [[ ! -d "$src" ]]; then
+        CUR_STATE="ABSENT"; CUR_COLOR="$RED"; CUR_SEV=2
+        CUR_DETAIL="répertoire introuvable"
+        return 1
+    fi
+
+    if [[ -z "$(ls -A "$src" 2>/dev/null)" ]]; then
+        CUR_STATE="VIDE"
+        if [[ "$has_copy" == "yes" ]]; then
+            CUR_COLOR="$RED"; CUR_SEV=2
+            CUR_DETAIL="$detail"
+        else
+            CUR_COLOR="$YELLOW"; CUR_SEV=1
+            CUR_DETAIL="répertoire vide, rien à sauvegarder"
+        fi
+        return 1
+    fi
+}
+
 sync_project() {
     local src="$1" label="$2"
     local dst="${MIRROR_ROOT}/${label}"
@@ -736,30 +839,11 @@ sync_project() {
     CUR_DETAIL=""
     CUR_SEV=0
 
-    if [[ ! -d "$src" ]]; then
-        CUR_STATE="ABSENT"; CUR_COLOR="$RED"; CUR_SEV=2
-        CUR_DETAIL="répertoire introuvable"
-        return 1
-    fi
-
-    # Garde-fou contre le pire scénario : un disque Windows non monté laisse
-    # un point de montage vide. Avec --delete, rsync viderait alors le miroir
-    # de tout le projet, c'est-à-dire la sauvegarde elle-même.
-    #
-    # Encore faut-il distinguer ce cas d'un répertoire réellement vide, qu'un
-    # glob « ~/projets/* » ramène tôt ou tard : il n'y a alors rien à sauver,
-    # et faire échouer la passe entière pour ça serait une fausse alerte.
-    if [[ -z "$(ls -A "$src" 2>/dev/null)" ]]; then
-        CUR_STATE="VIDE"
-        if [[ -d "$dst" && -n "$(ls -A "$dst" 2>/dev/null)" ]]; then
-            CUR_COLOR="$RED"; CUR_SEV=2
-            CUR_DETAIL="source vide alors que le miroir ne l'est pas — disque non monté ? miroir laissé intact"
-        else
-            CUR_COLOR="$YELLOW"; CUR_SEV=1
-            CUR_DETAIL="répertoire vide, rien à sauvegarder"
-        fi
-        return 1
-    fi
+    local has_copy="no"
+    [[ -d "$dst" && -n "$(ls -A "$dst" 2>/dev/null)" ]] && has_copy="yes"
+    check_source "$src" "$has_copy" \
+        "source vide alors que le miroir ne l'est pas — disque non monté ? miroir laissé intact" \
+        || return 1
 
     local -a opts=(
         --recursive
@@ -916,6 +1000,151 @@ first_rsync_error() {
 }
 
 # -----------------------------------------------------------------------------
+# Chiffrement (projets marqués « @ »)
+# -----------------------------------------------------------------------------
+HAS_ENCRYPTED="no"
+CRYPT_ERROR=""
+CURRENT_PART=""
+
+# Une erreur ici n'arrête pas la passe : les autres projets doivent partir
+# quand même, un soir où l'on est pressé. Elle est conservée dans CRYPT_ERROR,
+# et encrypt_project fera échouer chaque projet concerné au lieu de le copier.
+check_encryption() {
+    local path count=0
+    for path in "${PROJ_PATH[@]}"; do
+        is_encrypted "$path" && count=$(( count + 1 ))
+    done
+    (( count > 0 )) || return 0
+    HAS_ENCRYPTED="yes"
+
+    if ! command -v age >/dev/null 2>&1; then
+        CRYPT_ERROR="age absent (apt install age)"
+    elif ! command -v tar >/dev/null 2>&1 || ! command -v zstd >/dev/null 2>&1; then
+        CRYPT_ERROR="tar ou zstd absent (apt install zstd)"
+    elif [[ ! -r "$RECIPIENTS" ]]; then
+        CRYPT_ERROR="clé publique introuvable (${RECIPIENTS})"
+    fi
+
+    if [[ -n "$CRYPT_ERROR" ]]; then
+        warn "Chiffrement impossible : ${CRYPT_ERROR}."
+        warn "${count} projet(s) à chiffrer seront en échec. Ils ne sont jamais copiés en clair."
+    else
+        info "À chiffrer    : ${count} projet(s)"
+    fi
+}
+
+# Archive chiffrée d'un projet. Elle part de la source et non du miroir,
+# contrairement à archive_project : ce projet n'a justement pas de miroir, et
+# toute étape intermédiaire sur la clé y déposerait une copie lisible, qu'un
+# simple effacement ne fait pas disparaître d'une mémoire flash. Le tube ne
+# matérialise rien en clair, ni sur le support, ni dans le répertoire temporaire.
+#
+# L'archive est écrite dans un .part renommé à la fin : un échec ou un Ctrl+C
+# laisse la précédente intacte au lieu de la remplacer par un fichier tronqué.
+encrypt_project() {
+    local src="$1" label="$2"
+    local archive="${CRYPT_ROOT}/${label}.tar.zst.age"
+    local part="${archive}.part"
+    local log="${TMP_DIR}/chiffrement.log"
+
+    CUR_STATE="CHIFFRÉ"
+    CUR_COLOR="$GREEN"
+    CUR_DETAIL=""
+    CUR_SEV=0
+
+    if [[ -n "$CRYPT_ERROR" ]]; then
+        CUR_STATE="ÉCHEC"; CUR_COLOR="$RED"; CUR_SEV=2
+        CUR_DETAIL="non sauvegardé : ${CRYPT_ERROR}"
+        return 1
+    fi
+
+    local has_copy="no" previous="aucune archive sur le support"
+    if [[ -s "$archive" ]]; then
+        has_copy="yes"
+        previous="archive précédente conservée"
+    fi
+    check_source "$src" "$has_copy" \
+        "source vide alors qu'une archive existe — disque non monté ? archive laissée intacte" \
+        || return 1
+
+    if [[ "$DRY_RUN" == "yes" ]]; then
+        CUR_DETAIL="chiffrement simulé"
+        return 0
+    fi
+
+    : > "$log"
+    CURRENT_PART="$part"
+
+    # « -C src . » archive le contenu, comme rsync avec « src/ ». Nommer le
+    # répertoire le soumettrait aux exclusions : un projet appelé « build »
+    # donnerait une archive vide, sans la moindre erreur.
+    set +e
+    tar --create --file=- --exclude-from="$EXCLUDE_FILE" -C "$src" . 2>>"$log" \
+        | zstd -q -T0 "-${ZSTD_LEVEL}" --long 2>>"$log" \
+        | age --encrypt --recipients-file "$RECIPIENTS" 2>>"$log" > "$part"
+    local -a rcs=("${PIPESTATUS[@]}")
+    set -e
+
+    local tar_rc=${rcs[0]} zstd_rc=${rcs[1]} age_rc=${rcs[2]} rc
+
+    for rc in "${rcs[@]}"; do
+        if (( rc == 130 || rc == 143 )); then
+            rm -f "$part"
+            CURRENT_PART=""
+            CUR_STATE="INTERROMPU"; CUR_COLOR="$RED"; CUR_SEV=2
+            CUR_DETAIL="chiffrement interrompu — ${previous}"
+            INTERRUPTED="yes"
+            return 1
+        fi
+    done
+
+    # tar rend 1 si un fichier change pendant sa lecture : l'archive reste
+    # valide. Le journal n'est montré qu'à l'écran : il peut citer des noms de
+    # fichiers, qui n'ont rien à faire dans le rapport déposé en clair sur la clé.
+    if (( tar_rc > 1 || zstd_rc != 0 || age_rc != 0 )) || ! mv -f "$part" "$archive"; then
+        rm -f "$part"
+        CURRENT_PART=""
+        [[ "$QUIET" == "no" ]] && cat "$log" >&2
+        CUR_STATE="ÉCHEC"; CUR_COLOR="$RED"; CUR_SEV=2
+        CUR_DETAIL="tar ${tar_rc}, zstd ${zstd_rc}, age ${age_rc} — ${previous}"
+        return 1
+    fi
+    CURRENT_PART=""
+
+    local size
+    size="$(stat -c %s "$archive" 2>/dev/null || echo 0)"
+    CUR_DETAIL="archive $(human "$size")"
+    (( tar_rc == 1 )) && CUR_DETAIL+=" — fichiers modifiés pendant la lecture"
+    return 0
+}
+
+# Option -a pour un projet chiffré : une copie horodatée de l'archive du jour,
+# qui est déjà chiffrée. archive_project ne doit jamais traiter ce projet : il
+# lit le miroir, et produirait une archive en clair à partir d'un reste de miroir.
+snapshot_encrypted() {
+    local label="$1"
+    local stamp snapshot
+
+    if [[ "$DRY_RUN" == "yes" ]]; then
+        CUR_DETAIL+=" | instantané simulé"
+        return 0
+    fi
+
+    stamp="$(date +%Y%m%d_%H%M)"
+    snapshot="${ARCHIVE_ROOT}/${label}_${stamp}.tar.zst.age"
+
+    if cp "${CRYPT_ROOT}/${label}.tar.zst.age" "$snapshot" 2>/dev/null; then
+        CUR_DETAIL+=" | instantané conservé"
+        rotate_archives "$label" ".tar.zst.age"
+    else
+        rm -f "$snapshot"
+        CUR_DETAIL+=" | instantané ÉCHOUÉ"
+        CUR_STATE="PARTIEL"; CUR_COLOR="$YELLOW"; CUR_SEV=2
+        return 1
+    fi
+}
+
+# -----------------------------------------------------------------------------
 # Archives horodatées (option -a)
 # -----------------------------------------------------------------------------
 
@@ -955,11 +1184,11 @@ archive_project() {
 # comme chronologiquement, ce qui évite de dépendre des dates de la clé —
 # souvent fausses sur un système de fichiers FAT.
 rotate_archives() {
-    local label="$1" old
+    local label="$1" ext="${2:-.tar.zst}" old
     local -a archives=()
 
     shopt -s nullglob
-    archives=( "${ARCHIVE_ROOT}/${label}"_[0-9]*.tar.zst )
+    archives=( "${ARCHIVE_ROOT}/${label}"_[0-9]*"$ext" )
     shopt -u nullglob
 
     (( ${#archives[@]} > KEEP )) || return 0
@@ -1002,7 +1231,9 @@ finish_interrupted() {
         echo ""
     fi
 
-    if [[ -n "$CURRENT_LABEL" ]]; then
+    if [[ -n "$CURRENT_PART" ]]; then
+        warn "« ${CURRENT_LABEL} » était en cours de chiffrement : aucune nouvelle archive n'a été écrite."
+    elif [[ -n "$CURRENT_LABEL" ]]; then
         warn "« ${CURRENT_LABEL} » était en cours de copie : son miroir est incomplet."
     fi
 
@@ -1109,6 +1340,31 @@ warn_orphans() {
     warn "Conservés tels quels. À supprimer à la main de ${MIRROR_ROOT} si inutiles."
 }
 
+# Un projet passé en chiffré laisse derrière lui son miroir et ses archives en
+# clair, et warn_orphans ne les voit pas : le projet figure bien dans la liste.
+# Le script n'y touche pas plus qu'aux orphelins, mais ces copies sont
+# précisément ce que le chiffrement devait éviter : elles doivent se voir.
+warn_clear_copies() {
+    local i label
+    local -a leftovers=()
+
+    shopt -s nullglob
+    for i in "${!PROJ_PATH[@]}"; do
+        is_encrypted "${PROJ_PATH[$i]}" || continue
+        label="${PROJ_LABEL[$i]}"
+        [[ -d "${MIRROR_ROOT}/${label}" ]] && leftovers+=("${MIRROR_ROOT}/${label}")
+        leftovers+=( "${ARCHIVE_ROOT}/${label}"_[0-9]*.tar.zst )
+    done
+    shopt -u nullglob
+
+    (( ${#leftovers[@]} > 0 )) || return 0
+
+    echo ""
+    warn "${BOLD}Copie(s) en clair${RESET} d'un projet à chiffrer encore présente(s) sur le support :"
+    printf '            %s\n' "${leftovers[@]}"
+    warn "À supprimer à la main. Sur une clé, un effacement ne rend pas les données irrécupérables."
+}
+
 write_report() {
     local report="${BACKUP_ROOT}/${REPORT_NAME}"
 
@@ -1128,6 +1384,12 @@ write_report() {
         echo "Récupérer un projet depuis cette clé :"
         echo "  - ouvrir directement les fichiers dans ${BACKUP_DIRNAME}/${MIRROR_DIRNAME}/<projet>/"
         echo "  - ou récupérer l'historique : git clone ${BACKUP_DIRNAME}/${MIRROR_DIRNAME}/<projet> <destination>"
+        if [[ "$HAS_ENCRYPTED" == "yes" ]]; then
+            echo ""
+            echo "Récupérer un projet chiffré (état CHIFFRÉ) ; il faut age et la clé privée :"
+            echo "  mkdir -p <destination>"
+            echo "  age -d -i identite.age ${BACKUP_DIRNAME}/${CRYPT_DIRNAME}/<projet>.tar.zst.age | tar --zstd -xf - -C <destination>"
+        fi
     } > "$report" 2>/dev/null || warn "Rapport non écrit sur la clé."
 }
 
@@ -1154,6 +1416,7 @@ main() {
     [[ "$DRY_RUN" == "yes" ]] && warn "Mode simulation (--dry-run) : rien ne sera écrit."
     info "Liste         : ${CONF}"
     info "Projets       : ${#PROJ_PATH[@]}"
+    check_encryption
 
     prepare_dest
     setup_workdir
@@ -1173,10 +1436,18 @@ main() {
         # « || true » : sync_project rend 1 sur incident, ce qui sous set -e
         # interromprait la sauvegarde des projets suivants — exactement ce
         # qu'il ne faut pas faire un soir où l'on est pressé.
-        sync_project "$src" "$label" || true
+        if is_encrypted "$src"; then
+            encrypt_project "$src" "$label" || true
+        else
+            sync_project "$src" "$label" || true
+        fi
 
         if [[ "$DO_ARCHIVE" == "yes" && "$CUR_STATE" != "ABSENT" && "$CUR_STATE" != "VIDE" && "$CUR_STATE" != "ÉCHEC" && "$CUR_STATE" != "INTERROMPU" ]]; then
-            archive_project "$label" || true
+            if is_encrypted "$src"; then
+                snapshot_encrypted "$label" || true
+            else
+                archive_project "$label" || true
+            fi
         fi
 
         elapsed=$(( SECONDS - started ))
@@ -1202,6 +1473,7 @@ main() {
     render_table couleur
     write_report
     warn_orphans
+    warn_clear_copies
 
     local failed=0 unpublished=0
     for i in "${!R_SEV[@]}"; do

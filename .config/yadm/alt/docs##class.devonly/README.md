@@ -20,7 +20,7 @@ Les conventions de rédaction sont fixées dans [CLAUDE.md](../CLAUDE.md), secti
 | [pack-bundle.md](pack-bundle.md) | [`pack-bundle.sh`](../.local/bin/pack-bundle.sh) | Sauvegarde de l'historique Git en fichier `.bundle` clonable |
 | [tar-dir.md](tar-dir.md) | [`tar-dir.sh`](../.local/bin/tar-dir.sh) | Un ou plusieurs répertoires (jokers acceptés) → un `NOM.tar` chacun, sans compression, avec barre de progression ; `.tar` existant sauté, erreurs en fin de lot |
 | [pack-split.md](pack-split.md) | [`pack-split.sh`](../.local/bin/pack-split.sh) | Gros fichier → volumes zstd + empreintes b3sum + réparation par2, pour Drive ou clé USB ; restauration inverse |
-| [backup-projets.md](backup-projets.md) | [`backup-projets.sh`](../.local/bin/backup-projets.sh) | Miroir incrémental d'une liste de projets vers une clé USB, avant d'éteindre |
+| [backup-projets.md](backup-projets.md) | [`backup-projets.sh`](../.local/bin/backup-projets.sh) | Miroir incrémental d'une liste de projets vers une clé USB, avant d'éteindre, avec archive chiffrée des projets sensibles |
 
 ### Documents et bureautique
 
