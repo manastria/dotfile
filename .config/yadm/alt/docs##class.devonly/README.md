@@ -67,6 +67,7 @@ Les conventions de rédaction sont fixées dans [CLAUDE.md](../CLAUDE.md), secti
 | [install-delta.md](install-delta.md) | [`install-delta.sh`](../.local/bin/install-delta.sh) | `delta` (pager de diff Git colorisé), binaire GitHub + configuration Git optionnelle |
 | [install-fonts.md](install-fonts.md) | [`install-fonts.sh`](../.local/bin/install-fonts.sh) | Polices `.ttf` / `.otf` d'un dossier local copiées dans `~/.local/share/fonts` + `fc-cache` (rien n'est téléchargé) |
 | [uninstall-atuin.md](uninstall-atuin.md) | [`uninstall-atuin.sh`](../.local/bin/uninstall-atuin.sh) | Désinstalle Atuin : binaire et reçu ; historique conservé sauf `--purge-data`, config yadm intacte |
+| [uninstall-starship.md](uninstall-starship.md) | [`uninstall-starship.sh`](../.local/bin/uninstall-starship.sh) | Désinstalle Starship : binaire et cache, sudo seulement si besoin ; profils yadm conservés, bascule sur le prompt Bash de secours |
 
 ---
 
