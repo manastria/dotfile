@@ -27,6 +27,7 @@ Les conventions de rédaction sont fixées dans [CLAUDE.md](../CLAUDE.md), secti
 | Page | Script | Objet |
 | ---- | ------ | ----- |
 | [md2docx.md](md2docx.md) | [`md2docx.sh`](../.local/bin/md2docx.sh) | Conversion Markdown → `.docx` via pandoc, profil `bts-sio` fixe, sortie déduite du nom d'entrée |
+| [docx2pdf.md](docx2pdf.md) | [`docx2pdf.sh`](../.local/bin/docx2pdf.sh) | `.docx` → PDF exporté par Word, puis PDF « 2 pages par feuille » (`pdfjam`) pour la photocopieuse ; WSL, option `--moteur libreoffice` |
 
 ### Système et matériel
 
