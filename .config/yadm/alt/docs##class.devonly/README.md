@@ -47,6 +47,12 @@ Les conventions de rédaction sont fixées dans [CLAUDE.md](../CLAUDE.md), secti
 | [install-wezterm.md](install-wezterm.md) | [`install-wezterm.sh`](../.local/bin/install-wezterm.sh) | WezTerm (dépôt APT officiel) et terminfo `wezterm` dans `~/.terminfo/` ; la config vient de `.wezterm.lua` |
 | [fix-zsh-completions.md](fix-zsh-completions.md) | [`fix-zsh-completions.sh`](../.local/bin/fix-zsh-completions.sh) | Répare les complétions zsh cassées (liens morts `compinit`, montages WSL volatils) |
 
+### Git
+
+| Page | Script | Objet |
+| ---- | ------ | ----- |
+| [git-main-to-master.md](git-main-to-master.md) | [`git-main-to-master.sh`](../.local/bin/git-main-to-master.sh) | Renomme `main` en `master` en local et sur le remote : dépôt propre exigé, upstreams corrigés, `main` supprimée côté serveur (bascule GitHub via `gh`) |
+
 ### Outillage du dépôt
 
 | Page | Script | Objet |
