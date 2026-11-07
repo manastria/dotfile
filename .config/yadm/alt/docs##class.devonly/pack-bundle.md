@@ -227,7 +227,7 @@ ls -1t ~/backup/dotfile_*.bundle | tail -n +8 | xargs -r rm --
 ```
 
 **Sauvegarde périodique de tous les dépôts d'un répertoire**
-Se combine avec [`check-git-sync.sh`](../.local/bin/check-git-sync.sh) pour ne sauvegarder que ce qui n'est pas déjà poussé :
+Se combine avec [`git-check-sync.sh`](../.local/bin/git-check-sync.sh) pour ne sauvegarder que ce qui n'est pas déjà poussé :
 
 ```bash
 for repo in ~/projets/*/; do

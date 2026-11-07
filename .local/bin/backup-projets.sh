@@ -121,7 +121,7 @@
 #     backup-projets.sh --only gclasse --dest /mnt/g/sauvegardes
 #
 #     # Enchaînement avec l'état de synchronisation des dépôts
-#     backup-projets.sh && check-git-sync.sh ~/projets
+#     backup-projets.sh && git-check-sync.sh ~/projets
 #
 #     # Préparation du chiffrement, une seule fois : note la clé publique
 #     # affichée, puis enregistre-la dans le fichier de destinataires

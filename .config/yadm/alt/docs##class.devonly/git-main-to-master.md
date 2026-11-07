@@ -24,7 +24,7 @@ La conversion se fait dans cet ordre, le remote d'abord : s'il refuse, le dépô
 4. `origin/HEAD` pointe sur `master` ;
 5. si le remote est GitHub et que `gh` est connecté, la branche par défaut du dépôt GitHub passe à `master` ; puis `main` est supprimée sur le remote.
 
-Différence avec le script voisin : [`check-git-sync.sh`](../.local/bin/check-git-sync.sh) compare des dépôts à leurs remotes mais ne renomme aucune branche.
+Différence avec le script voisin : [`git-check-sync.sh`](../.local/bin/git-check-sync.sh) compare des dépôts à leurs remotes mais ne renomme aucune branche.
 
 Le script **refuse** de démarrer si :
 

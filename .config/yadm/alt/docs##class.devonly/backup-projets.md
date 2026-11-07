@@ -41,7 +41,7 @@ Les **liens symboliques cassés** de la source ne font pas échouer la sauvegard
 
 Un **Ctrl+C** arrête toute la sauvegarde, pas seulement la copie en cours : le script affiche le récapitulatif partiel de ce qui est passé, nomme le projet qui était en cours de copie — son miroir est donc incomplet — et sort en code `130`. Aucun rapport n'est écrit sur le support dans ce cas : celui de la sauvegarde précédente, qui décrit une passe complète, reste plus honnête qu'un rapport tronqué qui se ferait passer pour la dernière en date.
 
-Ce que le script ne fait **pas** : il ne commite rien, ne pousse rien, ne modifie aucun dépôt. Pour l'état de synchronisation détaillé, avec `git fetch` et détection des divergences, c'est [`check-git-sync.sh`](../.local/bin/check-git-sync.sh) — les deux s'enchaînent bien.
+Ce que le script ne fait **pas** : il ne commite rien, ne pousse rien, ne modifie aucun dépôt. Pour l'état de synchronisation détaillé, avec `git fetch` et détection des divergences, c'est [`git-check-sync.sh`](../.local/bin/git-check-sync.sh) — les deux s'enchaînent bien.
 
 L'arborescence obtenue sur la clé :
 
@@ -141,7 +141,7 @@ backup-projets.sh --archive --keep 5
 backup-projets.sh --only gclasse --dest /mnt/g/sauvegardes
 
 # Sauvegarder, puis faire le point sur ce qui reste à publier
-backup-projets.sh && check-git-sync.sh ~/projets
+backup-projets.sh && git-check-sync.sh ~/projets
 ```
 
 Sortie réelle d'une sauvegarde quotidienne (mode `-q`) :
@@ -351,7 +351,7 @@ age -d -i ~/.config/backup-projets/identite.age \
 | `2` | Erreur d'usage : option inconnue, configuration illisible ou vide, motif `@` sans projet correspondant, support de destination introuvable, ambigu, non monté, ou incapable de dater les fichiers. |
 | `130` | Interrompu au clavier (Ctrl+C). Récapitulatif partiel affiché, aucun rapport écrit sur le support. |
 
-L'état Git n'entre **pas** dans le code de retour : un projet non publié est une sauvegarde réussie, c'est même la raison d'être du script. Pour un code de retour qui réagit à l'état de publication, enchaîner avec [`check-git-sync.sh`](../.local/bin/check-git-sync.sh).
+L'état Git n'entre **pas** dans le code de retour : un projet non publié est une sauvegarde réussie, c'est même la raison d'être du script. Pour un code de retour qui réagit à l'état de publication, enchaîner avec [`git-check-sync.sh`](../.local/bin/git-check-sync.sh).
 
 ---
 
@@ -368,7 +368,7 @@ L'état Git n'entre **pas** dans le code de retour : un projet non publié est u
 5. `check_encryption` → `prepare_dest` → `setup_workdir` — état du chiffrement dans `HAS_ENCRYPTED`/`CRYPT_ERROR`, détection ou validation de la destination, sonde de liens symboliques, contrôle d'espace, répertoire temporaire avec `trap`.
 6. Boucle sur les projets : `git_state`, puis `encrypt_project` et `snapshot_encrypted` pour un projet `@`, `sync_project` et `archive_project` pour les autres, accumulation dans les tableaux `R_*` ; puis `render_table`, `write_report`, `warn_orphans`, `warn_clear_copies` et calcul du code de sortie.
 
-Les fonctions d'analyse communiquent par variables globales (`CUR_STATE`, `CUR_DETAIL`, `GIT_LABEL`, `GIT_SEV`) : une fonction bash ne rend qu'un entier, et sérialiser un tuple à travers `stdout` obligerait à re-parser une chaîne à chaque appel. C'est la convention déjà retenue par [`check-git-sync.sh`](../.local/bin/check-git-sync.sh).
+Les fonctions d'analyse communiquent par variables globales (`CUR_STATE`, `CUR_DETAIL`, `GIT_LABEL`, `GIT_SEV`) : une fonction bash ne rend qu'un entier, et sérialiser un tuple à travers `stdout` obligerait à re-parser une chaîne à chaque appel. C'est la convention déjà retenue par [`git-check-sync.sh`](../.local/bin/git-check-sync.sh).
 
 ### Détail des choix techniques
 
@@ -382,7 +382,7 @@ Encore faut-il ne pas crier au loup : un glob `~/projets/*` finit toujours par r
 
 **Liens symboliques : sonde plutôt que déduction.** Le type de montage ne dit rien de la question. Sous WSL, une clé exFAT est vue comme du `v9fs`, exactement comme un disque NTFS qui, lui, accepte les liens. `detect_deref` crée donc un lien symbolique de test à la racine du support et le supprime aussitôt : si l'appel échoue, `--copy-links` est activé et les liens sont remplacés par leur cible. Le dépôt `dotfile` lui-même contient un lien (`docs` → `.config/yadm/alt/docs##class.devonly/`), le cas n'est pas théorique.
 
-**Aucun accès réseau.** `git_state` compare `HEAD` à `@{u}` sans `fetch`. La sauvegarde doit fonctionner sur un réseau capricieux ou absent, et le script ne cherche pas à savoir si le distant a bougé : uniquement si des commits locaux risquent de n'exister nulle part ailleurs. Un `fetch` bloquant sur une authentification expirée, un soir de départ, serait le pire des comportements. Le diagnostic complet reste le rôle de `check-git-sync.sh`.
+**Aucun accès réseau.** `git_state` compare `HEAD` à `@{u}` sans `fetch`. La sauvegarde doit fonctionner sur un réseau capricieux ou absent, et le script ne cherche pas à savoir si le distant a bougé : uniquement si des commits locaux risquent de n'exister nulle part ailleurs. Un `fetch` bloquant sur une authentification expirée, un soir de départ, serait le pire des comportements. Le diagnostic complet reste le rôle de `git-check-sync.sh`.
 
 **Archives construites depuis le miroir.** `archive_project` lit `MIRROR_ROOT`, jamais la source. Le miroir est déjà expurgé des artefacts de développement, et il est local au support : relire un giga-octet à travers un montage 9p une seconde fois coûterait une minute pour un résultat identique. Les projets `@` sont l'exception : ils n'ont pas de miroir, et `snapshot_encrypted` copie simplement l'archive chiffrée du jour.
 
@@ -490,7 +490,7 @@ L'empreinte serait à stocker à côté de l'archive, et non sur la machine : si
 
 - **`--dry-run` n'écrit rien**, pas même les répertoires du miroir : les `mkdir` sont conditionnés. Seule exception assumée, la sonde `detect_deref` crée puis supprime un lien à la racine du support, pour que la simulation reflète le comportement réel.
 - **Le récapitulatif est rendu deux fois** par `render_table`, en mode `couleur` pour le terminal et `brut` pour le fichier déposé sur la clé — celui-ci doit rester lisible dans le Bloc-notes d'un poste Windows, où des séquences ANSI ne seraient que du bruit.
-- **`pad()` compte les caractères, pas les octets.** `printf %-Ns` désaligne les colonnes dès qu'un nom de projet contient un accent. Même remarque que dans `check-git-sync.sh`.
+- **`pad()` compte les caractères, pas les octets.** `printf %-Ns` désaligne les colonnes dès qu'un nom de projet contient un accent. Même remarque que dans `git-check-sync.sh`.
 - **La sortie de `rsync --stats` est relue** pour alimenter la colonne `DÉTAIL`, d'où le `LC_ALL=C` qui fige le format. Une évolution de `rsync` qui renommerait ces lignes ferait afficher `0 fichier(s)` sans autre symptôme : c'est le premier endroit à vérifier si le différentiel paraît toujours nul.
 - **Les codes de sortie de `rsync` sont traités finement** : `24` (fichiers disparus pendant la copie, typiquement un éditeur ouvert) est bénin, `23` signale un transfert partiel — souvent un nom de fichier illégal sur exFAT (`:`, `?`, `*`) — et tout le reste est un échec. Un projet en échec n'interrompt pas la boucle : les suivants sont sauvegardés quand même.
 - **Un lien symbolique dont la cible existe n'est jamais exclu** : seul `symlink has no referent`, émis par rsync, déclenche l'exclusion. C'est rsync qui juge, pas le script — inutile de dupliquer la logique de résolution des liens relatifs.

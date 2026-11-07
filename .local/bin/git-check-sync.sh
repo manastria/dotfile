@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # NAME
-#     check-git-sync.sh — état de synchronisation des dépôts Git d'un répertoire
+#     git-check-sync.sh — état de synchronisation des dépôts Git d'un répertoire
 #
 # SYNOPSIS
-#     check-git-sync.sh [-d DIR] [-n] [-t SEC] [-q] [-h]
-#     check-git-sync.sh [DIR]
+#     git-check-sync.sh [-d DIR] [-n] [-t SEC] [-q] [-x CAT,...] [-o CAT,...]
+#                       [--hide-ok] [--hide-non-git] [-y | -r] [-h]
+#     git-check-sync.sh [DIR]
 #
 # DESCRIPTION
 #     Passe en revue chaque sous-dossier de DIR (premier niveau uniquement,
@@ -12,38 +13,69 @@
 #     son remote « origin », quelle que soit la forge (GitHub, GitLab,
 #     Codeberg, self-hosted…). Pensé comme un état des lieux avant de
 #     quitter la machine : rien de non commité, rien de non poussé, rien de
-#     bizarre côté distant. Le script ne modifie jamais l'historique local :
-#     la seule commande écrivante est « git fetch », qui met uniquement à
-#     jour les branches de suivi (refs/remotes/*).
+#     bizarre côté distant.
+#
+#     Après le tableau, deux cas sans ambiguïté sont proposés à la mise à
+#     jour : les dépôts UNIQUEMENT en retard (« git pull --rebase ») et ceux
+#     qui ont UNIQUEMENT des commits à pousser (« git push »). « Uniquement »
+#     signifie aucun autre constat : arbre propre, fetch réussi, pas de
+#     divergence ni de réécriture. Rien n'est lancé sans confirmation (ou
+#     --yes). Hors de ces actions acceptées, la seule commande écrivante est
+#     « git fetch », qui met uniquement à jour les branches de suivi.
 #
 # OPTIONS
-#     -d, --dir DIR      Répertoire à scanner (défaut : répertoire courant).
-#                        DIR accepté aussi en argument positionnel.
-#     -n, --no-fetch     Ne contacte aucun remote. Le rapport se base alors
-#                        sur les dernières branches de suivi connues :
-#                        beaucoup plus rapide, mais possiblement périmé.
-#     -t, --timeout SEC  Délai maximum par « git fetch » (défaut : 20).
-#                        Évite qu'un remote injoignable bloque tout le scan.
-#     -q, --quiet        N'affiche que le tableau final, sans le détail
-#                        déroulant dépôt par dépôt.
-#     -h, --help         Affiche cette aide.
+#     -d, --dir DIR        Répertoire à scanner (défaut : répertoire courant).
+#                          DIR accepté aussi en argument positionnel.
+#     -n, --no-fetch       Ne contacte aucun remote pendant le scan. Le rapport
+#                          se base alors sur les dernières branches de suivi
+#                          connues : plus rapide, mais possiblement périmé.
+#     -t, --timeout SEC    Délai maximum par opération réseau : fetch, et
+#                          pull/push acceptés (défaut : 20).
+#     -q, --quiet          N'affiche que le tableau final, sans le détail
+#                          déroulant dépôt par dépôt.
+#     -x, --hide CAT,...   Masque les dépôts dont TOUS les constats sont dans
+#                          la liste (un dépôt « MODIFS + A-POUSSER » reste
+#                          affiché avec --hide modifs).
+#     -o, --only CAT,...   N'affiche que les dépôts ayant AU MOINS un constat
+#                          de la liste.
+#         --hide-ok        Raccourci de --hide ok.
+#         --hide-non-git   Raccourci de --hide non-git.
+#     -y, --yes            Applique les mises à jour proposées sans demander.
+#     -r, --report-only    Rapport seul : ne propose aucune mise à jour.
+#     -h, --help           Affiche cette aide.
+#
+#     Catégories (insensibles à la casse, options répétables) :
+#         ok  non-git  vide  modifs  sans-remote  fetch-ko  sans-branche
+#         sans-upstream  force-push  divergence  a-pousser  a-recuperer
+#
+#     Les dépôts masqués ne comptent ni dans le code de retour ni dans les
+#     mises à jour proposées.
 #
 # EXAMPLES
 #     # État des lieux du répertoire de projets courant
-#     cd ~/projets && check-git-sync.sh
+#     cd ~/projets && git-check-sync.sh
 #
-#     # Scanner un répertoire précis, sans accès réseau (avion, hors-ligne)
-#     check-git-sync.sh --no-fetch ~/projets
+#     # Seulement ce qui demande attention, sans les dossiers non-git
+#     git-check-sync.sh --hide ok,non-git ~/projets
 #
-#     # Utilisable dans un hook de fin de session : ne rend la main
-#     # proprement que si tout est synchronisé
-#     check-git-sync.sh -q ~/projets || echo "Des projets demandent attention"
+#     # Lister les dépôts à pousser, et les pousser sans question
+#     git-check-sync.sh -o a-pousser -y ~/projets
+#
+#     # Scanner sans accès réseau (avion, hors-ligne), sans rien proposer
+#     git-check-sync.sh --no-fetch -r ~/projets
+#
+#     # Hook de fin de session : ne rend la main proprement que si tout est
+#     # synchronisé
+#     git-check-sync.sh -q -r ~/projets || echo "Des projets demandent attention"
 #
 # EXIT CODES
-#     0   Tous les dépôts sont propres et synchronisés.
-#     1   Au moins un point d'attention (non commité, non poussé, en retard,
-#         divergence, force-push, fetch en échec, dossier non-git…).
-#     2   Erreur d'usage : option inconnue ou répertoire introuvable.
+#     0   Tous les dépôts affichés sont propres et synchronisés (après les
+#         éventuelles mises à jour acceptées).
+#     1   Au moins un point d'attention parmi les dépôts affichés (non
+#         commité, non poussé, en retard, divergence, force-push, fetch ou
+#         mise à jour en échec, dossier non-git…).
+#     2   Erreur d'usage : option ou catégorie inconnue, répertoire
+#         introuvable, options incompatibles.
 set -euo pipefail
 
 # -----------------------------------------------------------------------------
@@ -52,6 +84,7 @@ set -euo pipefail
 readonly REMOTE_NAME="origin"
 readonly DEFAULT_TIMEOUT=20
 readonly LABEL_WIDTH=13
+readonly CATEGORIES=" OK NON-GIT VIDE MODIFS SANS-REMOTE FETCH-KO SANS-BRANCHE SANS-UPSTREAM FORCE-PUSH DIVERGENCE A-POUSSER A-RECUPERER "
 
 # -----------------------------------------------------------------------------
 # Couleurs et fonctions de log
@@ -72,7 +105,7 @@ die()     { error "$*"; exit 1; }
 # Constat grave dans le rapport (divergence, force-push). Volontairement sur
 # stdout et non stderr comme error() : ce n'est pas une erreur d'exécution du
 # script mais une ligne du rapport, qui doit rester dans l'ordre du tableau
-# lors d'une redirection « check-git-sync.sh > rapport.txt ».
+# lors d'une redirection « git-check-sync.sh > rapport.txt ».
 critical() { echo -e "${RED}[CRITIQUE]${RESET}  $*"; }
 
 usage() {
@@ -92,17 +125,54 @@ BASE_DIR="."
 DO_FETCH="yes"
 FETCH_TIMEOUT="$DEFAULT_TIMEOUT"
 QUIET="no"
+# ask : proposer (si terminal) ; yes : appliquer ; none : rapport seul
+ACTION_MODE="ask"
+# Ensembles de catégories sous forme « ␣A␣B␣ » : le test d'appartenance se
+# réduit alors à un motif *" X "*, sans tableau associatif.
+HIDE_SET=""
+ONLY_SET=""
+
+# add_categories <nom-de-variable> <liste séparée par des virgules>
+# Normalise en majuscules et refuse toute catégorie inconnue : une faute de
+# frappe dans --hide masquerait sinon silencieusement… rien du tout.
+add_categories() {
+    local var="$1" list="$2" cat
+    local -a items
+    [[ -n "$list" ]] || usage_error "Liste de catégories vide."
+    IFS=',' read -r -a items <<< "$list"
+    for cat in "${items[@]}"; do
+        cat="${cat^^}"
+        cat="${cat// /}"
+        [[ -n "$cat" ]] || continue
+        [[ "$CATEGORIES" == *" $cat "* ]] \
+            || usage_error "Catégorie inconnue : $cat (voir --help)."
+        printf -v "$var" '%s' "${!var:- }$cat "
+    done
+}
+
+set_action_mode() {
+    if [[ "$ACTION_MODE" != "ask" && "$ACTION_MODE" != "$1" ]]; then
+        usage_error "--yes et --report-only sont incompatibles."
+    fi
+    ACTION_MODE="$1"
+}
 
 parse_args() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            -d|--dir)      BASE_DIR="${2:-}"; shift 2 ;;
-            -t|--timeout)  FETCH_TIMEOUT="${2:-}"; shift 2 ;;
-            -n|--no-fetch) DO_FETCH="no"; shift ;;
-            -q|--quiet)    QUIET="yes"; shift ;;
-            -h|--help)     usage; exit 0 ;;
-            -*)            usage_error "Option inconnue : $1" ;;
-            *)             BASE_DIR="$1"; shift ;;
+            -d|--dir)        BASE_DIR="${2:-}"; shift 2 ;;
+            -t|--timeout)    FETCH_TIMEOUT="${2:-}"; shift 2 ;;
+            -x|--hide)       add_categories HIDE_SET "${2:-}"; shift 2 ;;
+            -o|--only)       add_categories ONLY_SET "${2:-}"; shift 2 ;;
+            --hide-ok)       add_categories HIDE_SET "OK"; shift ;;
+            --hide-non-git)  add_categories HIDE_SET "NON-GIT"; shift ;;
+            -n|--no-fetch)   DO_FETCH="no"; shift ;;
+            -q|--quiet)      QUIET="yes"; shift ;;
+            -y|--yes)        set_action_mode "yes"; shift ;;
+            -r|--report-only) set_action_mode "none"; shift ;;
+            -h|--help)       usage; exit 0 ;;
+            -*)              usage_error "Option inconnue : $1" ;;
+            *)               BASE_DIR="$1"; shift ;;
         esac
     done
 
@@ -124,33 +194,75 @@ setup_git_env() {
     # défini une, pour ne pas écraser sa configuration.
     export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh} -o BatchMode=yes"
 
-    # timeout(1) borne les fetch sur remote injoignable (coreutils, présent
-    # partout sur Debian/Ubuntu — mais on reste fonctionnel sans lui).
+    # timeout(1) borne les opérations réseau sur remote injoignable
+    # (coreutils, présent partout sur Debian/Ubuntu — mais on reste
+    # fonctionnel sans lui).
     TIMEOUT_BIN="$(command -v timeout || true)"
+}
+
+# run_git_net <dir> <args git…>
+# Commande git qui touche le réseau, bornée par --timeout. Sortie standard et
+# d'erreur fusionnées. Code de retour de git, ou 124 si timeout(1) a coupé.
+run_git_net() {
+    local dir="$1"
+    shift
+    if [[ -n "$TIMEOUT_BIN" ]]; then
+        "$TIMEOUT_BIN" "$FETCH_TIMEOUT" git -C "$dir" "$@" 2>&1
+    else
+        git -C "$dir" "$@" 2>&1
+    fi
 }
 
 # -----------------------------------------------------------------------------
 # Accumulation des résultats
 # -----------------------------------------------------------------------------
-declare -a R_NAME=() R_LABEL=() R_COLOR=() R_DETAIL=()
+# R_FLAGS : tous les constats du dépôt (« MODIFS A-POUSSER »), pas seulement
+# le plus grave affiché dans R_LABEL. Les filtres et l'éligibilité aux mises
+# à jour se décident sur l'ensemble des constats.
+declare -a R_PATH=() R_NAME=() R_LABEL=() R_COLOR=() R_DETAIL=() R_FLAGS=() R_SHOWN=()
 
 # État du dépôt en cours d'analyse (globaux : évite de sérialiser un tuple
 # de retour à travers stdout, et les fonctions bash ne rendent qu'un entier).
 CUR_SEV=0
 CUR_LABEL="OK"
 CUR_COLOR="$GREEN"
-declare -a CUR_NOTES=()
+declare -a CUR_NOTES=() CUR_FLAGS=()
 
 # set_status <sévérité> <couleur> <libellé>
 # Le libellé affiché est celui du problème le plus grave : une comparaison
 # stricte fait que le premier constat d'une sévérité donnée l'emporte, ce
 # qui fixe la priorité par l'ordre des tests (force-push avant divergence).
+# Chaque constat est en revanche toujours mémorisé dans CUR_FLAGS.
 set_status() {
+    CUR_FLAGS+=("$3")
     if (( $1 > CUR_SEV )); then
         CUR_SEV="$1"
         CUR_COLOR="$2"
         CUR_LABEL="$3"
     fi
+}
+
+# is_visible "<constats séparés par des espaces>"
+# --only : au moins un constat dans la liste. --hide : masqué seulement si
+# TOUS les constats y sont, pour qu'un dépôt « MODIFS + A-POUSSER » ne
+# disparaisse pas parce qu'on a demandé à ignorer les modifications locales.
+is_visible() {
+    local f any_only="no" all_hidden="yes"
+    for f in $1; do
+        if [[ "$ONLY_SET" == *" $f "* ]]; then
+            any_only="yes"
+        fi
+        if [[ "$HIDE_SET" != *" $f "* ]]; then
+            all_hidden="no"
+        fi
+    done
+    if [[ -n "$ONLY_SET" && "$any_only" == "no" ]]; then
+        return 1
+    fi
+    if [[ -n "$HIDE_SET" && "$all_hidden" == "yes" ]]; then
+        return 1
+    fi
+    return 0
 }
 
 # -----------------------------------------------------------------------------
@@ -165,13 +277,9 @@ run_fetch() {
 
     # LC_ALL=C : la sortie du fetch est *parsée* plus bas pour repérer
     # « (forced update) ». Ce message est traduit dans les locales non
-    # anglaises, il faut donc forcer l'anglais.
-    if [[ -n "$TIMEOUT_BIN" ]]; then
-        FETCH_OUT="$(LC_ALL=C "$TIMEOUT_BIN" "$FETCH_TIMEOUT" \
-            git -C "$dir" fetch "$REMOTE_NAME" 2>&1)" || rc=$?
-    else
-        FETCH_OUT="$(LC_ALL=C git -C "$dir" fetch "$REMOTE_NAME" 2>&1)" || rc=$?
-    fi
+    # anglaises, il faut donc forcer l'anglais. L'export a lieu dans la
+    # sous-shell de $(…) : il ne fuit pas vers le reste du script.
+    FETCH_OUT="$(export LC_ALL=C; run_git_net "$dir" fetch "$REMOTE_NAME")" || rc=$?
     return "$rc"
 }
 
@@ -182,6 +290,7 @@ check_repo() {
     CUR_LABEL="OK"
     CUR_COLOR="$GREEN"
     CUR_NOTES=()
+    CUR_FLAGS=()
     FETCH_OUT=""
 
     # --- 1. Est-ce un dépôt Git ? -------------------------------------------
@@ -322,6 +431,150 @@ check_repo() {
 }
 
 # -----------------------------------------------------------------------------
+# Mises à jour proposées
+# -----------------------------------------------------------------------------
+
+# apply_action <pull|push> <index>
+# Exécute la mise à jour d'un dépôt éligible et, en cas de succès, le passe
+# à OK dans les résultats : l'éligibilité exige un constat unique, donc une
+# fois ce constat levé il ne reste rien à signaler.
+apply_action() {
+    local kind="$1" i="$2"
+    local dir="${R_PATH[$i]}" name="${R_NAME[$i]}" out rc=0 done_msg
+
+    case "$kind" in
+        pull)
+            # Aucun commit local (sinon ce serait A-POUSSER ou DIVERGENCE) et
+            # arbre propre : le rebase se réduit à une avance rapide, sans
+            # risque de conflit ni de commit réécrit.
+            out="$(run_git_net "$dir" pull --rebase)" || rc=$?
+            done_msg="mis à jour (git pull --rebase)"
+            ;;
+        push)
+            # Push explicite vers l'upstream comparé pendant le scan
+            # (branch.<b>.remote / branch.<b>.merge), plutôt qu'un « git push »
+            # nu dont la cible dépend de push.default et pourrait ne pas être
+            # la branche suivie (nom local différent du nom distant).
+            local branch remote merge
+            branch="$(git -C "$dir" symbolic-ref -q --short HEAD 2>/dev/null || true)"
+            remote="$(git -C "$dir" config --get "branch.${branch}.remote" 2>/dev/null || true)"
+            merge="$(git -C "$dir" config --get "branch.${branch}.merge" 2>/dev/null || true)"
+            if [[ -z "$branch" || -z "$remote" || -z "$merge" ]]; then
+                warn "$(pad "$name" "$NAME_WIDTH")  push impossible : upstream introuvable"
+                return 0
+            fi
+            out="$(run_git_net "$dir" push "$remote" "HEAD:${merge}")" || rc=$?
+            done_msg="poussé vers $remote/${merge#refs/heads/}"
+            ;;
+    esac
+
+    if (( rc == 0 )); then
+        success "$(pad "$name" "$NAME_WIDTH")  $done_msg"
+        R_LABEL[$i]="OK"
+        R_COLOR[$i]="$GREEN"
+        R_FLAGS[$i]="OK"
+        R_DETAIL[$i]="$done_msg"
+        return 0
+    fi
+
+    if (( rc == 124 )); then
+        warn "$(pad "$name" "$NAME_WIDTH")  échec : timeout ${FETCH_TIMEOUT}s (voir --timeout)"
+    else
+        warn "$(pad "$name" "$NAME_WIDTH")  échec de git $kind :"
+    fi
+    # Sortie de git indentée sous la ligne du dépôt : c'est elle qui dit
+    # pourquoi (rejet non fast-forward, authentification, hook…).
+    if [[ -n "$out" ]]; then
+        printf '%s\n' "$out" | sed 's/^/                  /'
+    fi
+    R_DETAIL[$i]="échec de git $kind"
+}
+
+# propose_group <pull|push> <index…>
+# Liste les dépôts du groupe puis, selon ACTION_MODE, demande confirmation
+# globale (o), dépôt par dépôt (i), ou applique directement (--yes).
+propose_group() {
+    local kind="$1"
+    shift
+    (( $# > 0 )) || return 0
+
+    local i cmd title answer="" one
+    if [[ "$kind" == "pull" ]]; then
+        cmd="git pull --rebase"
+        title="Uniquement en retard"
+    else
+        cmd="git push"
+        title="Uniquement des commits à pousser"
+    fi
+
+    echo ""
+    info "${BOLD}$title${RESET} — « $cmd » possible sur $# dépôt(s) :"
+    for i in "$@"; do
+        echo "                  - ${R_NAME[$i]} : ${R_DETAIL[$i]}"
+    done
+
+    case "$ACTION_MODE" in
+        yes)
+            answer="o"
+            ;;
+        ask)
+            # Sans terminal en entrée (cron, pipe, hook non interactif), pas
+            # de question : on indique simplement comment appliquer.
+            if [[ ! -t 0 ]]; then
+                info "Pas de terminal interactif : relancer avec --yes pour appliquer."
+                return 0
+            fi
+            read -r -p "$(echo -e "${YELLOW}Lancer « $cmd » ?${RESET} [o]ui / [N]on / [i] un par un : ")" answer || answer=""
+            ;;
+    esac
+
+    case "$answer" in
+        [oOyY]*)
+            for i in "$@"; do
+                apply_action "$kind" "$i"
+            done
+            ;;
+        [iI]*)
+            for i in "$@"; do
+                read -r -p "$(echo -e "  ${R_NAME[$i]} ? [o/N] ")" one || one=""
+                if [[ "$one" =~ ^[oOyY] ]]; then
+                    apply_action "$kind" "$i"
+                fi
+            done
+            ;;
+        *)
+            info "Ignoré."
+            ;;
+    esac
+}
+
+propose_updates() {
+    [[ "$ACTION_MODE" != "none" ]] || return 0
+
+    # Éligibilité stricte : le constat doit être SEUL. Un dépôt modifié, en
+    # échec de fetch ou réécrit côté distant demande un regard humain, même
+    # si l'opération réussirait peut-être techniquement.
+    local i
+    local -a pulls=() pushes=()
+    for i in "${!R_NAME[@]}"; do
+        [[ "${R_SHOWN[$i]}" == "yes" ]] || continue
+        case "${R_FLAGS[$i]}" in
+            A-RECUPERER) pulls+=("$i") ;;
+            A-POUSSER)   pushes+=("$i") ;;
+        esac
+    done
+
+    if (( ${#pulls[@]} + ${#pushes[@]} == 0 )); then
+        return 0
+    fi
+
+    echo ""
+    echo -e "${BOLD}=== MISES À JOUR POSSIBLES ===${RESET}"
+    propose_group pull ${pulls[@]+"${pulls[@]}"}
+    propose_group push ${pushes[@]+"${pushes[@]}"}
+}
+
+# -----------------------------------------------------------------------------
 # Affichage
 # -----------------------------------------------------------------------------
 
@@ -362,7 +615,7 @@ print_live() {
 }
 
 print_table() {
-    local i sep width=0
+    local i sep width=0 shown=0
 
     # Largeur du filet calée sur la ligne la plus longue, détail compris,
     # mais plafonnée à la largeur du terminal pour éviter qu'il ne s'enroule
@@ -370,6 +623,8 @@ print_table() {
     local term_width
     term_width="$(tput cols 2>/dev/null || echo 100)"
     for i in "${!R_NAME[@]}"; do
+        [[ "${R_SHOWN[$i]}" == "yes" ]] || continue
+        shown=$(( shown + 1 ))
         if (( ${#R_DETAIL[$i]} > width )); then
             width=${#R_DETAIL[$i]}
         fi
@@ -382,10 +637,15 @@ print_table() {
 
     echo ""
     echo -e "${BOLD}=== RÉCAPITULATIF ===${RESET}"
+    if (( shown == 0 )); then
+        info "Aucun dépôt ne correspond aux filtres."
+        return 0
+    fi
     echo -e "${BOLD}$(pad "PROJET" "$NAME_WIDTH")  $(pad "STATUT" "$LABEL_WIDTH")  DÉTAIL${RESET}"
     echo "$sep"
 
     for i in "${!R_NAME[@]}"; do
+        [[ "${R_SHOWN[$i]}" == "yes" ]] || continue
         echo -e "$(pad "${R_NAME[$i]}" "$NAME_WIDTH")  ${R_COLOR[$i]}$(pad "${R_LABEL[$i]}" "$LABEL_WIDTH")${RESET}  ${R_DETAIL[$i]}"
     done
 }
@@ -407,12 +667,19 @@ main() {
     if [[ "$DO_FETCH" == "no" ]]; then
         warn "Mode hors-ligne (--no-fetch) : état distant potentiellement périmé."
     fi
+    if [[ -n "$HIDE_SET" ]]; then
+        info "Masqués :${HIDE_SET% }"
+    fi
+    if [[ -n "$ONLY_SET" ]]; then
+        info "Uniquement :${ONLY_SET% }"
+    fi
     echo ""
 
     # Premier passage : uniquement pour connaître la largeur de colonne avant
     # d'afficher quoi que ce soit, sinon les lignes émises au fil de l'eau
-    # seraient alignées sur une largeur encore incomplète.
-    local d name detail
+    # seraient alignées sur une largeur encore incomplète. Les dépôts masqués
+    # comptent aussi : on ne connaît leurs constats qu'après analyse.
+    local d name detail flags
     local -a dirs=()
     NAME_WIDTH=6   # largeur mini = longueur de l'en-tête « PROJET »
     for d in "$BASE_DIR"/*/; do
@@ -435,35 +702,54 @@ main() {
         # ce qui sous set -e stopperait le scan au premier dépôt à problème.
         check_repo "$d" || true
         detail="$(join_notes)"
+        flags="${CUR_FLAGS[*]:-OK}"
 
+        R_PATH+=("$d")
         R_NAME+=("$name")
         R_LABEL+=("$CUR_LABEL")
         R_COLOR+=("$CUR_COLOR")
         R_DETAIL+=("$detail")
+        R_FLAGS+=("$flags")
 
-        if [[ "$QUIET" == "no" ]]; then
-            print_live "$name" "$detail"
+        if is_visible "$flags"; then
+            R_SHOWN+=("yes")
+            if [[ "$QUIET" == "no" ]]; then
+                print_live "$name" "$detail"
+            fi
+        else
+            R_SHOWN+=("no")
         fi
     done
 
     print_table
+    propose_updates
 
-    # Le code de sortie agrège tous les dépôts : 0 seulement si aucun ne
-    # demande d'action, pour rester utilisable dans un && / || ou un hook.
-    local i attention=0
-    for i in "${!R_LABEL[@]}"; do
-        if [[ "${R_LABEL[$i]}" != "OK" ]]; then
+    # Le code de sortie agrège les dépôts affichés, APRÈS les mises à jour
+    # acceptées : 0 seulement si aucun ne demande d'action, pour rester
+    # utilisable dans un && / || ou un hook. Ce qu'on a choisi de masquer,
+    # on a choisi de l'ignorer.
+    local i attention=0 shown=0 hidden=0
+    for i in "${!R_NAME[@]}"; do
+        if [[ "${R_SHOWN[$i]}" != "yes" ]]; then
+            hidden=$(( hidden + 1 ))
+            continue
+        fi
+        shown=$(( shown + 1 ))
+        if [[ "${R_FLAGS[$i]}" != "OK" ]]; then
             attention=$(( attention + 1 ))
         fi
     done
 
     echo ""
+    if (( hidden > 0 )); then
+        info "$hidden dépôt(s) masqué(s) par les filtres."
+    fi
     if (( attention == 0 )); then
-        success "${BOLD}Tout est synchronisé.${RESET} ${#R_NAME[@]} dépôt(s) vérifié(s)."
+        success "${BOLD}Tout est synchronisé.${RESET} $shown dépôt(s) affiché(s) sur ${#R_NAME[@]}."
         exit 0
     fi
 
-    warn "${BOLD}$attention point(s) d'attention${RESET} sur ${#R_NAME[@]} dépôt(s)."
+    warn "${BOLD}$attention point(s) d'attention${RESET} sur $shown dépôt(s) affiché(s)."
     exit 1
 }
 
