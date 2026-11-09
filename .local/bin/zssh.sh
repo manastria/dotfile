@@ -3,12 +3,12 @@
 #     zssh.sh — connexion SSH vers une machine dotfile, avec tmux et profil zsh
 #
 # SYNOPSIS
-#     zssh.sh [-e PROFIL] [-D] [OPTIONS_SSH...] HOTE
+#     zssh.sh [-e PROFIL] [-s SESSION] [-D] [OPTIONS_SSH...] HOTE
 #     zssh.sh -h | --help
 #
 # DESCRIPTION
-#     Ouvre une session SSH et y lance, côté distant, la session tmux « main »
-#     avec le profil zsh demandé (variable ZSH_PROFILE). La session est créée
+#     Ouvre une session SSH et y lance, côté distant, une session tmux (« main »
+#     par défaut, ou celle choisie avec -s) avec le profil zsh demandé (variable ZSH_PROFILE). La session est créée
 #     si elle n'existe pas, sinon on s'y rattache : après une coupure réseau,
 #     relancer la même commande retrouve le travail en cours.
 #
@@ -22,8 +22,10 @@
 #
 # OPTIONS
 #     -e, --profile PROFIL   Profil zsh distant (défaut : ssh).
+#     -s, --session NOM      Session tmux distante à créer ou reprendre
+#                            (défaut : main ; lettres, chiffres, _ et -).
 #     -D, --detach           Détache d'abord les autres clients déjà attachés
-#                            à la session « main » (reprise d'une session
+#                            à la session (reprise d'une session
 #                            restée ouverte ailleurs) : tmux new-session -D.
 #     -h, --help             Affiche cette aide.
 #     OPTIONS_SSH            Toute option ssh (-p, -i, -J, -o…), puis l'hôte.
@@ -35,13 +37,17 @@
 #     # Autre profil, port et clé SSH personnalisés
 #     zssh.sh -e writer -p 2222 -i ~/.ssh/id_ed25519 user@host
 #
+#     # Choisir la session tmux distante (créée si absente)
+#     zssh.sh -s projet user@host
+#
 #     # Reprendre la session restée ouverte sur un autre poste
 #     zssh.sh -D user@host
 #
 # EXIT CODES
 #     0   Session terminée normalement.
 #     1   Erreur d'exécution : ssh absent.
-#     2   Erreur d'usage : option inconnue, valeur manquante, hôte absent.
+#     2   Erreur d'usage : option inconnue, valeur manquante, hôte absent,
+#         profil ou nom de session invalide.
 #     *   Sinon, code de retour de ssh (255 : échec de connexion).
 set -euo pipefail
 
@@ -49,7 +55,7 @@ set -euo pipefail
 # Constantes
 # -----------------------------------------------------------------------------
 readonly DEFAULT_PROFILE="ssh"
-readonly TMUX_SESSION="main"
+readonly DEFAULT_SESSION="main"
 
 # -----------------------------------------------------------------------------
 # Couleurs et fonctions de log
@@ -77,6 +83,7 @@ usage_error() { error "$*"; echo "Essayez : $(basename "$0") --help" >&2; exit 2
 # Arguments
 # -----------------------------------------------------------------------------
 PROFILE="$DEFAULT_PROFILE"
+SESSION="$DEFAULT_SESSION"
 DETACH=""
 SSH_ARGS=()
 
@@ -88,6 +95,9 @@ parse_args() {
             -e|--profile)
                 [[ -n "${2:-}" ]] || usage_error "$1 attend une valeur."
                 PROFILE="$2"; shift 2 ;;
+            -s|--session)
+                [[ -n "${2:-}" ]] || usage_error "$1 attend une valeur."
+                SESSION="$2"; shift 2 ;;
             -D|--detach) DETACH="-D"; shift ;;
             -h|--help)   usage; exit 0 ;;
             --)          shift; break ;;
@@ -102,6 +112,11 @@ parse_args() {
     # on le restreint à des caractères sûrs plutôt que d'échapper.
     [[ "$PROFILE" =~ ^[A-Za-z0-9._-]+$ ]] \
         || usage_error "Nom de profil invalide : $PROFILE"
+
+    # Même précaution pour la session ; tmux interdit de toute façon « . » et
+    # « : » dans un nom de session.
+    [[ "$SESSION" =~ ^[A-Za-z0-9_-]+$ ]] \
+        || usage_error "Nom de session invalide : $SESSION"
 }
 
 # -----------------------------------------------------------------------------
@@ -120,7 +135,7 @@ connect() {
     # aussi les autres clients. ${DETACH:+ …} évite un double espace si absent.
     # exec : le code de retour de ssh devient celui du script.
     exec ssh -t "${SSH_ARGS[@]}" \
-        "TERM=xterm-256color ZSH_PROFILE='${PROFILE}' tmux new-session -A${DETACH:+ $DETACH} -s ${TMUX_SESSION}"
+        "TERM=xterm-256color ZSH_PROFILE='${PROFILE}' tmux new-session -A${DETACH:+ $DETACH} -s '${SESSION}'"
 }
 
 # -----------------------------------------------------------------------------
