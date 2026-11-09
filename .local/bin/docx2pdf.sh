@@ -4,7 +4,8 @@
 #
 # SYNOPSIS
 #     docx2pdf.sh FICHIER.docx... [--out DOSSIER] [--sans-2p] [--sans-cadre]
-#                                 [--fusion NOM] [--moteur word|libreoffice]
+#                                 [--fusion NOM [--feuille-par-doc]]
+#                                 [--moteur word|libreoffice]
 #     docx2pdf.sh -h|--help
 #
 # DESCRIPTION
@@ -34,6 +35,13 @@
 #     Aucun FICHIER.pdf individuel n'est écrit. Si un seul .docx échoue,
 #     rien n'est produit : un PDF auquel il manquerait un chapitre trompe.
 #
+#     Sans autre précaution, un document de pages impaires partage sa dernière
+#     feuille (du PDF 2 pages par feuille, ou en recto verso) avec le début du
+#     suivant. --feuille-par-doc ajoute une page blanche à la fin de chaque
+#     document de pages impaires (sauf le dernier) : chaque document commence
+#     alors sur une nouvelle feuille. Ces pages blanches sont dans NOM.pdf aussi,
+#     pour que NOM.pdf et NOM-2p.pdf gardent la même pagination.
+#
 # OPTIONS
 #     FICHIER.docx...   Un ou plusieurs fichiers à convertir (obligatoire).
 #     --out DOSSIER     Dossier de sortie, créé si besoin (défaut : celui de
@@ -44,6 +52,9 @@
 #     --fusion NOM      Un seul PDF pour tous les .docx, nommé NOM.pdf (le
 #                       .pdf est ajouté s'il manque ; pas de « / » dans NOM :
 #                       --out choisit le dossier).
+#     --feuille-par-doc Avec --fusion : chaque document commence sur une nouvelle
+#                       feuille (page blanche après un document de pages
+#                       impaires, sauf le dernier). Erreur sans --fusion.
 #     --moteur M        word (défaut) ou libreoffice.
 #     -h, --help        Affiche cette aide.
 #
@@ -66,12 +77,15 @@
 #     # Ordre choisi à la main, résultat dans un autre dossier
 #     docx2pdf.sh intro.docx annexes.docx conclusion.docx --fusion dossier --out ~/pdf
 #
+#     # Idem, chaque document commençant sur une nouvelle feuille (photocopie)
+#     docx2pdf.sh chapitre-*.docx --fusion cours --feuille-par-doc
+#
 # EXIT CODES
 #     0   Toutes les conversions ont réussi.
 #     1   Erreur d'exécution : outil manquant, ou échec d'au moins une conversion
 #         (avec --fusion : échec de la conversion d'un .docx ou de la fusion).
 #     2   Erreur d'usage : aucun fichier, option inconnue, NOM de --fusion
-#         invalide, fichier .docx introuvable.
+#         invalide, --feuille-par-doc sans --fusion, fichier .docx introuvable.
 set -euo pipefail
 
 # -----------------------------------------------------------------------------
@@ -110,6 +124,7 @@ OUT_DIR=""
 DEUX_PAGES=1
 CADRE=1
 FUSION=""   # nom (sans .pdf) du PDF fusionné ; vide = un PDF par .docx
+FEUILLE_PAR_DOC=0
 MOTEUR="word"
 
 parse_args() {
@@ -125,6 +140,7 @@ parse_args() {
                           [[ -n "$FUSION" && "$FUSION" != */* ]] \
                               || usage_error "--fusion attend un nom de fichier sans « / » (dossier : --out)."
                           shift 2 ;;
+            --feuille-par-doc) FEUILLE_PAR_DOC=1; shift ;;
             --moteur)     [[ $# -ge 2 ]] || usage_error "--moteur demande word ou libreoffice."
                           MOTEUR="$2"; shift 2 ;;
             -h|--help)    usage; exit 0 ;;
@@ -136,6 +152,9 @@ parse_args() {
     [[ ${#INPUTS[@]} -gt 0 ]] || usage_error "Fichier(s) .docx manquant(s)."
     [[ "$MOTEUR" == "word" || "$MOTEUR" == "libreoffice" ]] \
         || usage_error "Moteur inconnu : $MOTEUR (word ou libreoffice)."
+    # Vérifié après la boucle : l'ordre de --fusion et --feuille-par-doc sur la ligne ne compte pas
+    [[ $FEUILLE_PAR_DOC -eq 0 || -n "$FUSION" ]] \
+        || usage_error "--feuille-par-doc n'a de sens qu'avec --fusion."
 }
 
 # -----------------------------------------------------------------------------
@@ -271,6 +290,16 @@ imposer_2p() {  # $1 = PDF source ; produit son jumeau « -2p.pdf » à côté
     success "${out} (${feuilles} feuille(s) A4 paysage)"
 }
 
+ajouter_page_blanche() {  # $1 = PDF, modifié sur place
+    local pdf="$1" w h
+    # Sans --papersize, pdfjam impose son papier par défaut (A4) et redimensionnerait les pages du
+    # document. La taille est relue dans le PDF (« 595.276 x 841.89 pts (A4) ») ; l'unité est bp
+    # (point PDF, 1/72") et non pt, qui vaut 1/72,27" en LaTeX et donnerait 609,7 au lieu de 612.
+    read -r w _ h _ <<<"$(pdf_field "$pdf" "Page size")"
+    # '1-' = toutes les pages, '{}' = une page blanche (syntaxe de pdfpages)
+    pdfjam --quiet "$pdf" '1-,{}' --papersize "{${w}bp,${h}bp}" --outfile "$pdf"
+}
+
 # -----------------------------------------------------------------------------
 # Mode par défaut : un PDF par .docx
 # -----------------------------------------------------------------------------
@@ -297,7 +326,7 @@ convert_all() {
 # Mode --fusion : un seul PDF pour tous les .docx
 # -----------------------------------------------------------------------------
 fusionner_tout() {
-    local parts=() part dest out f i=0 pages
+    local parts=() part dest out f i=0 pages blanches=0 detail_pages
     # Le dossier par défaut est celui du premier .docx, puisqu'il n'y a qu'un seul résultat
     dest="$(dossier_sortie "$(realpath "${INPUTS[0]}")")"
     out="$dest/$FUSION.pdf"
@@ -311,6 +340,14 @@ fusionner_tout() {
         # Échec = arrêt immédiat : un PDF fusionné incomplet est pire que pas de PDF
         docx_to_pdf "$(realpath "$f")" "$part" "$(basename "$f")" \
             || die "Fusion annulée : $(basename "$f") n'a pas pu être converti."
+        # Page blanche après un document de pages impaires pour que le suivant commence sur une
+        # nouvelle feuille ; inutile après le dernier, qui n'a pas de suivant.
+        if [[ $FEUILLE_PAR_DOC -eq 1 && $i -lt ${#INPUTS[@]} ]] && (( $(pdf_field "$part" Pages) % 2 )); then
+            ajouter_page_blanche "$part" \
+                || die "Fusion annulée : page blanche impossible après $(basename "$f")."
+            blanches=$((blanches + 1))
+            info "Page blanche ajoutée après $(basename "$f") (nombre de pages impair)."
+        fi
         parts+=("$part")
     done
 
@@ -319,7 +356,9 @@ fusionner_tout() {
     pdfunite "${parts[@]}" "$TMP/fusion.pdf" || die "pdfunite a échoué."
     install -m 0644 "$TMP/fusion.pdf" "$out"
     pages="$(pdf_field "$out" Pages)"
-    success "${out} (${pages} page(s), ${#parts[@]} document(s))"
+    detail_pages="${pages} page(s)"
+    [[ $blanches -eq 0 ]] || detail_pages+=" dont ${blanches} blanche(s)"
+    success "${out} (${detail_pages}, ${#parts[@]} document(s))"
 
     [[ $DEUX_PAGES -eq 1 ]] || return 0
     imposer_2p "$out" || exit 1  # imposer_2p a déjà affiché l'erreur
