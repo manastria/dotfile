@@ -189,3 +189,6 @@ alias dnp="docker network prune -f"                                    # Supprim
 # --- Nettoyage complet ---
 alias dcclean="docker system prune -af && docker volume prune -f"
 alias dcxclean="docker compose down --volumes --remove-orphans && docker system prune -af && docker volume prune -f"
+
+# --- SSH ---
+alias zssh="zssh.sh"                                                  # SSH + tmux + profil zsh distant

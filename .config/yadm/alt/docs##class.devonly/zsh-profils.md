@@ -94,39 +94,42 @@ dans le sentinel `~/.zsh-profile`.
 
 ## Connexion SSH distante
 
-La fonction `zssh` combine SSH + tmux + profil zsh pour se connecter à une
+Le script [`zssh.sh`](../.local/bin/zssh.sh) combine SSH + tmux + profil zsh pour se connecter à une
 machine distante qui dispose déjà des dotfiles.
 
-### Commande `zssh`
+### Commande `zssh.sh`
 
 ```bash
 # Connexion avec le profil par défaut (ssh)
-zssh user@host
+zssh.sh user@host
 
 # Connexion avec un profil spécifique
-zssh -e simple user@host
+zssh.sh -e simple user@host
 
 # Avec des options SSH (port, clé, etc.)
-zssh -e writer -p 2222 user@host
-zssh -e simple -i ~/.ssh/id_ed25519 user@host
+zssh.sh -e writer -p 2222 user@host
+zssh.sh -e simple -i ~/.ssh/id_ed25519 user@host
+
+# Détacher les autres clients de la session (reprise)
+zssh.sh -D user@host
 
 # Afficher l'aide
-zssh
+zssh.sh --help
 ```
 
 ### Comportement
 
 - **Profil par défaut** : `ssh` (optimisé pour 8 couleurs).
-- **Session tmux** : `zssh` crée la session `main` ou s'y rattache si elle
+- **Session tmux** : `zssh.sh` crée la session `main` ou s'y rattache si elle
   existe déjà (`tmux new-session -A -s main`). En cas de déconnexion SSH,
-  relancer `zssh user@host` retrouve la session en cours.
-- **Option `-e`** (ou `--profile`) : doit être le **premier argument**, avant
-  les options SSH. Tout le reste est passé tel quel à `ssh`.
+  relancer `zssh.sh user@host` retrouve la session en cours.
+- **Option `-e`** (ou `--profile`) et `-D` (ou `--detach`) : à placer **avant** les
+  options SSH. Tout le reste est passé tel quel à `ssh`.
 - **`-e` plutôt que `-p`** : `-p` est déjà utilisé par SSH pour le port.
 
 ### Différence avec `zsh-remote`
 
-|                   | `zsh-remote`           | `zssh`                                 |
+|                   | `zsh-remote`           | `zssh.sh`                              |
 | ----------------- | ---------------------- | -------------------------------------- |
 | Cible             | Machine **locale**     | Machine **distante** (via SSH)         |
 | Commande          | `zenv ssh --tmux`      | `ssh -t … tmux new-session -A -s main` |

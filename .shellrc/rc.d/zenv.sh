@@ -134,27 +134,3 @@ alias zsh-daily='zenv simple --tmux'
 alias zsh-remote='zenv ssh --tmux'
 alias zsh-writer='zenv writer --tmux'
 alias zsh-minimal='zenv base'
-
-# Connexion SSH avec tmux et profil zsh sur la machine distante
-# Usage : zssh [-e profil] [options ssh...] hôte
-zssh() {
-    local profil="ssh"
-
-    # Extraire le profil si spécifié
-    case "$1" in
-        --profile|-e)
-            profil="$2"
-            shift 2
-            ;;
-    esac
-
-    if [ $# -eq 0 ]; then
-        echo "Usage : zssh [-e profil] [options ssh...] hôte" >&2
-        echo "Profil par défaut : ssh" >&2
-        return 1
-    fi
-
-    # -t : force l'allocation d'un pseudo-terminal (requis pour tmux)
-    # new-session -A -s main : crée ou rattache la session "main"
-    ssh -t "$@" "TERM=xterm-256color ZSH_PROFILE='${profil}' tmux new-session -A -s main"
-}
