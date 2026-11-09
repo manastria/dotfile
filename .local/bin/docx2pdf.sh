@@ -4,7 +4,7 @@
 #
 # SYNOPSIS
 #     docx2pdf.sh FICHIER.docx... [--out DOSSIER] [--sans-2p] [--sans-cadre]
-#                                 [--moteur word|libreoffice]
+#                                 [--fusion NOM] [--moteur word|libreoffice]
 #     docx2pdf.sh -h|--help
 #
 # DESCRIPTION
@@ -27,13 +27,23 @@
 #     session Word déjà ouverte n'est ni utilisée ni fermée. Le .docx est copié
 #     dans un dossier temporaire Windows, supprimé en fin de script.
 #
+#     Avec --fusion NOM, les .docx ne donnent plus un PDF chacun mais un seul :
+#     NOM.pdf (et NOM-2p.pdf), les documents étant mis bout à bout (pdfunite)
+#     dans l'ordre de la ligne de commande. Avec un joker (*.docx), c'est le
+#     shell qui développe la liste par ordre alphabétique (selon la locale).
+#     Aucun FICHIER.pdf individuel n'est écrit. Si un seul .docx échoue,
+#     rien n'est produit : un PDF auquel il manquerait un chapitre trompe.
+#
 # OPTIONS
 #     FICHIER.docx...   Un ou plusieurs fichiers à convertir (obligatoire).
 #     --out DOSSIER     Dossier de sortie, créé si besoin (défaut : celui de
-#                       chaque .docx).
-#     --sans-2p         Ne produire que FICHIER.pdf.
+#                       chaque .docx ; avec --fusion, celui du premier .docx).
+#     --sans-2p         Ne produire que le PDF simple (pas de -2p).
 #     --sans-cadre      Pas de cadre autour de chaque page du PDF 2 pages par
 #                       feuille.
+#     --fusion NOM      Un seul PDF pour tous les .docx, nommé NOM.pdf (le
+#                       .pdf est ajouté s'il manque ; pas de « / » dans NOM :
+#                       --out choisit le dossier).
 #     --moteur M        word (défaut) ou libreoffice.
 #     -h, --help        Affiche cette aide.
 #
@@ -50,10 +60,18 @@
 #     # Sans Word : conversion par LibreOffice
 #     docx2pdf.sh fiche.docx --moteur libreoffice
 #
+#     # Un seul PDF (cours.pdf et cours-2p.pdf), chapitres dans l'ordre alphabétique
+#     docx2pdf.sh chapitre-*.docx --fusion cours
+#
+#     # Ordre choisi à la main, résultat dans un autre dossier
+#     docx2pdf.sh intro.docx annexes.docx conclusion.docx --fusion dossier --out ~/pdf
+#
 # EXIT CODES
 #     0   Toutes les conversions ont réussi.
-#     1   Erreur d'exécution : outil manquant, ou échec d'au moins une conversion.
-#     2   Erreur d'usage : aucun fichier, option inconnue, fichier .docx introuvable.
+#     1   Erreur d'exécution : outil manquant, ou échec d'au moins une conversion
+#         (avec --fusion : échec de la conversion d'un .docx ou de la fusion).
+#     2   Erreur d'usage : aucun fichier, option inconnue, NOM de --fusion
+#         invalide, fichier .docx introuvable.
 set -euo pipefail
 
 # -----------------------------------------------------------------------------
@@ -91,6 +109,7 @@ INPUTS=()
 OUT_DIR=""
 DEUX_PAGES=1
 CADRE=1
+FUSION=""   # nom (sans .pdf) du PDF fusionné ; vide = un PDF par .docx
 MOTEUR="word"
 
 parse_args() {
@@ -100,6 +119,12 @@ parse_args() {
                           OUT_DIR="$2"; shift 2 ;;
             --sans-2p)    DEUX_PAGES=0; shift ;;
             --sans-cadre) CADRE=0; shift ;;
+            --fusion)     [[ $# -ge 2 ]] || usage_error "--fusion demande un nom de fichier."
+                          FUSION="${2%.pdf}"   # « cours » et « cours.pdf » sont équivalents
+                          # Un nom vide ou avec « / » donnerait un chemin imprévu : le dossier se choisit avec --out
+                          [[ -n "$FUSION" && "$FUSION" != */* ]] \
+                              || usage_error "--fusion attend un nom de fichier sans « / » (dossier : --out)."
+                          shift 2 ;;
             --moteur)     [[ $# -ge 2 ]] || usage_error "--moteur demande word ou libreoffice."
                           MOTEUR="$2"; shift 2 ;;
             -h|--help)    usage; exit 0 ;;
@@ -126,6 +151,9 @@ validate_inputs() {
 check_tools() {
     command -v wslpath >/dev/null 2>&1 || die "'wslpath' introuvable : ce script s'exécute sous WSL."
     command -v pdfinfo >/dev/null 2>&1 || die "'pdfinfo' introuvable (paquet poppler-utils)."
+    if [[ -n "$FUSION" ]]; then
+        command -v pdfunite >/dev/null 2>&1 || die "'pdfunite' introuvable (paquet poppler-utils)."
+    fi
     if [[ $DEUX_PAGES -eq 1 ]]; then
         command -v pdfjam >/dev/null 2>&1 || die "'pdfjam' introuvable (paquet texlive-extra-utils)."
     fi
@@ -199,15 +227,17 @@ pdf_field() {  # $1 = PDF, $2 = champ de pdfinfo (Pages, Producer...)
 }
 
 # -----------------------------------------------------------------------------
-# Traitement d'un fichier
+# Briques communes aux deux modes (un PDF par .docx / un PDF fusionné)
 # -----------------------------------------------------------------------------
-convert_one() {
-    local docx base dest pages producer feuilles
-    docx="$(realpath "$1")"
-    base="$(basename "$docx" .docx)"
-    dest="${OUT_DIR:-$(dirname "$docx")}"
+dossier_sortie() {  # $1 = .docx de référence ; crée le dossier de sortie et affiche son chemin absolu
+    local dest="${OUT_DIR:-$(dirname "$1")}"
     mkdir -p "$dest"
-    dest="$(realpath "$dest")"
+    realpath "$dest"
+}
+
+docx_to_pdf() {  # $1 = .docx, $2 = .pdf à produire, $3 = libellé affiché (défaut : $2)
+    local docx="$1" pdf="$2" label="${3:-$2}" base pages producer
+    base="$(basename "$docx" .docx)"
 
     info "Conversion : ${BOLD}${base}${RESET} (${MOTEUR})"
     rm -f "$TMP/in.docx" "$TMP/in.pdf"
@@ -220,23 +250,39 @@ convert_one() {
     fi
     [[ -s "$TMP/in.pdf" ]] || { error "$base : aucun PDF produit."; return 1; }
 
-    install -m 0644 "$TMP/in.pdf" "$dest/$base.pdf"  # cp garderait les droits rwx du lecteur Windows
-    pages="$(pdf_field "$dest/$base.pdf" Pages)"
-    producer="$(pdf_field "$dest/$base.pdf" Producer)"
-    success "${dest}/${base}.pdf (${pages} page(s), ${producer})"
+    install -m 0644 "$TMP/in.pdf" "$pdf"  # cp garderait les droits rwx du lecteur Windows
+    pages="$(pdf_field "$pdf" Pages)"
+    producer="$(pdf_field "$pdf" Producer)"
+    success "${label} (${pages} page(s), ${producer})"
     # Un PDF « réimprimé » par un pilote GDI a ses polices réécrites : il s'imprime mal.
     if [[ "$producer" =~ GDI|[Pp]rint ]]; then
         warn "Producteur « ${producer} » : ce PDF semble réimprimé, ses polices ont pu être réécrites."
     fi
+}
 
-    [[ $DEUX_PAGES -eq 1 ]] || return 0
-
+imposer_2p() {  # $1 = PDF source ; produit son jumeau « -2p.pdf » à côté
+    local pdf="$1" out feuilles
+    out="${pdf%.pdf}-2p.pdf"
     local args=(--quiet --nup 2x1 --landscape --a4paper)
     [[ $CADRE -eq 1 ]] && args+=(--frame true)
-    pdfjam "${args[@]}" --outfile "$dest/$base-2p.pdf" -- "$dest/$base.pdf" \
-        || { error "$base : pdfjam a échoué."; return 1; }
-    feuilles="$(pdf_field "$dest/$base-2p.pdf" Pages)"
-    success "${dest}/${base}-2p.pdf (${feuilles} feuille(s) A4 paysage)"
+    pdfjam "${args[@]}" --outfile "$out" -- "$pdf" \
+        || { error "$(basename "$pdf") : pdfjam a échoué."; return 1; }
+    feuilles="$(pdf_field "$out" Pages)"
+    success "${out} (${feuilles} feuille(s) A4 paysage)"
+}
+
+# -----------------------------------------------------------------------------
+# Mode par défaut : un PDF par .docx
+# -----------------------------------------------------------------------------
+convert_one() {
+    local docx base dest
+    docx="$(realpath "$1")"
+    base="$(basename "$docx" .docx)"
+    dest="$(dossier_sortie "$docx")"
+
+    docx_to_pdf "$docx" "$dest/$base.pdf" || return 1
+    [[ $DEUX_PAGES -eq 1 ]] || return 0
+    imposer_2p "$dest/$base.pdf"
 }
 
 convert_all() {
@@ -248,6 +294,38 @@ convert_all() {
 }
 
 # -----------------------------------------------------------------------------
+# Mode --fusion : un seul PDF pour tous les .docx
+# -----------------------------------------------------------------------------
+fusionner_tout() {
+    local parts=() part dest out f i=0 pages
+    # Le dossier par défaut est celui du premier .docx, puisqu'il n'y a qu'un seul résultat
+    dest="$(dossier_sortie "$(realpath "${INPUTS[0]}")")"
+    out="$dest/$FUSION.pdf"
+
+    # Les PDF intermédiaires restent dans $TMP, numérotés pour que l'ordre de
+    # pdfunite soit celui de INPUTS (ordre de la ligne de commande, ou ordre
+    # alphabétique du shell pour un joker).
+    for f in "${INPUTS[@]}"; do
+        i=$((i + 1))
+        part="$TMP/partie-$(printf '%03d' "$i").pdf"
+        # Échec = arrêt immédiat : un PDF fusionné incomplet est pire que pas de PDF
+        docx_to_pdf "$(realpath "$f")" "$part" "$(basename "$f")" \
+            || die "Fusion annulée : $(basename "$f") n'a pas pu être converti."
+        parts+=("$part")
+    done
+
+    info "Fusion de ${#parts[@]} PDF dans ${BOLD}${FUSION}.pdf${RESET}"
+    # Écrit dans $TMP puis installé : un échec de pdfunite n'écrase pas un ancien résultat
+    pdfunite "${parts[@]}" "$TMP/fusion.pdf" || die "pdfunite a échoué."
+    install -m 0644 "$TMP/fusion.pdf" "$out"
+    pages="$(pdf_field "$out" Pages)"
+    success "${out} (${pages} page(s), ${#parts[@]} document(s))"
+
+    [[ $DEUX_PAGES -eq 1 ]] || return 0
+    imposer_2p "$out" || exit 1  # imposer_2p a déjà affiché l'erreur
+}
+
+# -----------------------------------------------------------------------------
 # Point d'entrée
 # -----------------------------------------------------------------------------
 main() {
@@ -255,7 +333,11 @@ main() {
     validate_inputs
     check_tools
     make_tmp
-    convert_all
+    if [[ -n "$FUSION" ]]; then
+        fusionner_tout
+    else
+        convert_all
+    fi
 }
 
 main "$@"
