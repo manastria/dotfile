@@ -12,6 +12,11 @@
 #     si elle n'existe pas, sinon on s'y rattache : après une coupure réseau,
 #     relancer la même commande retrouve le travail en cours.
 #
+#     Le script refuse de s'exécuter depuis une session tmux locale (variable
+#     TMUX définie) : le tmux distant serait imbriqué dans le tmux local, avec
+#     des conflits de préfixe et d'affichage. Le lancer depuis un terminal
+#     hors tmux.
+#
 #     La machine distante doit disposer des dotfiles et de tmux. Pour lancer
 #     un profil sur la machine LOCALE, utiliser « zenv » (voir zenv.sh).
 #
@@ -45,7 +50,7 @@
 #
 # EXIT CODES
 #     0   Session terminée normalement.
-#     1   Erreur d'exécution : ssh absent.
+#     1   Erreur d'exécution : ssh absent, ou script lancé depuis tmux.
 #     2   Erreur d'usage : option inconnue, valeur manquante, hôte absent,
 #         profil ou nom de session invalide.
 #     *   Sinon, code de retour de ssh (255 : échec de connexion).
@@ -126,6 +131,13 @@ check_ssh() {
     command -v ssh >/dev/null 2>&1 || die "ssh introuvable dans le PATH."
 }
 
+check_not_in_tmux() {
+    # $TMUX est défini dans tout panneau tmux : se connecter d'ici imbriquerait
+    # le tmux distant dans le tmux local.
+    [[ -z "${TMUX:-}" ]] \
+        || die "Déjà dans une session tmux : lancez zssh.sh depuis un terminal hors tmux."
+}
+
 # -----------------------------------------------------------------------------
 # Connexion
 # -----------------------------------------------------------------------------
@@ -144,6 +156,7 @@ connect() {
 main() {
     parse_args "$@"
     check_ssh
+    check_not_in_tmux
     connect
 }
 

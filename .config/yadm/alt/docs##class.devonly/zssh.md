@@ -7,7 +7,7 @@
 
 > Paragraphe de rappel, à coller tel quel dans le mémo.
 
-`zssh.sh` ouvre une session SSH vers une machine qui possède déjà les dotfiles, et y lance une session tmux (`main` par défaut) avec un profil zsh choisi (`ssh` par défaut). La session est créée ou reprise : après une coupure réseau, relancer la même commande retrouve le travail en cours. Il ne lance **pas** de profil sur la machine locale, c'est le rôle de `zenv`. Les options courantes sont `-e PROFIL` pour le profil distant, `-s SESSION` pour choisir la session tmux distante (`main` par défaut) et `-D` pour détacher les autres clients déjà attachés à la session. Ces options se placent avant les options ssh (`-p`, `-i`…), qui sont transmises telles quelles.
+`zssh.sh` ouvre une session SSH vers une machine qui possède déjà les dotfiles, et y lance une session tmux (`main` par défaut) avec un profil zsh choisi (`ssh` par défaut). La session est créée ou reprise : après une coupure réseau, relancer la même commande retrouve le travail en cours. Il ne lance **pas** de profil sur la machine locale, c'est le rôle de `zenv`. Les options courantes sont `-e PROFIL` pour le profil distant, `-s SESSION` pour choisir la session tmux distante (`main` par défaut) et `-D` pour détacher les autres clients déjà attachés à la session. Ces options se placent avant les options ssh (`-p`, `-i`…), qui sont transmises telles quelles. Le script **refuse** de s'exécuter depuis une session tmux locale, pour ne pas imbriquer deux tmux : il faut le lancer hors tmux.
 
 ---
 
@@ -18,6 +18,8 @@
 Remplace l'ancienne fonction shell `zssh` (autrefois dans `zenv.sh`) par un script autonome, doté d'une aide `--help`. Il exécute `ssh -t HOTE "tmux new-session -A -s main"` avec `ZSH_PROFILE` et `TERM` positionnés côté distant.
 
 Différence avec `zenv` : `zenv` lance un profil zsh sur la machine **locale** ; `zssh.sh` le fait sur une machine **distante**.
+
+Garde anti-imbrication : si la variable `TMUX` est définie (on est dans un panneau tmux local), le script s'arrête avec une erreur avant toute connexion.
 
 ### Prérequis
 
@@ -57,6 +59,12 @@ zssh.sh -s projet user@host
 zssh.sh -D user@host
 ```
 
+Depuis un panneau tmux local :
+
+```
+[ERREUR]    Déjà dans une session tmux : lancez zssh.sh depuis un terminal hors tmux.
+```
+
 Sans hôte :
 
 ```
@@ -69,7 +77,7 @@ Essayez : zssh.sh --help
 | Code | Signification |
 | ---- | ------------- |
 | 0 | Session terminée normalement |
-| 1 | `ssh` absent |
+| 1 | `ssh` absent, ou script lancé depuis une session tmux locale |
 | 2 | Erreur d'usage : option inconnue, valeur manquante, hôte absent, profil ou nom de session invalide |
 | autre | Code de retour de `ssh` (255 : échec de connexion) |
 
@@ -83,7 +91,8 @@ Essayez : zssh.sh --help
 
 1. `parse_args` — lit `-e`, `-s`, `-D`, `-h` jusqu'au premier argument inconnu ; le reste va dans `SSH_ARGS`.
 2. `check_ssh` — présence de `ssh`.
-3. `connect` — `exec ssh -t …` avec la commande distante.
+3. `check_not_in_tmux` — refuse si `$TMUX` est défini.
+4. `connect` — `exec ssh -t …` avec la commande distante.
 
 ### Détail des choix techniques
 
@@ -94,6 +103,8 @@ Essayez : zssh.sh --help
 **`-s` et ssh.** `-s` est aussi une option ssh (sous-système), mais comme les options de zssh se placent en tête, il n'y a pas d'ambiguïté : placé après le premier argument inconnu, il part vers ssh.
 
 **Profil et session validés par regex.** Les noms sont insérés entre apostrophes dans une commande interprétée par le shell distant ; restreindre les caractères est plus sûr que d'échapper.
+
+**Refus dans tmux (`$TMUX`).** Imbriquer le tmux distant dans le tmux local provoque des conflits de préfixe (`C-b`) et d'affichage. Le test se fait après `parse_args` et `check_ssh`, donc `--help` et les erreurs d'usage restent utilisables dans tmux. Pas d'option de contournement : en cas de besoin, `TMUX= zssh.sh …` neutralise la garde pour un appel.
 
 **`exec ssh`.** Le code de retour de ssh devient celui du script.
 
