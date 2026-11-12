@@ -1,0 +1,703 @@
+#!/usr/bin/env bash
+# NAME
+#     vault — gère le coffre chiffré LUKS qui héberge les profils navigateur
+#
+# SYNOPSIS
+#     vault create [--size TAILLE]
+#     vault open
+#     vault close
+#     vault status
+#     vault clean [--apply]
+#     vault -h | --help
+#
+# DESCRIPTION
+#     Une seule commande, cinq sous-commandes, une seule configuration (les
+#     constantes et le tableau BINDS en tête de ce fichier).
+#
+#     Le coffre est un conteneur LUKS (~/vault.img, mapper « vault_prof »)
+#     monté sur ~/Vault. Les profils des navigateurs (Vivaldi, Brave, Firefox)
+#     y vivent ; des bind mounts les rendent visibles à leur emplacement
+#     habituel (~/.config/vivaldi, …). Coffre fermé, ces emplacements sont de
+#     simples dossiers du disque local : un navigateur lancé par erreur y crée
+#     un profil « hors coffre ».
+#
+#     create   Crée le conteneur (fallocate, luksFormat, ext4), l'ouvre et pose
+#              les binds. Passphrase et mot de passe sudo demandés une seule
+#              fois, au début. Ne migre PAS un profil existant : un profil déjà
+#              présent à l'emplacement d'un bind est seulement masqué tant que
+#              le coffre est monté. Demande « SUPPRIMER » si ~/vault.img
+#              existe (il serait écrasé).
+#     open     Ouvre LUKS (passphrase demandée), monte le coffre, pose les
+#              binds. Rejouable : saute ce qui est déjà fait. Signale les
+#              données locales qu'un bind va masquer.
+#     close    Ferme les navigateurs, démonte les binds, le coffre, puis
+#              referme LUKS. S'arrête, coffre laissé ouvert, si un démontage
+#              échoue (fichier encore ouvert) : jamais de faux « fermé ».
+#     status   Lecture seule : état du conteneur, de LUKS, du coffre et de
+#              chaque bind, avec la taille des données locales qu'un bind
+#              masquerait ou qui subsistent hors coffre.
+#     clean    Supprime les profils « hors coffre », c'est-à-dire les dossiers
+#              locaux aux emplacements des binds, quand le coffre est FERMÉ.
+#              Simulation par défaut : rien n'est supprimé sans --apply, puis
+#              confirmation tapée. Ne touche jamais au contenu du coffre.
+#
+#     Garde-fous de « clean » (chacun suffit à refuser) :
+#       - aucun chemin n'est accepté en argument : seules les cibles de
+#         BINDS (et les restes « .purge-* » d'un nettoyage interrompu) sont
+#         candidates ;
+#       - ~/vault.img doit exister : sans lui il n'y a pas de coffre sur cette
+#         machine, donc les profils locaux sont les SEULS exemplaires ;
+#       - LUKS fermé, ~/Vault non monté, aucun navigateur lancé ;
+#       - chaque candidat doit être un vrai dossier (ni lien symbolique, ni
+#         composant symlink), strictement sous $HOME, hors de ~/Vault, sans
+#         aucun point de montage dessus ni en dessous (lu dans mountinfo) ;
+#       - renommage avant suppression : « mv » échoue (EBUSY) sur un point de
+#         montage, ce qui rend le test atomique, sans fenêtre entre le contrôle
+#         et la suppression. Seule la copie renommée est supprimée, avec
+#         « rm --one-file-system », après un second contrôle des montages ;
+#       - verrou partagé (flock) avec open/close/create : une ouverture
+#         lancée pendant le nettoyage attend sa fin ;
+#       - refus du root, confirmation interactive obligatoire.
+#     Supprimer n'est pas effacer : sur ext4/SSD les données peuvent rester
+#     récupérables. « clean » range le disque, il ne garantit pas la
+#     confidentialité.
+#
+# OPTIONS
+#     --size TAILLE   (create) Taille du conteneur, syntaxe fallocate
+#                     (ex : 15G, 500M). Défaut : 15G.
+#     --apply         (clean) Supprime réellement, après confirmation.
+#     -h, --help      Affiche cette aide.
+#
+# EXAMPLES
+#     vault status                # où en est-on ?
+#     vault open                  # début de cours
+#     vault close                 # fin de cours
+#     vault clean                 # simulation : que traîne-t-il hors coffre ?
+#     vault clean --apply         # supprime après confirmation
+#     vault create --size 5G      # première installation, conteneur de 5 Go
+#
+# EXIT CODES
+#     0   Succès (ou rien à faire).
+#     1   Erreur d'exécution : conteneur absent ou déjà ouvert, démontage ou
+#         suppression en échec, garde-fou de « clean » déclenché, lancement
+#         en root, confirmation refusée.
+#     2   Erreur d'usage : sous-commande ou option inconnue.
+set -euo pipefail
+
+# -----------------------------------------------------------------------------
+# Constantes — unique source de vérité de tous les sous-commandes
+# -----------------------------------------------------------------------------
+readonly IMG="$HOME/vault.img"
+readonly MAP_NAME="vault_prof"
+readonly MNT="$HOME/Vault"
+readonly DEFAULT_SIZE="15G"
+readonly CONFIRM_WORD="SUPPRIMER"
+readonly PURGE_SUFFIX=".purge-"
+readonly LOCK_FILE="${XDG_RUNTIME_DIR:-$HOME/.cache}/vault.lock"
+
+# « SOURCE dans le coffre (relative à ~/Vault) | CIBLE (là où le navigateur la cherche) »
+# Ajouter un navigateur = ajouter une ligne ici (et son processus dans PROCS).
+readonly BINDS=(
+    "browser/vivaldi-prof|$HOME/.config/vivaldi"
+    "browser/brave-prof|$HOME/.config/BraveSoftware/Brave-Browser"
+    "browser/firefox/mozilla-firefox|$HOME/snap/firefox/common/.mozilla/firefox"
+    "browser/firefox/cache-firefox|$HOME/snap/firefox/common/.cache/mozilla/firefox"
+)
+
+# Noms exacts de processus (pkill/pgrep -x) à fermer avant de démonter.
+readonly PROCS=(vivaldi brave brave-browser firefox firefox-bin)
+
+# -----------------------------------------------------------------------------
+# Couleurs et fonctions de log
+# -----------------------------------------------------------------------------
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+RESET='\033[0m'
+
+info()    { echo -e "${CYAN}[INFO]${RESET}      $*"; }
+success() { echo -e "${GREEN}[OK]${RESET}        $*"; }
+warn()    { echo -e "${YELLOW}[ATTENTION]${RESET} $*"; }
+error()   { echo -e "${RED}[ERREUR]${RESET}    $*" >&2; }
+die()     { error "$*"; exit 1; }
+
+usage() {
+    # Réimprime le bloc d'en-tête manpage en retirant le préfixe « # ».
+    awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$0"
+}
+usage_error() { error "$*"; echo "Essayez : vault --help" >&2; exit 2; }
+
+# -----------------------------------------------------------------------------
+# Nettoyage : efface la passphrase, arrête le rafraîchissement sudo.
+# Exécuté sur toute sortie, y compris avant que ces éléments n'existent.
+# -----------------------------------------------------------------------------
+_SUDO_PID=""
+cleanup() {
+    if [[ -n "$_SUDO_PID" ]]; then
+        kill "$_SUDO_PID" 2>/dev/null || true
+    fi
+    unset VAULT_PASSPHRASE || true
+}
+trap cleanup EXIT INT TERM
+
+# -----------------------------------------------------------------------------
+# Vérifications préalables
+# -----------------------------------------------------------------------------
+# Tier 3 : lancé en root, $HOME serait celui de root (conteneur créé au mauvais
+# endroit) et, pour « clean », les protections de permissions disparaîtraient.
+check_user() {
+    if [ "$(id -u)" -eq 0 ]; then
+        error "Ce script ne doit pas être lancé en root."
+        error "Relancez sans sudo, en tant qu'utilisateur normal."
+        exit 1
+    fi
+    [[ "$HOME" == /?* ]] || die "\$HOME n'est pas un chemin absolu : « $HOME »."
+}
+
+need() {
+    local c
+    for c in "$@"; do
+        command -v "$c" >/dev/null 2>&1 || die "'$c' est requis mais introuvable."
+    done
+}
+
+# Tier 2 : mot de passe sudo demandé une fois, au début.
+warmup_sudo() {
+    info "Droits administrateur nécessaires (cryptsetup, mount)."
+    sudo -v
+}
+
+# Pour les opérations longues (create) : évite l'expiration du jeton sudo.
+start_sudo_keepalive() {
+    ( while true; do sudo -n true; sleep 50; done ) &
+    _SUDO_PID=$!
+}
+
+# Verrou exclusif partagé par toutes les opérations qui modifient l'état :
+# open, close, create et clean ne peuvent pas s'entrecouper. C'est ce qui
+# supprime la course « le coffre s'ouvre pendant que clean supprime ».
+# Le descripteur reste ouvert (donc le verrou tenu) jusqu'à la fin du script.
+LOCK_FD=""
+acquire_lock() {
+    mkdir -p "$(dirname "$LOCK_FILE")"
+    exec {LOCK_FD}>"$LOCK_FILE" || die "Impossible d'ouvrir le verrou : $LOCK_FILE"
+    flock -w 30 "$LOCK_FD" \
+        || die "Une autre opération vault est en cours (verrou : $LOCK_FILE)."
+}
+
+# -----------------------------------------------------------------------------
+# État du système
+# -----------------------------------------------------------------------------
+bind_src() { printf '%s\n' "$MNT/${1%%|*}"; }
+bind_dst() { printf '%s\n' "${1#*|}"; }
+
+luks_is_open()     { [[ -e "/dev/mapper/$MAP_NAME" ]]; }
+
+# findmnt canonicalise le chemin et lit les montages réels : fiable même pour
+# un bind mount d'un dossier du même système de fichiers (là où « mountpoint »
+# comparerait des numéros de périphérique identiques).
+is_mounted_at()    { findmnt -rn --mountpoint "$1" >/dev/null 2>&1; }
+vault_is_mounted() { is_mounted_at "$MNT"; }
+
+dir_has_content()  { [[ -d "$1" && -n "$(ls -A -- "$1" 2>/dev/null)" ]]; }
+
+# Noms (un par ligne) des navigateurs en cours d'exécution ; code 1 si aucun.
+running_browsers() {
+    local p found=1
+    for p in "${PROCS[@]}"; do
+        if pgrep -x "$p" >/dev/null 2>&1; then
+            printf '%s\n' "$p"
+            found=0
+        fi
+    done
+    return "$found"
+}
+
+# Chemin → forme utilisée dans /proc/self/mountinfo (espace, tabulation, saut
+# de ligne et barre oblique inverse y sont écrits en octal).
+mi_escape() {
+    local s="$1"
+    s="${s//\\/\\134}"
+    s="${s// /\\040}"
+    s="${s//$'\t'/\\011}"
+    s="${s//$'\n'/\\012}"
+    printf '%s' "$s"
+}
+
+# Vrai s'il existe un montage sur le chemin canonique $1 ou en dessous.
+# On lit mountinfo directement (champ 5 = point de montage) plutôt que de se
+# fier à « mountpoint », et le chemin passé DOIT être canonique : mountinfo
+# ne contient que des chemins réels. ENVIRON évite que « awk -v » n'interprète
+# les séquences « \040 » comme des caractères.
+has_mount_under() {
+    P="$(mi_escape "$1")" awk '
+        $5 == ENVIRON["P"] || index($5, ENVIRON["P"] "/") == 1 { f = 1 }
+        END { exit !f }' /proc/self/mountinfo
+}
+
+# -----------------------------------------------------------------------------
+# Saisies
+# -----------------------------------------------------------------------------
+confirm_typed() {
+    local answer
+    [[ -t 0 ]] || die "Confirmation interactive requise (entrée standard non interactive)."
+    read -r -p "$(echo -e "${YELLOW}Tapez ${CONFIRM_WORD} pour confirmer :${RESET} ")" answer
+    [[ "$answer" == "$CONFIRM_WORD" ]] || die "Annulé."
+}
+
+read_passphrase() {
+    local p1 p2
+
+    info "Passphrase du vault (différente du mot de passe de session)."
+    while true; do
+        read -r -s -p "$(echo -e "${CYAN}Passphrase :${RESET} ")" p1; echo
+        read -r -s -p "$(echo -e "${CYAN}Confirmation :${RESET} ")" p2; echo
+
+        if [[ -z "$p1" ]]; then
+            warn "Passphrase vide, réessayez."
+        elif [[ "$p1" != "$p2" ]]; then
+            warn "Les deux saisies ne correspondent pas, réessayez."
+        else
+            VAULT_PASSPHRASE="$p1"
+            break
+        fi
+    done
+}
+
+# -----------------------------------------------------------------------------
+# vault open
+# -----------------------------------------------------------------------------
+# Rend l'utilisateur propriétaire de la racine du coffre. Récursif seulement si
+# la racine n'est pas déjà à lui (premier montage après mkfs, ou changement
+# d'uid) : les montages suivants n'ont pas à parcourir tout le coffre.
+fix_mount_ownership() {
+    local uid gid
+    uid="$(id -u)"; gid="$(id -g)"
+    if [[ "$(stat -c '%u:%g' "$MNT")" != "$uid:$gid" ]]; then
+        info "Propriétaire de $MNT corrigé (première utilisation ou uid différent)."
+        sudo chown -R "$uid:$gid" "$MNT" || die "Échec du chown sur $MNT."
+    fi
+}
+
+cmd_open() {
+    local pair src dst
+
+    need cryptsetup mount findmnt stat
+    [[ -f "$IMG" ]] || die "Conteneur introuvable : $IMG (le créer avec : vault create)"
+    mkdir -p "$MNT"
+
+    if luks_is_open; then
+        info "LUKS déjà ouvert : /dev/mapper/$MAP_NAME"
+    else
+        info "Ouverture du conteneur LUKS (passphrase demandée)..."
+        sudo cryptsetup open "$IMG" "$MAP_NAME" || die "Échec de l'ouverture LUKS."
+    fi
+
+    if vault_is_mounted; then
+        info "Coffre déjà monté : $MNT"
+    else
+        sudo mount "/dev/mapper/$MAP_NAME" "$MNT" || die "Échec du montage de $MNT."
+        fix_mount_ownership
+    fi
+
+    # Garde-fou : sans montage effectif, « mkdir -p » ci-dessous créerait de
+    # fausses sources sur le disque local et les binds s'y brancheraient.
+    vault_is_mounted || die "$MNT n'est pas monté : binds non posés."
+
+    for pair in "${BINDS[@]}"; do
+        src="$(bind_src "$pair")"
+        dst="$(bind_dst "$pair")"
+        mkdir -p -- "$src" "$dst"
+
+        if is_mounted_at "$dst"; then
+            info "Bind déjà monté : $dst"
+            continue
+        fi
+        if dir_has_content "$dst"; then
+            warn "Données locales dans $dst : elles seront masquées (les supprimer : vault clean)."
+        fi
+        sudo mount --bind "$src" "$dst" || die "Échec du bind : $src → $dst"
+        success "Bind : $src → $dst"
+    done
+
+    success "Coffre ouvert, monté sur $MNT, binds en place."
+}
+
+# -----------------------------------------------------------------------------
+# vault close
+# -----------------------------------------------------------------------------
+stop_browsers() {
+    local running p i
+    running="$(running_browsers || true)"
+    [[ -n "$running" ]] || return 0
+
+    info "Fermeture des navigateurs : $(tr '\n' ' ' <<< "$running")"
+    while read -r p; do pkill -x "$p" || true; done <<< "$running"
+
+    # Attendre la sortie réelle : un navigateur écrit encore son profil après
+    # SIGTERM, et démonter trop tôt donnerait « target is busy ».
+    for i in $(seq 1 20); do
+        running_browsers >/dev/null || return 0
+        sleep 0.5
+    done
+    warn "Navigateurs encore actifs après 10 s : $(running_browsers | tr '\n' ' ')"
+}
+
+cmd_close() {
+    local i dst failed=0
+
+    need findmnt pgrep pkill
+    stop_browsers
+
+    # Ordre inverse de l'ouverture : les sources des binds sont DANS ~/Vault,
+    # démonter ~/Vault d'abord donnerait « target is busy ».
+    for ((i = ${#BINDS[@]} - 1; i >= 0; i--)); do
+        dst="$(bind_dst "${BINDS[$i]}")"
+        if ! is_mounted_at "$dst"; then
+            info "Bind non monté (ignoré) : $dst"
+            continue
+        fi
+        # Le démontage est vérifié : un « umount » réussi qui laisse un montage
+        # empilé en dessous compte comme un échec.
+        if sudo umount "$dst" && ! is_mounted_at "$dst"; then
+            success "Bind démonté : $dst"
+        else
+            warn "Échec du démontage : $dst"
+            failed=1
+        fi
+    done
+    (( failed == 0 )) || die "Des binds sont encore montés (fichier ouvert ?). Coffre laissé ouvert. Piste : fuser -vm <chemin>"
+
+    if vault_is_mounted; then
+        sudo umount "$MNT" || die "Échec du démontage de $MNT. LUKS laissé ouvert."
+        success "Coffre démonté : $MNT"
+    else
+        info "Coffre non monté (ignoré) : $MNT"
+    fi
+
+    if luks_is_open; then
+        sudo cryptsetup close "$MAP_NAME" || die "Échec de la fermeture LUKS : $MAP_NAME"
+        success "LUKS fermé : $MAP_NAME"
+    else
+        info "LUKS déjà fermé : $MAP_NAME"
+    fi
+
+    success "Coffre fermé."
+}
+
+# -----------------------------------------------------------------------------
+# vault status
+# -----------------------------------------------------------------------------
+hr() { printf '%s\n' "------------------------------------------------------------"; }
+
+cmd_status() {
+    local pair src dst real_src size
+
+    need findmnt
+    echo "vault status"
+    hr
+    if [[ -f "$IMG" ]]; then
+        echo "Conteneur : PRESENT ($(du -h -- "$IMG" | cut -f1))  $IMG"
+    else
+        echo "Conteneur : ABSENT  $IMG  (pas de coffre sur cette machine)"
+    fi
+
+    if luks_is_open; then
+        echo "LUKS      : OUVERT  (/dev/mapper/$MAP_NAME)"
+    else
+        echo "LUKS      : FERME"
+    fi
+
+    if vault_is_mounted; then
+        echo "Coffre    : MONTE   ($MNT)"
+        findmnt -rn -o SOURCE,FSTYPE,OPTIONS --mountpoint "$MNT" || true
+    else
+        echo "Coffre    : DEMONTE ($MNT)"
+    fi
+
+    hr
+    echo "Binds :"
+    hr
+    for pair in "${BINDS[@]}"; do
+        src="$(bind_src "$pair")"
+        dst="$(bind_dst "$pair")"
+
+        if is_mounted_at "$dst"; then
+            real_src="$(findmnt -rn -o SOURCE --mountpoint "$dst" | head -n1)"
+            echo "- $dst : MONTE (source -> $real_src)"
+        elif [[ ! -d "$dst" ]]; then
+            echo "- $dst : ABSENT (attendu -> $src)"
+        elif dir_has_content "$dst"; then
+            size="$(du -sxh -- "$dst" 2>/dev/null | cut -f1)"
+            echo "- $dst : DEMONTE, données locales hors coffre : $size (vault clean)"
+        else
+            echo "- $dst : DEMONTE, vide (attendu -> $src)"
+        fi
+    done
+    hr
+}
+
+# -----------------------------------------------------------------------------
+# vault clean
+# -----------------------------------------------------------------------------
+CANDIDATES=()      # chemins candidats à la suppression (remplis par collect_candidates)
+APPLY="no"
+
+# Candidats : chaque cible de bind, plus les « <cible>.purge-* » laissés par un
+# nettoyage interrompu. Jamais autre chose : aucun chemin ne vient de l'extérieur.
+collect_candidates() {
+    local pair dst leftover
+    CANDIDATES=()
+    for pair in "${BINDS[@]}"; do
+        dst="$(bind_dst "$pair")"
+        # Un dossier vide n'est pas un profil : ignoré. Un lien symbolique ou un
+        # fichier à cet emplacement, lui, est retenu pour que assert_deletable
+        # le refuse bruyamment plutôt que de passer sous silence.
+        if [[ -L "$dst" || ( -e "$dst" && ! -d "$dst" ) ]] || dir_has_content "$dst"; then
+            CANDIDATES+=("$dst")
+        fi
+        for leftover in "$dst$PURGE_SUFFIX"*; do
+            if [[ -e "$leftover" || -L "$leftover" ]]; then
+                CANDIDATES+=("$leftover")
+            fi
+        done
+    done
+}
+
+# Conditions sans lesquelles « clean » ne regarde même pas les dossiers.
+check_clean_context() {
+    local running
+
+    [[ -f "$IMG" ]] \
+        || die "Aucun coffre sur cette machine ($IMG absent) : les dossiers de profil sont les seuls exemplaires. Rien n'est supprimé."
+    luks_is_open && die "LUKS est ouvert (/dev/mapper/$MAP_NAME) : fermez le coffre d'abord (vault close)."
+    vault_is_mounted && die "$MNT est monté : fermez le coffre d'abord (vault close)."
+    if running="$(running_browsers)"; then
+        die "Navigateur(s) en cours d'exécution : $(tr '\n' ' ' <<< "$running"). Fermez-les d'abord."
+    fi
+    return 0
+}
+
+# Refuse (die) tout chemin qui ne soit pas un dossier ordinaire, physique,
+# strictement sous $HOME, extérieur au coffre, sans montage dessus ni dessous.
+# Appelée avant ET après le renommage : le second contrôle porte sur la copie
+# renommée, qui ne doit plus rien contenir de monté.
+assert_deletable() {
+    local p="$1" real home_real
+
+    [[ "$p" == "$HOME"/?* ]]            || die "Chemin hors de \$HOME refusé : $p"
+    [[ ! -L "$p" ]]                     || die "Lien symbolique refusé : $p"
+    [[ -d "$p" ]]                       || die "Pas un dossier ordinaire : $p"
+    [[ "$p" != "$MNT" && "$p" != "$MNT"/* && "$MNT" != "$p"/* ]] \
+                                        || die "Chemin lié au coffre ($MNT) refusé : $p"
+
+    # Le chemin réel doit être exactement le chemin attendu : aucun composant
+    # ne doit être un lien symbolique (sinon on supprimerait ailleurs). $HOME
+    # lui-même peut passer par un lien (/home → /data/home) : on le normalise.
+    home_real="$(realpath -e -- "$HOME")"   || die "\$HOME illisible."
+    real="$(realpath -e -- "$p")"           || die "Chemin illisible : $p"
+    [[ "$real" == "$home_real${p#"$HOME"}" ]] \
+                                        || die "Chemin non canonique (lien symbolique ?) : $p → $real"
+
+    # mountinfo ne connaît que les chemins réels : on lui passe $real.
+    if has_mount_under "$real"; then
+        die "Montage actif sur ou sous $p : suppression refusée."
+    fi
+}
+
+describe_candidate() {
+    local p="$1" size count last
+    size="$(du -sxh -- "$p" 2>/dev/null | cut -f1)"
+    count="$(find "$p" -xdev 2>/dev/null | wc -l)"
+    last="$(find "$p" -xdev -printf '%TY-%Tm-%Td\n' 2>/dev/null | sort | tail -n1)"
+    printf '  %-9s %8s entrées  dernière modification %s  %s\n' "$size" "$count" "${last:--}" "$p"
+}
+
+# Supprime un candidat : renommer, recontrôler, supprimer.
+purge_one() {
+    local p="$1" trash
+
+    assert_deletable "$p"
+
+    if [[ "${p##*/}" == *"$PURGE_SUFFIX"* ]]; then
+        trash="$p"          # reste d'un nettoyage interrompu : déjà renommé
+    else
+        trash="$p$PURGE_SUFFIX$(date +%Y%m%d%H%M%S)-$$"
+        [[ ! -e "$trash" ]] || die "Nom déjà pris : $trash"
+        # Renommer d'abord : sur un point de montage, rename(2) échoue (EBUSY).
+        # Le contrôle des montages devient donc atomique avec l'action.
+        mv -T -- "$p" "$trash" \
+            || die "Renommage impossible (point de montage ?) : $p. Rien n'est supprimé pour celui-ci."
+        info "Renommé : $p → ${trash##*/}"
+    fi
+
+    assert_deletable "$trash"
+    # --one-file-system en plus : si un montage apparaissait malgré tout dans
+    # l'arborescence, rm ne le traverserait pas.
+    if ! rm -rf --one-file-system -- "$trash"; then
+        warn "Suppression incomplète : $trash (relancer « vault clean --apply » pour reprendre)."
+        return 1
+    fi
+    success "Supprimé : $p"
+}
+
+cmd_clean() {
+    local p failed=0
+
+    need findmnt realpath pgrep du find mv rm
+    check_clean_context
+
+    collect_candidates
+    if [[ ${#CANDIDATES[@]} -eq 0 ]]; then
+        success "Rien à nettoyer : aucun dossier hors coffre aux emplacements des binds."
+        return 0
+    fi
+
+    # Tout est validé avant d'afficher quoi que ce soit : un seul candidat
+    # suspect arrête l'ensemble, sans suppression partielle.
+    for p in "${CANDIDATES[@]}"; do
+        assert_deletable "$p"
+    done
+
+    warn "Dossiers HORS coffre (coffre fermé) qui seraient supprimés :"
+    for p in "${CANDIDATES[@]}"; do
+        describe_candidate "$p"
+    done
+    warn "S'ils contiennent votre seul exemplaire d'un profil, il sera perdu."
+    info "Le contenu du coffre ($MNT) n'est jamais touché."
+
+    if [[ "$APPLY" != "yes" ]]; then
+        info "Simulation — rien n'a été supprimé. Relancez avec : vault clean --apply"
+        return 0
+    fi
+
+    confirm_typed
+    for p in "${CANDIDATES[@]}"; do
+        purge_one "$p" || failed=1
+    done
+    (( failed == 0 )) || die "Nettoyage incomplet (voir ci-dessus)."
+    success "Nettoyage terminé."
+}
+
+# -----------------------------------------------------------------------------
+# vault create
+# -----------------------------------------------------------------------------
+SIZE="$DEFAULT_SIZE"
+
+check_not_open() {
+    if luks_is_open; then
+        die "/dev/mapper/$MAP_NAME existe déjà : le coffre semble ouvert. Lancez « vault close » avant de recréer le conteneur."
+    fi
+}
+
+check_existing_container() {
+    if [[ -e "$IMG" ]]; then
+        warn "Un conteneur existe déjà : $IMG"
+        warn "Continuer va l'ÉCRASER DÉFINITIVEMENT, avec tout ce qu'il contient."
+        confirm_typed
+        # fallocate ne tronque pas un fichier plus grand que la taille demandée :
+        # on repart d'un fichier neuf.
+        rm -f -- "$IMG"
+    fi
+}
+
+ensure_cryptsetup() {
+    if dpkg -s cryptsetup &>/dev/null; then
+        return
+    fi
+    info "Installation de cryptsetup..."
+    sudo apt-get update -q
+    sudo apt-get install -y cryptsetup
+}
+
+# La passphrase passe par stdin (--key-file=-), jamais en argument (visible dans
+# ps) ni exportée (visible dans /proc/<pid>/environ). --batch-mode supprime la
+# confirmation « YES » de luksFormat. printf '%s' n'ajoute pas de saut de ligne :
+# luksFormat et open reçoivent exactement les mêmes octets.
+create_luks() {
+    info "Création du conteneur ($SIZE) : $IMG"
+    fallocate -l "$SIZE" "$IMG"
+
+    info "Initialisation LUKS..."
+    printf '%s' "$VAULT_PASSPHRASE" | sudo cryptsetup luksFormat --batch-mode --key-file=- "$IMG"
+
+    info "Ouverture du volume..."
+    printf '%s' "$VAULT_PASSPHRASE" | sudo cryptsetup open --key-file=- "$IMG" "$MAP_NAME"
+
+    info "Formatage en ext4..."
+    sudo mkfs.ext4 -q "/dev/mapper/$MAP_NAME"
+}
+
+cmd_create() {
+    need fallocate mkfs.ext4 findmnt stat
+    echo -e "\n${BOLD}=== Création du Vault ===${RESET}\n"
+
+    check_not_open
+    check_existing_container
+    read_passphrase
+    warmup_sudo
+    start_sudo_keepalive
+
+    ensure_cryptsetup
+    create_luks
+
+    info "Montage et mise en place des binds..."
+    cmd_open
+
+    echo -e "\n${GREEN}${BOLD}Terminé.${RESET} Vault créé et monté sur ${CYAN}$MNT${RESET}, binds en place.\n"
+    info "Vérification : vault status"
+}
+
+# -----------------------------------------------------------------------------
+# Analyse des arguments
+# -----------------------------------------------------------------------------
+parse_options() {
+    local cmd="$1"; shift
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -h|--help) usage; exit 0 ;;
+            --size)
+                [[ "$cmd" == "create" ]] || usage_error "--size ne s'applique qu'à « create »."
+                SIZE="${2:-}"
+                [[ -n "$SIZE" ]] || usage_error "--size requiert une valeur"
+                shift 2
+                ;;
+            --apply)
+                [[ "$cmd" == "clean" ]] || usage_error "--apply ne s'applique qu'à « clean »."
+                APPLY="yes"
+                shift
+                ;;
+            *) usage_error "Option inconnue pour « $cmd » : $1" ;;
+        esac
+    done
+}
+
+# -----------------------------------------------------------------------------
+# Point d'entrée
+# -----------------------------------------------------------------------------
+main() {
+    [[ $# -gt 0 ]] || usage_error "Sous-commande requise : create | open | close | status | clean"
+
+    local cmd="$1"
+    shift
+    case "$cmd" in
+        -h|--help|help) usage; exit 0 ;;
+        create|open|close|status|clean) ;;
+        *) usage_error "Sous-commande inconnue : $cmd" ;;
+    esac
+
+    parse_options "$cmd" "$@"
+    check_user
+
+    case "$cmd" in
+        status) cmd_status ;;
+        clean)  acquire_lock; cmd_clean ;;
+        open)   acquire_lock; warmup_sudo; cmd_open ;;
+        close)  acquire_lock; warmup_sudo; cmd_close ;;
+        create) acquire_lock; cmd_create ;;
+    esac
+}
+
+main "$@"
