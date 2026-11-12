@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# NAME
+#     yadm-update-submodule — git update-submodule appliqué au dépôt yadm
+#
+# SYNOPSIS
+#     yadm-update-submodule <arguments de git-update-submodule>
+#
+# DESCRIPTION
+#     Wrapper transparent : équivaut à « git-update-submodule --yadm "$@" ».
+#     Il ne connaît aucune sous-commande ni option de git-update-submodule
+#     (<chemin> <tag>, status, sync, -n, -h…) : tout lui est transmis tel quel,
+#     donc toute évolution de git-update-submodule est disponible ici sans
+#     modifier ce fichier. Il sert uniquement à retrouver la commande par
+#     complétion (« yadm-<Tab> ») et à éviter de taper --yadm.
+#     L'aide (-h) et les codes de retour sont ceux de git-update-submodule.
+#
+# EXAMPLES
+#     yadm-update-submodule sync          # remet les submodules sur les commits épinglés
+#     yadm-update-submodule sync -n       # diagnostic seul
+#     yadm-update-submodule status
+#
+# EXIT CODES
+#     Ceux de git-update-submodule.
+set -euo pipefail
+
+# Chemin résolu à côté de ce fichier : ~/.local/bin n'est pas toujours dans le
+# PATH (cas de sudo ou d'un cron), et ce script reste ainsi lançable partout.
+exec "$(dirname "$(readlink -f "$0")")/git-update-submodule" --yadm "$@"

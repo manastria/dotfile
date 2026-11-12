@@ -54,14 +54,15 @@ Les conventions de rédaction sont fixées dans [CLAUDE.md](../CLAUDE.md), secti
 | ---- | ------ | ----- |
 | [git-check-sync.md](git-check-sync.md) | [`git-check-sync.sh`](../.local/bin/git-check-sync.sh) | État de synchronisation de tous les dépôts d'un répertoire (fetch, force-push, divergence), filtres `--hide`/`--only`, propose `pull --rebase` / `push` sur les cas sans ambiguïté |
 | [git-main-to-master.md](git-main-to-master.md) | [`git-main-to-master.sh`](../.local/bin/git-main-to-master.sh) | Renomme `main` en `master` en local et sur le remote : dépôt propre exigé, upstreams corrigés, `main` supprimée côté serveur (bascule GitHub via `gh`) |
-| [git-update-submodule.md](git-update-submodule.md) | [`git-update-submodule`](../.local/bin/git-update-submodule) | Sous-commande `git update-submodule` : épingle un submodule sur un tag et commite uniquement ce changement (chemin exact, index propre exigés) ; `status` = `git submodule status` + URL de `origin` |
+| [git-update-submodule.md](git-update-submodule.md) | [`git-update-submodule`](../.local/bin/git-update-submodule) | Sous-commande `git update-submodule` : épingle un submodule sur un tag et commite uniquement ce changement ; `sync` remet les submodules sur les commits épinglés ; `status` = `git submodule status` + URL de `origin` ; `--yadm` opère sur le dépôt yadm |
 
 ### Outillage du dépôt
 
 | Page | Script | Objet |
 | ---- | ------ | ----- |
 | [yadm-alt-link.md](yadm-alt-link.md) | [`yadm-alt-link.py`](../.local/bin/yadm-alt-link.py) | Sépare les fichiers réservés au développement via les alt yadm |
-| [yadm-check-submodules.md](yadm-check-submodules.md) | [`yadm-check-submodules.sh`](../.local/bin/yadm-check-submodules.sh) | Synchronise les submodules du dépôt yadm vers le commit épinglé |
+| [yadm-check-submodules.md](yadm-check-submodules.md) | [`yadm-check-submodules.sh`](../.local/bin/yadm-check-submodules.sh) | Alias de compatibilité : `yadm-update-submodule sync` (synchronise les submodules yadm sur les commits épinglés) |
+| [yadm-update-submodule.md](yadm-update-submodule.md) | [`yadm-update-submodule`](../.local/bin/yadm-update-submodule) | Wrapper transparent : `git-update-submodule --yadm …`, pour le dépôt yadm |
 
 ### Installateurs
 

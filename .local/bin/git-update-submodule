@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
 # NAME
-#     git-update-submodule — épingle un submodule sur un tag et commite le changement
+#     git-update-submodule — épingle un submodule sur un tag, ou resynchronise les submodules
 #
 # SYNOPSIS
-#     git update-submodule <chemin> <tag>
-#     git update-submodule status [<chemin>...]
+#     git update-submodule [--yadm] <chemin> <tag>
+#     git update-submodule [--yadm] status [<chemin>...]
+#     git update-submodule [--yadm] sync [-n]
 #     git update-submodule -h | --help
 #
 # DESCRIPTION
 #     Sous-commande git : ce fichier doit s'appeler « git-update-submodule » et
 #     se trouver dans le PATH pour que « git update-submodule » le trouve.
+#     « yadm update-submodule » fonctionne aussi : yadm transmet à git toute
+#     commande qu'il ne connaît pas, et git exporte GIT_DIR / GIT_WORK_TREE
+#     vers la sous-commande (voir --yadm).
 #
 #     Forme « <chemin> <tag> » : initialise le submodule si besoin, récupère
 #     les tags de son remote « origin », bascule dessus en tête détachée, puis
@@ -27,14 +31,36 @@
 #     présents dans une URL (https://jeton@hôte) sont masqués. Si l'URL du
 #     remote diffère de celle de .gitmodules, cette dernière est signalée.
 #
+#     Forme « sync » : remet les submodules au commit épinglé par le dépôt
+#     parent (typiquement après un « pull » ou un changement de branche, que
+#     git ne répercute pas sur les submodules). Ne fait rien si tout est déjà
+#     en place ; sinon liste les submodules fautifs (« - » non initialisé,
+#     « + » commit local différent) puis lance
+#     « git submodule update --init --recursive ». Elle ne tire JAMAIS la
+#     dernière version upstream. Un conflit de fusion (« U ») arrête le script.
+#
 #     Garde-fous de la forme « <chemin> <tag> » : le script refuse de
 #     continuer si le dépôt parent a déjà des changements indexés (ils
 #     seraient absents du commit) ou un HEAD détaché, si le submodule a des
 #     modifications locales, ou si le tag n'existe pas sur « origin ». Rien
 #     n'est committé quand le submodule est déjà enregistré sur ce tag.
 #
+#     Dépôt yadm : yadm est un dépôt git comme un autre, dont le répertoire
+#     git est séparé de l'arbre de travail ($HOME). L'option --yadm positionne
+#     GIT_DIR et GIT_WORK_TREE ; ensuite toutes les formes ci-dessus
+#     fonctionnent à l'identique, depuis n'importe quel répertoire.
+#
 # OPTIONS
-#     -h, --help   Affiche cette aide.
+#     --yadm            Opère sur le dépôt yadm : GIT_DIR=$YADM_REPO et
+#                       GIT_WORK_TREE=$HOME. Inutile via « yadm update-submodule »
+#                       (yadm les a déjà positionnés).
+#     -n, --dry-run     (sync uniquement) Signale les submodules désynchronisés
+#                       sans rien modifier.
+#     -h, --help        Affiche cette aide.
+#
+# ENVIRONMENT
+#     YADM_REPO   Chemin du dépôt yadm, utilisé par --yadm.
+#                 Défaut : ~/.local/share/yadm/repo.git
 #
 # EXAMPLES
 #     # État des submodules, avec l'URL d'où viendront les tags
@@ -43,13 +69,22 @@
 #     # Épingler powerlevel10k sur un tag
 #     git update-submodule .zsh/custom/themes/powerlevel10k v1.20.0
 #
-#     # Un submodule qui s'appellerait « status » s'écrit avec « ./ »
+#     # Remettre les submodules sur les commits épinglés (après un pull)
+#     git update-submodule sync
+#
+#     # Même chose sur le dépôt yadm, depuis n'importe où
+#     git update-submodule --yadm sync
+#     yadm update-submodule sync
+#
+#     # Un submodule qui s'appellerait « status » ou « sync » s'écrit avec « ./ »
 #     git update-submodule ./status v1.0
 #
 # EXIT CODES
-#     0   Succès, ou submodule déjà enregistré sur ce tag (rien à committer).
-#     1   Erreur d'exécution : hors dépôt git, submodule invalide, dépôt dans
-#         un état refusé, tag introuvable, échec de git.
+#     0   Succès, submodule déjà enregistré sur ce tag (rien à committer), ou
+#         submodules déjà synchronisés.
+#     1   Erreur d'exécution : hors dépôt git, dépôt yadm introuvable,
+#         submodule invalide, dépôt dans un état refusé, tag introuvable,
+#         conflit de fusion dans un submodule, échec de git.
 #     2   Erreur d'usage : option inconnue, nombre d'arguments incorrect.
 set -euo pipefail
 
@@ -58,6 +93,7 @@ set -euo pipefail
 # -----------------------------------------------------------------------------
 readonly CMD="git update-submodule"
 readonly REMOTE="origin"
+readonly YADM_REPO="${YADM_REPO:-$HOME/.local/share/yadm/repo.git}"
 
 # -----------------------------------------------------------------------------
 # Couleurs et fonctions de log
@@ -84,17 +120,21 @@ usage_error() { error "$*"; echo "Essayez : ${CMD} --help" >&2; exit 2; }
 # -----------------------------------------------------------------------------
 # Options
 # -----------------------------------------------------------------------------
-ACTION=""          # « update » ou « status »
-ARGS=()            # arguments positionnels (hors mot-clé « status »)
+ACTION=""          # « update », « status » ou « sync »
+ARGS=()            # arguments positionnels (hors mot-clé « status » / « sync »)
+USE_YADM="no"      # --yadm : opérer sur le dépôt yadm
+DRY_RUN="no"       # -n : sync sans modification
 
 parse_args() {
     local positional=()
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            -h|--help) usage; exit 0 ;;
-            -*)        usage_error "Option inconnue : $1" ;;
-            *)         positional+=("$1"); shift ;;
+            -h|--help)    usage; exit 0 ;;
+            --yadm)       USE_YADM="yes"; shift ;;
+            -n|--dry-run) DRY_RUN="yes"; shift ;;
+            -*)           usage_error "Option inconnue : $1" ;;
+            *)            positional+=("$1"); shift ;;
         esac
     done
 
@@ -105,11 +145,18 @@ parse_args() {
         ACTION="status"
         shift
         ARGS=("$@")
+    elif [[ "${1:-}" == "sync" ]]; then
+        [[ $# -eq 1 ]] || usage_error "« sync » n'accepte aucun argument."
+        ACTION="sync"
     elif [[ $# -eq 2 ]]; then
         ACTION="update"
         ARGS=("$@")
     else
-        usage_error "Usage : ${CMD} <chemin> <tag> | ${CMD} status [<chemin>...]"
+        usage_error "Usage : ${CMD} <chemin> <tag> | ${CMD} status [<chemin>...] | ${CMD} sync [-n]"
+    fi
+
+    if [[ "$DRY_RUN" == "yes" && "$ACTION" != "sync" ]]; then
+        usage_error "-n / --dry-run ne s'applique qu'à « sync »."
     fi
 }
 
@@ -141,7 +188,22 @@ DECLARED=""        # lignes « nom<TAB>chemin » issues de .gitmodules
 # script n'est jamais modifié, donc les chemins saisis restent relatifs à
 # l'endroit où l'utilisateur se trouve.
 repo_git() { git -C "$TOP" "$@"; }
-sub_git()  { local dir="$TOP/$1"; shift; git -C "$dir" "$@"; }
+# « env -u » : sous yadm (--yadm ou « yadm update-submodule »), GIT_DIR et
+# GIT_WORK_TREE sont exportés et désignent le dépôt PARENT. Sans les retirer,
+# « git -C <submodule> » hériterait de GIT_DIR et travaillerait sur le parent
+# au lieu du submodule (fetch, checkout et lecture de HEAD au mauvais endroit).
+sub_git()  { local dir="$TOP/$1"; shift; env -u GIT_DIR -u GIT_WORK_TREE git -C "$dir" "$@"; }
+
+# --yadm : le dépôt yadm a son répertoire git hors de l'arbre de travail ($HOME).
+# Une fois GIT_DIR / GIT_WORK_TREE positionnés, git (« rev-parse --show-toplevel »
+# renvoie alors $HOME, quel que soit le répertoire courant) et tout le reste du
+# script se comportent comme sur n'importe quel dépôt.
+setup_yadm() {
+    [ "$USE_YADM" = "yes" ] || return 0
+    [ -d "$YADM_REPO" ] || die "Dépôt yadm introuvable : $YADM_REPO"
+    export GIT_DIR="$YADM_REPO"
+    export GIT_WORK_TREE="$HOME"
+}
 
 locate_repo() {
     TOP="$(git rev-parse --show-toplevel 2>/dev/null)" \
@@ -396,18 +458,60 @@ cmd_update() {
 }
 
 # -----------------------------------------------------------------------------
+# Sous-commande « sync »
+# -----------------------------------------------------------------------------
+cmd_sync() {
+    local status
+
+    info "Vérification de l'état des submodules..."
+
+    # Affectation séparée de la déclaration : « local status=$(...) » masque le
+    # code de retour de la commande et ferait passer un échec de git pour un
+    # succès. Pas de pipe vers grep dans un « if » pour la même raison.
+    status="$(repo_git submodule status --recursive)" \
+        || die "Échec de « git submodule status »."
+
+    # Préfixes : « - » non initialisé, « + » commit local différent de celui
+    # épinglé, « U » conflit de fusion (non réparable automatiquement).
+    if grep -q '^U' <<< "$status"; then
+        grep '^U' <<< "$status" | while read -r line; do warn "  $line"; done
+        die "Conflit de fusion dans un submodule : intervention manuelle requise."
+    fi
+
+    if ! grep -q '^[-+]' <<< "$status"; then
+        success "Tous les submodules sont déjà à jour."
+        return 0
+    fi
+
+    warn "Mise à jour des submodules requise :"
+    grep '^[-+]' <<< "$status" | while read -r line; do warn "  $line"; done
+
+    if [ "$DRY_RUN" = "yes" ]; then
+        info "Simulation — aucune modification. Relancez sans --dry-run."
+        return 0
+    fi
+
+    info "Téléchargement et mise à jour en cours..."
+    repo_git submodule update --init --recursive \
+        || die "Échec de « git submodule update »."
+    success "Submodules synchronisés."
+}
+
+# -----------------------------------------------------------------------------
 # Point d'entrée
 # -----------------------------------------------------------------------------
 main() {
     parse_args "$@"
     check_root
     check_deps
+    setup_yadm
     locate_repo
     load_declared
 
     case "$ACTION" in
         status) cmd_status ;;
         update) cmd_update ;;
+        sync)   cmd_sync ;;
     esac
 }
 
