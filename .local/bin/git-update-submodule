@@ -1,45 +1,414 @@
 #!/usr/bin/env bash
+# NAME
+#     git-update-submodule — épingle un submodule sur un tag et commite le changement
+#
+# SYNOPSIS
+#     git update-submodule <chemin> <tag>
+#     git update-submodule status [<chemin>...]
+#     git update-submodule -h | --help
+#
+# DESCRIPTION
+#     Sous-commande git : ce fichier doit s'appeler « git-update-submodule » et
+#     se trouver dans le PATH pour que « git update-submodule » le trouve.
+#
+#     Forme « <chemin> <tag> » : initialise le submodule si besoin, récupère
+#     les tags de son remote « origin », bascule dessus en tête détachée, puis
+#     crée dans le dépôt parent UN commit qui ne contient que ce submodule :
+#         « Mise à jour de <nom> vers <tag> »
+#     <chemin> est relatif au répertoire courant (l'autocomplétion du shell
+#     convient, avec ou sans « / » final) et doit désigner exactement un
+#     submodule déclaré dans .gitmodules.
+#
+#     Forme « status » : équivalent de « git submodule status », dont elle
+#     reprend les lignes telles quelles (préfixe, commit, chemin, description),
+#     en ajoutant l'URL du remote « origin » — celui qui sert à récupérer les
+#     tags. Pour un submodule non initialisé, l'URL vient de la configuration
+#     du dépôt parent ou de .gitmodules. Les identifiants éventuellement
+#     présents dans une URL (https://jeton@hôte) sont masqués. Si l'URL du
+#     remote diffère de celle de .gitmodules, cette dernière est signalée.
+#
+#     Garde-fous de la forme « <chemin> <tag> » : le script refuse de
+#     continuer si le dépôt parent a déjà des changements indexés (ils
+#     seraient absents du commit) ou un HEAD détaché, si le submodule a des
+#     modifications locales, ou si le tag n'existe pas sur « origin ». Rien
+#     n'est committé quand le submodule est déjà enregistré sur ce tag.
+#
+# OPTIONS
+#     -h, --help   Affiche cette aide.
+#
+# EXAMPLES
+#     # État des submodules, avec l'URL d'où viendront les tags
+#     git update-submodule status
+#
+#     # Épingler powerlevel10k sur un tag
+#     git update-submodule .zsh/custom/themes/powerlevel10k v1.20.0
+#
+#     # Un submodule qui s'appellerait « status » s'écrit avec « ./ »
+#     git update-submodule ./status v1.0
+#
+# EXIT CODES
+#     0   Succès, ou submodule déjà enregistré sur ce tag (rien à committer).
+#     1   Erreur d'exécution : hors dépôt git, submodule invalide, dépôt dans
+#         un état refusé, tag introuvable, échec de git.
+#     2   Erreur d'usage : option inconnue, nombre d'arguments incorrect.
+set -euo pipefail
 
-# Vérification du nombre d'arguments
-if [ "$#" -ne 2 ]; then
-    echo "Usage: git update-submodule <chemin_du_submodule> <tag>"
-    exit 1
-fi
+# -----------------------------------------------------------------------------
+# Constantes
+# -----------------------------------------------------------------------------
+readonly CMD="git update-submodule"
+readonly REMOTE="origin"
 
-# Suppression de l'éventuel slash final saisi par l'autocomplétion
-SUB_PATH="${1%/}"
-TARGET_TAG="$2"
+# -----------------------------------------------------------------------------
+# Couleurs et fonctions de log
+# -----------------------------------------------------------------------------
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+RESET='\033[0m'
 
-# 1. Vérification de l'existence du submodule dans la configuration
-if ! git config --file .gitmodules --get-regexp path | grep -q "$SUB_PATH"; then
-    echo "Erreur : « $SUB_PATH » n'est pas un submodule valide dans .gitmodules."
-    exit 1
-fi
+info()    { echo -e "${CYAN}[INFO]${RESET}      $*"; }
+success() { echo -e "${GREEN}[OK]${RESET}        $*"; }
+warn()    { echo -e "${YELLOW}[ATTENTION]${RESET} $*"; }
+error()   { echo -e "${RED}[ERREUR]${RESET}    $*" >&2; }
+die()     { error "$*"; exit 1; }
 
-# 2. Initialisation si le répertoire est vide
-git submodule update --init "$SUB_PATH" || { 
-    echo "Erreur : Impossible d'initialiser « $SUB_PATH »."
-    exit 1
+usage() {
+    # Réimprime le bloc d'en-tête manpage en retirant le préfixe « # ».
+    awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$0"
+}
+usage_error() { error "$*"; echo "Essayez : ${CMD} --help" >&2; exit 2; }
+
+# -----------------------------------------------------------------------------
+# Options
+# -----------------------------------------------------------------------------
+ACTION=""          # « update » ou « status »
+ARGS=()            # arguments positionnels (hors mot-clé « status »)
+
+parse_args() {
+    local positional=()
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -h|--help) usage; exit 0 ;;
+            -*)        usage_error "Option inconnue : $1" ;;
+            *)         positional+=("$1"); shift ;;
+        esac
+    done
+
+    # « ${tableau[@]+…} » : un tableau vide fait échouer « set -u » avant bash 4.4.
+    set -- ${positional[@]+"${positional[@]}"}
+
+    if [[ "${1:-}" == "status" ]]; then
+        ACTION="status"
+        shift
+        ARGS=("$@")
+    elif [[ $# -eq 2 ]]; then
+        ACTION="update"
+        ARGS=("$@")
+    else
+        usage_error "Usage : ${CMD} <chemin> <tag> | ${CMD} status [<chemin>...]"
+    fi
 }
 
-# 3. Récupération des étiquettes distantes
-git -C "$SUB_PATH" fetch --tags || { 
-    echo "Erreur : Échec du fetch réseau sur « $SUB_PATH »."
-    exit 1
+# -----------------------------------------------------------------------------
+# Vérifications préalables
+# -----------------------------------------------------------------------------
+# Tier 3 : lancé en root, git créerait des objets appartenant à root dans le
+# dépôt (et dans .git/modules) de l'utilisateur.
+check_root() {
+    if [ "$(id -u)" -eq 0 ]; then
+        error "Ce script ne doit pas être lancé en root."
+        error "Relancez sans sudo, en tant qu'utilisateur normal."
+        exit 1
+    fi
 }
 
-# 4. Vérification stricte de l'existence du tag
-if ! git -C "$SUB_PATH" rev-parse "refs/tags/$TARGET_TAG" >/dev/null 2>&1; then
-    echo "Erreur : Le tag « $TARGET_TAG » n'existe pas dans le dépôt distant du submodule."
-    exit 1
-fi
-
-# 5. Basculement sur le tag (en mode tête détachée)
-git -C "$SUB_PATH" checkout "$TARGET_TAG" || { 
-    echo "Erreur : Échec du checkout sur « $TARGET_TAG »."
-    exit 1
+check_deps() {
+    command -v git >/dev/null 2>&1 || die "'git' n'est pas installé."
+    command -v realpath >/dev/null 2>&1 || die "'realpath' (coreutils) est requis."
 }
 
-# 6. Ajout automatique à l'index du dépôt parent
-git add "$SUB_PATH"
-echo "Succès : « $SUB_PATH » mis à jour sur « $TARGET_TAG » et ajouté à l'index."
+# -----------------------------------------------------------------------------
+# Accès au dépôt parent
+# -----------------------------------------------------------------------------
+TOP=""             # racine du dépôt parent (chemin physique)
+DECLARED=""        # lignes « nom<TAB>chemin » issues de .gitmodules
+
+# Toutes les commandes passent par « git -C » : le répertoire courant du
+# script n'est jamais modifié, donc les chemins saisis restent relatifs à
+# l'endroit où l'utilisateur se trouve.
+repo_git() { git -C "$TOP" "$@"; }
+sub_git()  { local dir="$TOP/$1"; shift; git -C "$dir" "$@"; }
+
+locate_repo() {
+    TOP="$(git rev-parse --show-toplevel 2>/dev/null)" \
+        || die "Ce répertoire n'est pas dans un dépôt git."
+}
+
+# Convertit un chemin saisi (relatif au répertoire courant ou absolu, avec ou
+# sans « / » final, avec « ./ » ou « .. ») en chemin relatif à la racine du
+# dépôt. « -m » : le répertoire peut ne pas exister (submodule non initialisé).
+to_repo_relative() {
+    local abs
+    abs="$(realpath -m -- "$1")" || die "Chemin illisible : $1"
+    case "$abs" in
+        "$TOP")   die "« $1 » est la racine du dépôt, pas un submodule." ;;
+        "$TOP"/*) printf '%s\n' "${abs#"$TOP"/}" ;;
+        *)        die "« $1 » est en dehors du dépôt ($TOP)." ;;
+    esac
+}
+
+# Charge dans DECLARED les submodules déclarés dans .gitmodules.
+# « -z » : sépare les entrées par NUL, donc sûr même si un chemin contient
+# des espaces. Le nom du submodule (clé de configuration) peut différer du
+# chemin : il faut le retrouver pour lire « submodule.<nom>.url ».
+load_declared() {
+    local gitmodules="$TOP/.gitmodules" entry key name
+    [ -f "$gitmodules" ] || return 0
+    DECLARED="$(
+        git config --file "$gitmodules" -z --get-regexp '^submodule\..*\.path$' 2>/dev/null |
+            while IFS= read -r -d '' entry; do
+                key="${entry%%$'\n'*}"
+                name="${key#submodule.}"
+                printf '%s\t%s\n' "${name%.path}" "${entry#*$'\n'}"
+            done || true
+    )"
+}
+
+# Nom (clé de configuration) du submodule dont le chemin est exactement $1.
+submodule_name_for() {
+    local name path
+    while IFS=$'\t' read -r name path; do
+        if [ "$path" = "$1" ]; then
+            printf '%s\n' "$name"
+            return 0
+        fi
+    done <<< "$DECLARED"
+    return 1
+}
+
+list_declared_paths() {
+    local name path
+    while IFS=$'\t' read -r name path; do
+        [ -n "$path" ] && printf '  %s\n' "$path"
+    done <<< "$DECLARED"
+    return 0
+}
+
+# Le chemin $1 est-il enregistré comme submodule (gitlink, mode 160000) dans
+# l'index ? Le motif « 160000 <sha> <étape>TAB<chemin> » doit correspondre à la
+# ligne entière : un répertoire ordinaire listerait ses fichiers (mode 100644),
+# jamais une ligne 160000.
+is_gitlink() {
+    local entry
+    entry="$(repo_git -c core.quotepath=off ls-files --stage -- ":(literal)$1")"
+    [[ "$entry" == "160000 "*$'\t'"$1" ]]
+}
+
+# Vérifie que $1 est EXACTEMENT un submodule déclaré (et non une sous-chaîne,
+# un répertoire parent ou un motif), puis place son nom dans SUB_NAME_CFG.
+SUB_NAME_CFG=""
+require_submodule() {
+    local rel="$1"
+    if ! SUB_NAME_CFG="$(submodule_name_for "$rel")"; then
+        error "« $rel » n'est pas un submodule déclaré dans .gitmodules."
+        if [ -n "$DECLARED" ]; then
+            info "Submodules disponibles (chemins relatifs à la racine du dépôt) :" >&2
+            list_declared_paths >&2
+        fi
+        exit 1
+    fi
+    is_gitlink "$rel" \
+        || die "« $rel » est déclaré dans .gitmodules mais absent de l'index du dépôt."
+}
+
+# -----------------------------------------------------------------------------
+# URL du remote
+# -----------------------------------------------------------------------------
+# Masque les identifiants embarqués dans une URL : jeton ou « utilisateur:mdp »
+# en https, mot de passe seul pour les autres schémas (« ssh://git@hôte »
+# n'est pas un secret et reste intact).
+mask_url() {
+    sed -E \
+        -e 's#^(https?://)[^/@]+@#\1***@#' \
+        -e 's#^([A-Za-z][A-Za-z0-9+.-]*://[^/:@]+):[^/@]*@#\1:***@#' <<< "$1"
+}
+
+# URL du remote « origin » du submodule $1 (nom de configuration $2), brute.
+# Ordre : le dépôt du submodule lui-même (c'est lui que « fetch » interroge),
+# puis la configuration du parent (renseignée par « submodule init »), puis
+# .gitmodules. Le test sur « .git » évite qu'un « git -C » lancé dans un
+# répertoire de submodule vide remonte au dépôt parent.
+remote_url_for() {
+    local rel="$1" name="$2" url=""
+    if [ -e "$TOP/$rel/.git" ]; then
+        url="$(sub_git "$rel" remote get-url "$REMOTE" 2>/dev/null)" || url=""
+    fi
+    if [ -z "$url" ]; then
+        url="$(repo_git config --get "submodule.${name}.url" 2>/dev/null)" || url=""
+    fi
+    if [ -z "$url" ]; then
+        url="$(gitmodules_url_for "$name")"
+    fi
+    printf '%s\n' "$url"
+}
+
+# URL déclarée dans .gitmodules pour le submodule de nom $1 (vide si absente).
+gitmodules_url_for() {
+    local url=""
+    if [ -f "$TOP/.gitmodules" ]; then
+        url="$(git config --file "$TOP/.gitmodules" --get "submodule.${1}.url" 2>/dev/null)" || url=""
+    fi
+    printf '%s\n' "$url"
+}
+
+# -----------------------------------------------------------------------------
+# Sous-commande « status »
+# -----------------------------------------------------------------------------
+cmd_status() {
+    local -a rels=()
+    local arg out line rest path sha name url declared_url re
+    local c_url="" c_warn="" c_reset=""
+
+    # Couleurs uniquement vers un terminal : la sortie reste exploitable en pipe.
+    if [ -t 1 ]; then c_url="$CYAN"; c_warn="$YELLOW"; c_reset="$RESET"; fi
+
+    # Chaque argument doit être un submodule déclaré : « git submodule status »
+    # accepte n'importe quel chemin et se contente de ne rien afficher.
+    for arg in ${ARGS[@]+"${ARGS[@]}"}; do
+        arg="$(to_repo_relative "$arg")" || exit 1
+        require_submodule "$arg"
+        rels+=("$arg")
+    done
+
+    out="$(repo_git submodule status -- ${rels[@]+"${rels[@]}"})" \
+        || die "Échec de « git submodule status »."
+
+    if [ -z "$out" ]; then
+        info "Aucun submodule dans ce dépôt."
+        return 0
+    fi
+
+    # Format d'une ligne : « <préfixe><sha> <chemin>[ (<description>)] ».
+    # La description est absente pour un submodule non initialisé.
+    re='^(.*) \((.*)\)$'
+    while IFS= read -r line; do
+        rest="${line:1}"                    # sans le préfixe ( ,-,+,U)
+        sha="${rest%% *}"                   # inutilisé ici, retiré pour isoler le chemin
+        rest="${rest#"$sha" }"
+        if [[ "$rest" =~ $re ]]; then path="${BASH_REMATCH[1]}"; else path="$rest"; fi
+
+        name="$(submodule_name_for "$path")" || name=""
+        url="$(remote_url_for "$path" "$name")"
+        declared_url="$(gitmodules_url_for "$name")"
+
+        printf '%s  %burl=%s%b' "$line" "$c_url" "$(mask_url "${url:-(inconnue)}")" "$c_reset"
+        if [ -n "$url" ] && [ -n "$declared_url" ] && [ "$url" != "$declared_url" ]; then
+            printf '  %b(.gitmodules : %s)%b' "$c_warn" "$(mask_url "$declared_url")" "$c_reset"
+        fi
+        printf '\n'
+    done <<< "$out"
+}
+
+# -----------------------------------------------------------------------------
+# Sous-commande « <chemin> <tag> »
+# -----------------------------------------------------------------------------
+# Le commit ne doit contenir QUE le submodule. Deux protections : on refuse un
+# index déjà chargé (cmd_update valide aussi le commit avec « -- <chemin> »),
+# et un HEAD détaché, où le commit ne serait sur aucune branche.
+check_parent_ready() {
+    repo_git symbolic-ref -q HEAD >/dev/null \
+        || die "HEAD est détaché dans le dépôt parent : placez-vous sur une branche avant de continuer."
+    repo_git diff --cached --quiet \
+        || die "Le dépôt parent a déjà des changements indexés (« git status ») : commitez-les ou retirez-les de l'index (« git restore --staged ») avant de continuer."
+}
+
+ensure_initialized() {
+    local rel="$1" real_top
+
+    if [ ! -e "$TOP/$rel/.git" ]; then
+        info "Initialisation du submodule « $rel »..."
+        repo_git submodule update --init -- "$rel" \
+            || die "Impossible d'initialiser « $rel »."
+    fi
+
+    # Garde-fou : « git -C » dans un répertoire qui n'est pas la racine d'un
+    # dépôt travaille sur le premier dépôt trouvé en remontant, ici le parent.
+    # Toute commande suivante agirait alors sur le mauvais dépôt.
+    real_top="$(git -C "$TOP/$rel" rev-parse --show-toplevel 2>/dev/null)" || real_top=""
+    [ "$real_top" = "$TOP/$rel" ] \
+        || die "« $rel » n'est pas un dépôt git indépendant (submodule non initialisé ?). Abandon."
+
+    # Fichiers suivis modifiés : le checkout les écraserait ou échouerait.
+    # Les fichiers non suivis sont ignorés : ils ne bloquent pas le checkout.
+    [ -z "$(sub_git "$rel" status --porcelain --untracked-files=no)" ] \
+        || die "Le submodule « $rel » contient des modifications locales non commitées."
+}
+
+cmd_update() {
+    local rel tag url old commit msg
+
+    rel="$(to_repo_relative "${ARGS[0]%/}")" || exit 1
+    tag="${ARGS[1]}"
+
+    # Le préfixe refs/tags/ rend le nom non ambigu : sans lui, une branche de
+    # même nom l'emporterait lors du checkout.
+    git check-ref-format "refs/tags/${tag}" \
+        || die "Nom de tag invalide : « ${tag} »."
+
+    require_submodule "$rel"
+    check_parent_ready
+    ensure_initialized "$rel"
+
+    url="$(mask_url "$(remote_url_for "$rel" "$SUB_NAME_CFG")")"
+    info "Récupération des tags depuis ${url:-$REMOTE}..."
+    sub_git "$rel" fetch --tags "$REMOTE" \
+        || die "Échec du fetch sur « $rel » (réseau ? tag déplacé en amont ?)."
+
+    commit="$(sub_git "$rel" rev-parse --verify --quiet "refs/tags/${tag}^{commit}")" \
+        || die "Le tag « ${tag} » n'existe pas sur ${url:-$REMOTE}."
+    old="$(sub_git "$rel" rev-parse HEAD)"
+
+    # Tête détachée voulue : un tag n'est pas une branche.
+    sub_git "$rel" checkout --quiet --detach "$commit" \
+        || die "Échec du checkout de « ${tag} » dans « $rel »."
+
+    repo_git add -- "$rel"
+    if repo_git diff --cached --quiet -- "$rel"; then
+        success "« $rel » est déjà enregistré sur ${tag} (${commit:0:7}) : rien à committer."
+        return 0
+    fi
+
+    msg="Mise à jour de ${rel##*/} vers ${tag}"
+    # « -- <chemin> » : même si l'index change entre-temps, seul ce submodule
+    # entre dans le commit.
+    if ! repo_git commit --quiet -m "$msg" -- "$rel"; then
+        error "Le commit a échoué ; le submodule est resté sur ${tag} et indexé."
+        info "Réessayer : git commit -m \"${msg}\" -- ${rel}"
+        info "Annuler   : git restore --staged -- ${rel} && git -C ${rel} checkout --detach ${old}"
+        exit 1
+    fi
+
+    success "« ${rel} » : ${old:0:7} → ${commit:0:7} (${tag}), commit $(repo_git rev-parse --short HEAD) créé."
+}
+
+# -----------------------------------------------------------------------------
+# Point d'entrée
+# -----------------------------------------------------------------------------
+main() {
+    parse_args "$@"
+    check_root
+    check_deps
+    locate_repo
+    load_declared
+
+    case "$ACTION" in
+        status) cmd_status ;;
+        update) cmd_update ;;
+    esac
+}
+
+main "$@"

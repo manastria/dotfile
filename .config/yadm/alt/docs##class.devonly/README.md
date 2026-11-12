@@ -54,6 +54,7 @@ Les conventions de rédaction sont fixées dans [CLAUDE.md](../CLAUDE.md), secti
 | ---- | ------ | ----- |
 | [git-check-sync.md](git-check-sync.md) | [`git-check-sync.sh`](../.local/bin/git-check-sync.sh) | État de synchronisation de tous les dépôts d'un répertoire (fetch, force-push, divergence), filtres `--hide`/`--only`, propose `pull --rebase` / `push` sur les cas sans ambiguïté |
 | [git-main-to-master.md](git-main-to-master.md) | [`git-main-to-master.sh`](../.local/bin/git-main-to-master.sh) | Renomme `main` en `master` en local et sur le remote : dépôt propre exigé, upstreams corrigés, `main` supprimée côté serveur (bascule GitHub via `gh`) |
+| [git-update-submodule.md](git-update-submodule.md) | [`git-update-submodule`](../.local/bin/git-update-submodule) | Sous-commande `git update-submodule` : épingle un submodule sur un tag et commite uniquement ce changement (chemin exact, index propre exigés) ; `status` = `git submodule status` + URL de `origin` |
 
 ### Outillage du dépôt
 
