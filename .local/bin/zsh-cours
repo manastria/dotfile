@@ -1,0 +1,245 @@
+#!/usr/bin/env bash
+# NAME
+#     zsh-cours — session tmux « cours » : une fenêtre par répertoire de travail
+#
+# SYNOPSIS
+#     zsh-cours [-p PROFIL] [-s SESSION] [-D] [-n]
+#     zsh-cours -h | --help
+#
+# DESCRIPTION
+#     Crée une session tmux dont chaque fenêtre s'ouvre dans son propre
+#     répertoire, puis s'y rattache :
+#
+#         fenêtre 1 « projets »  →  ~/projets
+#         fenêtre 2 « astro »    →  ~/projets/cours_astro
+#
+#     Si la session existe déjà, elle est reprise telle quelle : aucune
+#     fenêtre n'est ajoutée ni déplacée. Lancé depuis l'intérieur de tmux, le
+#     script bascule vers la session au lieu d'imbriquer un second tmux.
+#
+#     Chaque shell démarre avec le profil zsh demandé (variable ZSH_PROFILE),
+#     comme le fait « zenv ». Ne remplace pas « zsh-daily » : celui-ci ouvre la
+#     session « main » dans le répertoire courant, sans disposition imposée.
+#
+#     Les fenêtres sont décrites par le tableau WINDOWS, en tête de script.
+#
+# OPTIONS
+#     -p, --profile PROFIL   Profil zsh des fenêtres (défaut : simple).
+#     -s, --session NOM      Nom de la session tmux (défaut : cours ;
+#                            lettres, chiffres, _ et -).
+#     -D, --detach           Détache d'abord les autres clients déjà attachés
+#                            à la session (reprise d'une session restée
+#                            ouverte ailleurs).
+#     -n, --no-attach        Crée la session sans s'y rattacher.
+#     -h, --help             Affiche cette aide.
+#
+# EXAMPLES
+#     # Ouvrir (ou reprendre) la session de cours
+#     zsh-cours
+#
+#     # Autre profil zsh
+#     zsh-cours -p omz
+#
+#     # Préparer la session en arrière-plan, s'y rattacher plus tard
+#     zsh-cours --no-attach
+#
+# EXIT CODES
+#     0   Session créée ou reprise, puis quittée normalement.
+#     1   Erreur d'exécution : tmux absent, répertoire introuvable, profil
+#         inconnu, échec de tmux.
+#     2   Erreur d'usage : option inconnue, valeur manquante, nom de profil
+#         ou de session invalide.
+set -euo pipefail
+
+# -----------------------------------------------------------------------------
+# Constantes
+# -----------------------------------------------------------------------------
+readonly DEFAULT_PROFILE="simple"
+readonly DEFAULT_SESSION="cours"
+
+# Une ligne par fenêtre : « numéro|nom|répertoire ». La première ligne est la
+# fenêtre active à l'arrivée dans la session.
+readonly WINDOWS=(
+    "1|projets|${HOME}/projets"
+    "2|astro|${HOME}/projets/cours_astro"
+)
+
+# -----------------------------------------------------------------------------
+# Couleurs et fonctions de log
+# -----------------------------------------------------------------------------
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+RESET='\033[0m'
+
+info()    { echo -e "${CYAN}[INFO]${RESET}      $*"; }
+success() { echo -e "${GREEN}[OK]${RESET}        $*"; }
+warn()    { echo -e "${YELLOW}[ATTENTION]${RESET} $*"; }
+error()   { echo -e "${RED}[ERREUR]${RESET}    $*" >&2; }
+die()     { error "$*"; exit 1; }
+
+usage() {
+    # Réimprime l'en-tête manpage sans le préfixe « # ».
+    awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$0"
+}
+usage_error() { error "$*"; echo "Essayez : $(basename "$0") --help" >&2; exit 2; }
+
+# -----------------------------------------------------------------------------
+# Arguments
+# -----------------------------------------------------------------------------
+PROFILE="$DEFAULT_PROFILE"
+SESSION="$DEFAULT_SESSION"
+DETACH=0
+ATTACH=1
+
+parse_args() {
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -p|--profile)
+                [[ -n "${2:-}" ]] || usage_error "$1 attend une valeur."
+                PROFILE="$2"; shift 2 ;;
+            -s|--session)
+                [[ -n "${2:-}" ]] || usage_error "$1 attend une valeur."
+                SESSION="$2"; shift 2 ;;
+            -D|--detach)    DETACH=1; shift ;;
+            -n|--no-attach) ATTACH=0; shift ;;
+            -h|--help)      usage; exit 0 ;;
+            *) usage_error "Option inconnue : $1" ;;
+        esac
+    done
+
+    # Le profil sert à fabriquer un nom de fichier, la session un nom tmux
+    # (qui interdit « . » et « : ») : on restreint à des caractères sûrs.
+    [[ "$PROFILE" =~ ^[A-Za-z0-9._-]+$ ]] \
+        || usage_error "Nom de profil invalide : $PROFILE"
+    [[ "$SESSION" =~ ^[A-Za-z0-9_-]+$ ]] \
+        || usage_error "Nom de session invalide : $SESSION"
+}
+
+# -----------------------------------------------------------------------------
+# Vérifications préalables
+# -----------------------------------------------------------------------------
+check_prerequisites() {
+    command -v tmux >/dev/null 2>&1 || die "tmux n'est pas installé."
+
+    # Mêmes règles que zenv : base, light et omz n'ont pas de fichier p10k.
+    case "$PROFILE" in
+        base|light|omz) ;;
+        *)
+            [[ -f "${HOME}/.zsh/powerlevel10k/p10k.zsh.${PROFILE}" ]] \
+                || die "Profil '${PROFILE}' introuvable (utilisez « zenv » pour la liste)."
+            ;;
+    esac
+
+    # tmux remplace silencieusement un répertoire inexistant par $HOME :
+    # on préfère échouer plutôt que d'ouvrir une fenêtre au mauvais endroit.
+    local entry dir
+    for entry in "${WINDOWS[@]}"; do
+        dir="${entry##*|}"
+        [[ -d "$dir" ]] || die "Répertoire introuvable : ${dir}"
+    done
+}
+
+# Vrai si tmux >= 3.2 : new-session accepte alors -e VAR=val, qui fixe le profil
+# même quand le serveur tmux tourne déjà (même test que dans zenv.sh).
+tmux_has_env_flag() {
+    local v major minor
+    v="$(tmux -V | sed 's/[^0-9.]//g')"
+    major="${v%%.*}"
+    minor="${v#*.}"
+    [[ "$minor" != "$v" ]] || minor=0
+    [[ -n "$major" ]] || return 1
+    [[ "$major" -gt 3 ]] || { [[ "$major" -eq 3 && "${minor:-0}" -ge 2 ]]; }
+}
+
+# -----------------------------------------------------------------------------
+# Création de la session
+# -----------------------------------------------------------------------------
+# Détruit la session à moitié construite puis quitte : sans cela, un second
+# lancement la reprendrait « telle quelle » avec des fenêtres manquantes.
+rollback_die() {
+    tmux kill-session -t "=${SESSION}" 2>/dev/null || true
+    die "$*"
+}
+
+create_session() {
+    local entry rest num name dir first_index first=1
+    local new_args
+
+    for entry in "${WINDOWS[@]}"; do
+        num="${entry%%|*}"
+        rest="${entry#*|}"
+        name="${rest%%|*}"
+        dir="${rest#*|}"
+
+        if [[ "$first" -eq 1 ]]; then
+            # -d : crée sans s'attacher. -c : répertoire de la fenêtre, et
+            # répertoire de départ par défaut des fenêtres suivantes (écrasé
+            # ci-dessous par -c de chaque new-window).
+            new_args=(new-session -d -s "$SESSION" -n "$name" -c "$dir")
+            tmux_has_env_flag && new_args+=(-e "ZSH_PROFILE=${PROFILE}")
+            # ZSH_PROFILE en préfixe : suffit au premier démarrage du serveur
+            # tmux ; -e couvre le cas d'un serveur déjà lancé.
+            TERM=xterm-256color ZSH_PROFILE="$PROFILE" tmux "${new_args[@]}" \
+                || die "Création de la session '${SESSION}' impossible."
+
+            # La première fenêtre prend l'index base-index de la config tmux
+            # (0 par défaut) : on la renumérote pour coller au tableau.
+            first_index="$(tmux list-windows -t "=${SESSION}" -F '#{window_index}' | head -n1)"
+            if [[ "$first_index" != "$num" ]]; then
+                tmux move-window -s "=${SESSION}:${first_index}" -t "=${SESSION}:${num}" \
+                    || rollback_die "Renumérotation de la fenêtre '${name}' impossible."
+            fi
+            first=0
+            FIRST_WINDOW="$num"
+        else
+            tmux new-window -t "=${SESSION}:${num}" -n "$name" -c "$dir" \
+                || rollback_die "Création de la fenêtre ${num} '${name}' impossible."
+        fi
+    done
+
+    tmux select-window -t "=${SESSION}:${FIRST_WINDOW}" \
+        || rollback_die "Sélection de la fenêtre ${FIRST_WINDOW} impossible."
+}
+
+# -----------------------------------------------------------------------------
+# Rattachement
+# -----------------------------------------------------------------------------
+attach_session() {
+    if [[ -n "${TMUX:-}" ]]; then
+        # Déjà dans tmux : imbriquer est déconseillé, on bascule.
+        tmux switch-client -t "=${SESSION}"
+    elif [[ "$DETACH" -eq 1 ]]; then
+        # -d : détache les autres clients (reprise depuis une autre machine).
+        TERM=xterm-256color exec tmux attach-session -d -t "=${SESSION}"
+    else
+        TERM=xterm-256color exec tmux attach-session -t "=${SESSION}"
+    fi
+}
+
+# -----------------------------------------------------------------------------
+# Point d'entrée
+# -----------------------------------------------------------------------------
+FIRST_WINDOW=""
+
+main() {
+    parse_args "$@"
+    check_prerequisites
+
+    # « = » : correspondance exacte du nom, sinon tmux accepte un préfixe
+    # (« cours » reprendrait « cours2 »).
+    if tmux has-session -t "=${SESSION}" 2>/dev/null; then
+        info "Session '${SESSION}' déjà ouverte : reprise telle quelle."
+    else
+        create_session
+        success "Session '${SESSION}' créée (${#WINDOWS[@]} fenêtres, profil ${BOLD}${PROFILE}${RESET})."
+    fi
+
+    if [[ "$ATTACH" -eq 1 ]]; then
+        attach_session
+    fi
+}
+
+main "$@"

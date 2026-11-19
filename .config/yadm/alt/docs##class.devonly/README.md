@@ -45,6 +45,7 @@ Les conventions de rédaction sont fixées dans [CLAUDE.md](../CLAUDE.md), secti
 | [set-default-shell.md](set-default-shell.md) | [`set-default-shell.sh`](../.local/bin/set-default-shell.sh) | Menu interactif : shell par défaut (bash/zsh) et profil zsh |
 | [install-wezterm.md](install-wezterm.md) | [`install-wezterm.sh`](../.local/bin/install-wezterm.sh) | WezTerm (dépôt APT officiel) et terminfo `wezterm` dans `~/.terminfo/` ; la config vient de `.wezterm.lua` |
 | [fix-zsh-completions.md](fix-zsh-completions.md) | [`fix-zsh-completions.sh`](../.local/bin/fix-zsh-completions.sh) | Répare les complétions zsh cassées (liens morts `compinit`, montages WSL volatils) |
+| [zsh-cours.md](zsh-cours.md) | [`zsh-cours`](../.local/bin/zsh-cours) | Session tmux `cours` : fenêtre 1 dans `~/projets`, fenêtre 2 dans `~/projets/cours_astro` ; reprise telle quelle si elle existe, bascule depuis tmux ; `-p` profil zsh, `-D` détache les autres clients, `-n` sans rattachement |
 | [zssh.md](zssh.md) | [`zssh.sh`](../.local/bin/zssh.sh) | Connexion SSH vers une machine dotfile avec session tmux `main` et profil zsh distant ; `-D` détache les autres clients ; refuse de tourner dans tmux |
 
 ### Git

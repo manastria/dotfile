@@ -56,6 +56,9 @@ déconnexion ou depuis un autre terminal retrouve donc la session `main`.
   crée la session en arrière-plan si besoin puis y **bascule**
   (`switch-client`).
 - Les alias acceptent les options en plus : `zsh-daily -s projet`.
+- `zenv` n'impose aucune disposition de fenêtres : elles s'ouvrent dans le
+  répertoire courant. Pour une session préparée (une fenêtre par répertoire),
+  voir [`zsh-cours`](zsh-cours.md).
 
 ### Alias prédéfinis
 
