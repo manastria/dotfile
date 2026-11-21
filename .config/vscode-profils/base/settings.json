@@ -27,5 +27,6 @@
     "git.enableSmartCommit": true,
     "git.autofetch": true,
     "git.confirmSync": false,
-    "git.smartCommitChanges": "tracked"
+    "git.smartCommitChanges": "tracked",
+    "git.rememberPostCommitCommand": true
 }
