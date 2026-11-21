@@ -1,0 +1,12 @@
+# Extensions communes : un identifiant « éditeur.nom » par ligne.
+# Les thèmes sont des extensions comme les autres ; le thème actif se choisit
+# avec "workbench.colorTheme" dans settings.json (base ou profil).
+# configure-vscode.sh installe ce qui manque et ne désinstalle jamais rien.
+
+# Icônes
+vscode-icons-team.vscode-icons
+
+# Thèmes
+# GitHub.github-vscode-theme
+# zhuangtongfa.material-theme
+# catppuccin.catppuccin-vsc

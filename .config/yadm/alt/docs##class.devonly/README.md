@@ -74,6 +74,7 @@ Les conventions de rédaction sont fixées dans [CLAUDE.md](../CLAUDE.md), secti
 | [install-projecteur.md](install-projecteur.md) | [`install-projecteur.sh`](../.local/bin/install-projecteur.sh) | Projecteur (pointeur laser virtuel Logitech Spotlight), compilé depuis les sources |
 | [install-prof.md](install-prof.md) | [`install-prof.sh`](../.local/bin/install-prof.sh) | Compte `prof` de dépannage sur une VM étudiant : création du compte et dotfiles yadm |
 | [install-paquets-vm.md](install-paquets-vm.md) | [`install-paquets-vm.py`](../.local/bin/install-paquets-vm.py) | Paquets d'une VM pédagogique décrits par un profil TOML : distribution, version, bureau Kubuntu/Xubuntu/Lubuntu |
+| [configure-vscode.md](configure-vscode.md) | [`configure-vscode.sh`](../.local/bin/configure-vscode.sh) | Configure VS Code par profil (`base` + `-p classe`/`maison`) : `settings.json` imposé par clé, raccourcis ajoutés, extensions et thèmes installés ; fusion sans écrasement, sauvegarde `.bak`, `-n` pour simuler |
 | [install-bat.md](install-bat.md) | [`install-bat.sh`](../.local/bin/install-bat.sh) | `bat` (cat/more avec coloration syntaxique), binaire GitHub dans `~/.local/bin` |
 | [install-delta.md](install-delta.md) | [`install-delta.sh`](../.local/bin/install-delta.sh) | `delta` (pager de diff Git colorisé), binaire GitHub + configuration Git optionnelle |
 | [install-fonts.md](install-fonts.md) | [`install-fonts.sh`](../.local/bin/install-fonts.sh) | Polices `.ttf` / `.otf` d'un dossier local copiées dans `~/.local/share/fonts` + `fc-cache` (rien n'est téléchargé) |

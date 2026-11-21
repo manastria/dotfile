@@ -1,0 +1,13 @@
+// Profil « classe » : lisible depuis le fond de la salle (vidéoprojecteur).
+// S'applique par-dessus base/.
+{
+    "workbench.colorTheme": "GitHub Light Default",
+    "window.zoomLevel": 1,
+    "editor.fontSize": 18,
+    "terminal.integrated.fontSize": 17,
+    "editor.cursorBlinking": "solid",
+    "editor.cursorWidth": 3,
+    "editor.renderLineHighlight": "all",
+    "editor.guides.bracketPairs": true,
+    "breadcrumbs.enabled": false
+}

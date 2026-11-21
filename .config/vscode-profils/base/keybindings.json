@@ -1,0 +1,14 @@
+// Raccourcis communs, appliqués par configure-vscode.sh.
+// Fusion : un raccourci déjà présent est laissé tel quel, un raccourci
+// manquant est ajouté ; les raccourcis personnels de la machine sont conservés.
+// Pour retirer un raccourci par défaut, utiliser la forme "-commande".
+[
+    // Afficher / masquer la minimap à la demande
+    { "key": "ctrl+alt+m", "command": "editor.action.toggleMinimap" },
+    {
+        "key": "alt+x w",
+        "command": "workbench.action.tasks.runTask",
+        "args": "Ouvrir dans le navigateur (dev)",
+        "when": "editorTextFocus"
+    }
+]

@@ -1,0 +1,31 @@
+// Réglages communs à toutes les machines, appliqués par configure-vscode.sh.
+// Chaque clé listée ici est IMPOSÉE : elle écrase la valeur du settings.json
+// local. Les clés absentes de ce fichier ne sont jamais touchées.
+{
+    "telemetry.telemetryLevel": "off",
+    "update.showReleaseNotes": false,
+    "workbench.startupEditor": "none",
+    "workbench.iconTheme": "vscode-icons",
+
+    "editor.tabSize": 4,
+    "editor.insertSpaces": true,
+    "editor.minimap.enabled": false,
+    "editor.renderWhitespace": "trailing",
+    "editor.bracketPairColorization.enabled": true,
+
+    "files.autoSave": "off",
+    "files.insertFinalNewline": true,
+    "files.trimTrailingWhitespace": true,
+    "files.eol": "\n",
+
+    "terminal.integrated.defaultProfile.linux": "zsh",
+
+    "claudeCode.preferredLocation": "panel",
+    "security.workspace.trust.untrustedFiles": "open",
+    "extensions.ignoreRecommendations": true,
+
+    "git.enableSmartCommit": true,
+    "git.autofetch": true,
+    "git.confirmSync": false,
+    "git.smartCommitChanges": "tracked"
+}

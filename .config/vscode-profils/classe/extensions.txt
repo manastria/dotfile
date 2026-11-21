@@ -1,0 +1,1 @@
+# Extensions propres au profil « classe ».

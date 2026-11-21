@@ -1,0 +1,8 @@
+// Profil « maison » : confort personnel. S'applique par-dessus base/.
+{
+    "workbench.colorTheme": "One Dark Pro",
+    "window.zoomLevel": 0,
+    "editor.fontSize": 14,
+    "terminal.integrated.fontSize": 14,
+    "editor.minimap.enabled": true
+}
