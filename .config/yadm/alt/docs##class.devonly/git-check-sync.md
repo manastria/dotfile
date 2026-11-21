@@ -35,8 +35,18 @@ Un dépôt peut cumuler plusieurs constats (`MODIFS` + `A-POUSSER`) ; la colonne
 
 **Filtres.** `--hide` et `--only` prennent des listes de catégories :
 
-- `--hide` masque un dépôt quand **tous** ses constats sont dans la liste. `--hide modifs` masque les dépôts simplement modifiés, mais garde un dépôt modifié *et* en avance : on ne veut pas perdre de vue des commits non poussés parce qu'on a choisi d'ignorer les brouillons.
-- `--only` n'affiche que les dépôts ayant **au moins un** constat de la liste.
+- `--hide` retire de l'affichage les dépôts qui n'ont **rien d'autre** que les catégories listées. Un dépôt qui a ne serait-ce qu'un constat hors de la liste reste affiché.
+- `--only` affiche les dépôts qui ont **au moins une** des catégories listées, même s'ils en ont d'autres.
+
+Exemple avec `--hide modifs`, sur trois dépôts :
+
+| Dépôt | Constats | Résultat | Pourquoi |
+| ----- | -------- | -------- | -------- |
+| `brouillons` | `MODIFS` | masqué | `MODIFS` est la seule chose à signaler, et elle est dans la liste |
+| `notes` | `MODIFS` + `A-POUSSER` | **affiché** | `A-POUSSER` n'est pas dans la liste |
+| `outils` | `DIVERGENCE` | **affiché** | `DIVERGENCE` n'est pas dans la liste |
+
+C'est voulu : on peut décider d'ignorer les fichiers en cours de travail, mais pas au point de ne plus voir des commits qui n'ont jamais quitté la machine.
 
 Les dépôts masqués ne comptent ni dans le code de retour, ni dans les mises à jour proposées.
 
