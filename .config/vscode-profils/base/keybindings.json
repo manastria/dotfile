@@ -9,6 +9,8 @@
         "key": "alt+x w",
         "command": "workbench.action.tasks.runTask",
         "args": "Ouvrir dans le navigateur (dev)",
-        "when": "editorTextFocus"
+        "when": "editorTextFocus && resourceExtname == .mdx"
     }
+    { "key": "alt+x g", "command": "workbench.action.tasks.runTask", "args": "Ouvrir un cours (numéro ou slug)" },
+    
 ]
