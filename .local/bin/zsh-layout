@@ -1,32 +1,47 @@
 #!/usr/bin/env bash
 # NAME
-#     zsh-cours — session tmux « cours » : une fenêtre par répertoire de travail
+#     zsh-layout — session tmux décrite par un fichier de disposition
 #
 # SYNOPSIS
-#     zsh-cours [-p PROFIL] [-s SESSION] [-D] [-n]
-#     zsh-cours -h | --help
+#     zsh-layout -l DISPOSITION [-p PROFIL] [-s SESSION] [-D] [-n]
+#     zsh-layout -h | --help
 #
 # DESCRIPTION
 #     Crée une session tmux dont chaque fenêtre s'ouvre dans son propre
-#     répertoire, puis s'y rattache :
-#
-#         fenêtre 1 « projets »  →  ~/projets
-#         fenêtre 2 « astro »    →  ~/projets/cours_astro
+#     répertoire, puis s'y rattache. Les fenêtres sont lues dans le fichier
+#     ~/.config/zsh-layouts/DISPOSITION.conf (voir FORMAT ci-dessous).
 #
 #     Si la session existe déjà, elle est reprise telle quelle : aucune
-#     fenêtre n'est ajoutée ni déplacée. Lancé depuis l'intérieur de tmux, le
-#     script bascule vers la session au lieu d'imbriquer un second tmux.
+#     fenêtre n'est ajoutée ni déplacée, et le fichier de disposition n'est
+#     même pas relu. Lancé depuis l'intérieur de tmux, le script bascule vers
+#     la session au lieu d'imbriquer un second tmux.
 #
 #     Chaque shell démarre avec le profil zsh demandé (variable ZSH_PROFILE),
 #     comme le fait « zenv ». Ne remplace pas « zsh-daily » : celui-ci ouvre la
 #     session « main » dans le répertoire courant, sans disposition imposée.
 #
-#     Les fenêtres sont décrites par le tableau WINDOWS, en tête de script.
+#     Des alias (zsh-projets, zsh-cours) sont définis dans
+#     ~/.shellrc/rc.d/zenv.sh : ils appellent ce script avec la disposition
+#     correspondante.
+#
+# FORMAT
+#     Une ligne par fenêtre : « numéro|nom|répertoire ». La première ligne est
+#     la fenêtre active à l'arrivée dans la session. Les lignes vides et celles
+#     qui commencent par « # » sont ignorées. Un « ~ » ou « ~/ » initial dans
+#     le répertoire est remplacé par $HOME. Le nom et le répertoire ne doivent
+#     pas contenir « | ».
+#
+#         # ~/.config/zsh-layouts/cours.conf
+#         1|projets|~/projets
+#         2|astro|~/projets/cours_astro
 #
 # OPTIONS
+#     -l, --layout NOM       Disposition à ouvrir (obligatoire) : nom d'un
+#                            fichier ~/.config/zsh-layouts/NOM.conf (lettres,
+#                            chiffres, _ et -).
 #     -p, --profile PROFIL   Profil zsh des fenêtres (défaut : simple).
-#     -s, --session NOM      Nom de la session tmux (défaut : cours ;
-#                            lettres, chiffres, _ et -).
+#     -s, --session NOM      Nom de la session tmux (défaut : le nom de la
+#                            disposition ; lettres, chiffres, _ et -).
 #     -D, --detach           Détache d'abord les autres clients déjà attachés
 #                            à la session (reprise d'une session restée
 #                            ouverte ailleurs).
@@ -34,35 +49,28 @@
 #     -h, --help             Affiche cette aide.
 #
 # EXAMPLES
-#     # Ouvrir (ou reprendre) la session de cours
-#     zsh-cours
+#     # Ouvrir (ou reprendre) la session « cours »
+#     zsh-layout --layout cours
 #
 #     # Autre profil zsh
-#     zsh-cours -p omz
+#     zsh-layout -l projets -p omz
 #
 #     # Préparer la session en arrière-plan, s'y rattacher plus tard
-#     zsh-cours --no-attach
+#     zsh-layout -l cours --no-attach
 #
 # EXIT CODES
 #     0   Session créée ou reprise, puis quittée normalement.
-#     1   Erreur d'exécution : tmux absent, répertoire introuvable, profil
-#         inconnu, échec de tmux.
-#     2   Erreur d'usage : option inconnue, valeur manquante, nom de profil
-#         ou de session invalide.
+#     1   Erreur d'exécution : tmux absent, disposition introuvable ou mal
+#         formée, répertoire introuvable, profil inconnu, échec de tmux.
+#     2   Erreur d'usage : option inconnue, valeur manquante, disposition
+#         absente, nom de disposition, de profil ou de session invalide.
 set -euo pipefail
 
 # -----------------------------------------------------------------------------
 # Constantes
 # -----------------------------------------------------------------------------
 readonly DEFAULT_PROFILE="simple"
-readonly DEFAULT_SESSION="cours"
-
-# Une ligne par fenêtre : « numéro|nom|répertoire ». La première ligne est la
-# fenêtre active à l'arrivée dans la session.
-readonly WINDOWS=(
-    "1|projets|${HOME}/projets"
-    "2|astro|${HOME}/projets/cours_astro"
-)
+readonly LAYOUTS_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/zsh-layouts"
 
 # -----------------------------------------------------------------------------
 # Couleurs et fonctions de log
@@ -89,14 +97,18 @@ usage_error() { error "$*"; echo "Essayez : $(basename "$0") --help" >&2; exit 2
 # -----------------------------------------------------------------------------
 # Arguments
 # -----------------------------------------------------------------------------
+LAYOUT=""
 PROFILE="$DEFAULT_PROFILE"
-SESSION="$DEFAULT_SESSION"
+SESSION=""
 DETACH=0
 ATTACH=1
 
 parse_args() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
+            -l|--layout)
+                [[ -n "${2:-}" ]] || usage_error "$1 attend une valeur."
+                LAYOUT="$2"; shift 2 ;;
             -p|--profile)
                 [[ -n "${2:-}" ]] || usage_error "$1 attend une valeur."
                 PROFILE="$2"; shift 2 ;;
@@ -110,12 +122,72 @@ parse_args() {
         esac
     done
 
-    # Le profil sert à fabriquer un nom de fichier, la session un nom tmux
-    # (qui interdit « . » et « : ») : on restreint à des caractères sûrs.
+    [[ -n "$LAYOUT" ]] || usage_error "La disposition est obligatoire (-l NOM)."
+    # La session reprend le nom de la disposition tant que -s n'est pas donné.
+    [[ -n "$SESSION" ]] || SESSION="$LAYOUT"
+
+    # La disposition et le profil servent à fabriquer un nom de fichier, la
+    # session un nom tmux (qui interdit « . » et « : ») : on restreint à des
+    # caractères sûrs, ce qui exclut aussi « / » et « .. » dans les noms.
+    [[ "$LAYOUT" =~ ^[A-Za-z0-9_-]+$ ]] \
+        || usage_error "Nom de disposition invalide : $LAYOUT"
     [[ "$PROFILE" =~ ^[A-Za-z0-9._-]+$ ]] \
         || usage_error "Nom de profil invalide : $PROFILE"
     [[ "$SESSION" =~ ^[A-Za-z0-9_-]+$ ]] \
         || usage_error "Nom de session invalide : $SESSION"
+}
+
+# -----------------------------------------------------------------------------
+# Disposition
+# -----------------------------------------------------------------------------
+# Une entrée par fenêtre : « numéro|nom|répertoire », remplie par load_layout.
+WINDOWS=()
+
+list_layouts() {
+    local f names=()
+    for f in "${LAYOUTS_DIR}"/*.conf; do
+        [[ -e "$f" ]] && names+=("$(basename "$f" .conf)")
+    done
+    echo "${names[*]:-aucune}"
+}
+
+# Lit ~/.config/zsh-layouts/NOM.conf dans WINDOWS, en validant chaque ligne :
+# mieux vaut échouer ici que créer une session à moitié construite.
+load_layout() {
+    local file="${LAYOUTS_DIR}/${LAYOUT}.conf"
+    local line num name dir lineno=0 seen=" "
+
+    [[ -f "$file" ]] \
+        || die "Disposition '${LAYOUT}' introuvable : ${file} (disponibles : $(list_layouts))."
+
+    # « || [[ -n "$line" ]] » traite aussi une dernière ligne sans saut de ligne.
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        lineno=$((lineno + 1))
+        # Espaces de tête et de queue, puis lignes vides et commentaires.
+        line="${line#"${line%%[![:space:]]*}"}"
+        line="${line%"${line##*[![:space:]]}"}"
+        [[ -z "$line" || "$line" == \#* ]] && continue
+
+        IFS='|' read -r num name dir <<< "$line"
+        [[ "$num" =~ ^[0-9]+$ ]] \
+            || die "${file}:${lineno} : numéro de fenêtre invalide : « ${num} »."
+        [[ -n "$name" && -n "$dir" ]] \
+            || die "${file}:${lineno} : attendu « numéro|nom|répertoire »."
+        [[ "$dir" != *"|"* ]] \
+            || die "${file}:${lineno} : « | » interdit dans le répertoire."
+        [[ "$seen" != *" ${num} "* ]] \
+            || die "${file}:${lineno} : numéro de fenêtre ${num} en double."
+        seen+="${num} "
+
+        # Seul le « ~ » initial est développé (pas de $VAR ni de commande).
+        case "$dir" in
+            "~")   dir="$HOME" ;;
+            "~/"*) dir="${HOME}/${dir#"~/"}" ;;
+        esac
+        WINDOWS+=("${num}|${name}|${dir}")
+    done < "$file"
+
+    [[ "${#WINDOWS[@]}" -gt 0 ]] || die "${file} : aucune fenêtre définie."
 }
 
 # -----------------------------------------------------------------------------
@@ -132,9 +204,11 @@ check_prerequisites() {
                 || die "Profil '${PROFILE}' introuvable (utilisez « zenv » pour la liste)."
             ;;
     esac
+}
 
-    # tmux remplace silencieusement un répertoire inexistant par $HOME :
-    # on préfère échouer plutôt que d'ouvrir une fenêtre au mauvais endroit.
+# tmux remplace silencieusement un répertoire inexistant par $HOME :
+# on préfère échouer plutôt que d'ouvrir une fenêtre au mauvais endroit.
+check_directories() {
     local entry dir
     for entry in "${WINDOWS[@]}"; do
         dir="${entry##*|}"
@@ -186,7 +260,7 @@ create_session() {
                 || die "Création de la session '${SESSION}' impossible."
 
             # La première fenêtre prend l'index base-index de la config tmux
-            # (0 par défaut) : on la renumérote pour coller au tableau.
+            # (0 par défaut) : on la renumérote pour coller à la disposition.
             first_index="$(tmux list-windows -t "=${SESSION}" -F '#{window_index}' | head -n1)"
             if [[ "$first_index" != "$num" ]]; then
                 tmux move-window -s "=${SESSION}:${first_index}" -t "=${SESSION}:${num}" \
@@ -229,12 +303,14 @@ main() {
     check_prerequisites
 
     # « = » : correspondance exacte du nom, sinon tmux accepte un préfixe
-    # (« cours » reprendrait « cours2 »).
+    # (« projets » reprendrait « projets2 »).
     if tmux has-session -t "=${SESSION}" 2>/dev/null; then
         info "Session '${SESSION}' déjà ouverte : reprise telle quelle."
     else
+        load_layout
+        check_directories
         create_session
-        success "Session '${SESSION}' créée (${#WINDOWS[@]} fenêtres, profil ${BOLD}${PROFILE}${RESET})."
+        success "Session '${SESSION}' créée (disposition ${BOLD}${LAYOUT}${RESET}, ${#WINDOWS[@]} fenêtre(s), profil ${BOLD}${PROFILE}${RESET})."
     fi
 
     if [[ "$ATTACH" -eq 1 ]]; then

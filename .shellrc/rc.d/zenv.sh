@@ -134,3 +134,8 @@ alias zsh-daily='zenv simple --tmux'
 alias zsh-remote='zenv ssh --tmux'
 alias zsh-writer='zenv writer --tmux'
 alias zsh-minimal='zenv base'
+
+# Sessions tmux préparées (une fenêtre par répertoire) : le script zsh-layout lit
+# ~/.config/zsh-layouts/<disposition>.conf. Ce ne sont pas des appels à zenv.
+alias zsh-projets='zsh-layout --layout projets'
+alias zsh-cours='zsh-layout --layout cours'

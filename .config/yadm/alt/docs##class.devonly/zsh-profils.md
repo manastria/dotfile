@@ -58,7 +58,7 @@ déconnexion ou depuis un autre terminal retrouve donc la session `main`.
 - Les alias acceptent les options en plus : `zsh-daily -s projet`.
 - `zenv` n'impose aucune disposition de fenêtres : elles s'ouvrent dans le
   répertoire courant. Pour une session préparée (une fenêtre par répertoire),
-  voir [`zsh-cours`](zsh-cours.md).
+  voir [`zsh-layout`](zsh-layout.md) et ses alias `zsh-projets` et `zsh-cours`.
 
 ### Alias prédéfinis
 
@@ -68,6 +68,8 @@ déconnexion ou depuis un autre terminal retrouve donc la session `main`.
 | `zsh-remote`  | `ssh`    | oui  | Connexions SSH : 8 couleurs + tmux          |
 | `zsh-writer`  | `writer` | oui  | Documentation : prompt épuré + tmux         |
 | `zsh-minimal` | `base`   | non  | Debug/test rapide : sans oh-my-zsh          |
+| `zsh-projets` | `simple` | oui  | Session `projets` : fenêtre dans `~/projets` (via `zsh-layout`) |
+| `zsh-cours`   | `simple` | oui  | Session `cours` : `~/projets` et `~/projets/cours_astro` (via `zsh-layout`) |
 
 ### Profils disponibles
 
