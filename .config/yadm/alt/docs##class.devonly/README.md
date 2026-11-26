@@ -53,6 +53,7 @@ Les conventions de rédaction sont fixées dans [CLAUDE.md](../CLAUDE.md), secti
 | Page | Script | Objet |
 | ---- | ------ | ----- |
 | [git-check-sync.md](git-check-sync.md) | [`git-check-sync.sh`](../.local/bin/git-check-sync.sh) | État de synchronisation de tous les dépôts d'un répertoire (fetch, force-push, divergence), filtres `--hide`/`--only`, propose `pull --rebase` / `push` sur les cas sans ambiguïté |
+| [git-depannage.md](git-depannage.md) | [`git-depannage.sh`](../.shellrc/depannage/git-depannage.sh) | Fichier **sourcé** (`. <(curl …)`) pour dépanner sur le poste d'un étudiant : alias Git temporaires (`gs`, `gl`, `gd`…) et `gdiag` (état complet du dépôt, opération en cours, conflits), sans rien écrire sur le disque ni modifier le dépôt |
 | [git-main-to-master.md](git-main-to-master.md) | [`git-main-to-master.sh`](../.local/bin/git-main-to-master.sh) | Renomme `main` en `master` en local et sur le remote : dépôt propre exigé, upstreams corrigés, `main` supprimée côté serveur (bascule GitHub via `gh`) |
 | [git-update-submodule.md](git-update-submodule.md) | [`git-update-submodule`](../.local/bin/git-update-submodule) | Sous-commande `git update-submodule` : épingle un submodule sur un tag et commite uniquement ce changement ; `sync` remet les submodules sur les commits épinglés ; `status` = `git submodule status` + URL de `origin` ; `--yadm` opère sur le dépôt yadm |
 
