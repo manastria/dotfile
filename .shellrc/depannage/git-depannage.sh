@@ -70,9 +70,9 @@ _gdep_alias() {
 # Format de log : hash, références (branches, tags, HEAD), titre, auteur.
 # %C(auto) laisse Git décider de la couleur (aucune si la sortie est redirigée).
 _gdep_alias gs  'git status -sb' 'état court : branche et une ligne par fichier'
-_gdep_alias gl  'git log --graph --all --format="%C(auto)%h%d %s (%an)"' 'graphe de toutes les branches, avec auteur'
-_gdep_alias gll 'git log --graph --all --name-status --format="%C(auto)%h%d %s (%an)"' 'gl + fichiers touchés (A/M/D/R)'
-_gdep_alias gls 'git log --graph --all --stat --format="%C(auto)%h%d %s (%an)"' 'gl + volume des changements'
+_gdep_alias gl  'git log --graph --all --format="%C(auto)%h%d %s (%an, %ar)"' 'graphe de toutes les branches, avec auteur et date relative'
+_gdep_alias gll 'git log --graph --all --name-status --format="%C(auto)%h%d %s (%an, %ar)"' 'gl + fichiers touchés (A/M/D/R)'
+_gdep_alias gls 'git log --graph --all --stat --format="%C(auto)%h%d %s (%an, %ar)"' 'gl + volume des changements'
 _gdep_alias gd  'git diff' 'modifications non indexées'
 _gdep_alias gdc 'git diff --cached' 'modifications indexées (après git add)'
 _gdep_alias gdh 'git diff HEAD' 'tout, indexé ou non, par rapport au dernier commit'
@@ -213,7 +213,7 @@ gdiag() {
     # rev-parse --verify échoue dans un dépôt sans commit, où git log afficherait une erreur.
     if git rev-parse -q --verify HEAD >/dev/null 2>&1; then
         # --no-pager : le diagnostic doit s'afficher d'un bloc, sans passer par less.
-        git --no-pager log --graph --all -n "$nb" --format="%C(auto)%h%d %s (%an)"
+        git --no-pager log --graph --all -n "$nb" --format="%C(auto)%h%d %s (%an, %ar)"
     else
         echo "(aucun commit)"
     fi

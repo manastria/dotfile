@@ -32,7 +32,7 @@ Alias définis (liste également affichée par `gaide`) :
 | Alias | Commande | Usage |
 | ----- | -------- | ----- |
 | `gs` | `git status -sb` | état court : branche et une ligne par fichier |
-| `gl` | `git log --graph --all --format="%C(auto)%h%d %s (%an)"` | graphe de toutes les branches, avec auteur |
+| `gl` | `git log --graph --all --format="%C(auto)%h%d %s (%an, %ar)"` | graphe de toutes les branches, avec auteur et date relative |
 | `gll` | `gl` + `--name-status` | fichiers touchés (A/M/D/R) |
 | `gls` | `gl` + `--stat` | volume des changements |
 | `gd` | `git diff` | modifications non indexées |
@@ -105,11 +105,11 @@ Fichiers en conflit :
   -> Après résolution : git add <fichier>, puis poursuivre l'opération
 
 == Historique (10 derniers commits, toutes branches) ==
-* 04ebdfa (dev) trois-dev (Test)
-| * 52d2500 (HEAD, main) quatre-main (Test)
+* 04ebdfa (dev) trois-dev (Test, 67 minutes ago)
+| * 52d2500 (HEAD, main) quatre-main (Test, 67 minutes ago)
 |/  
-* 8828c75 deux (Test)
-* 0f4f3c3 un (Test)
+* 8828c75 deux (Test, 67 minutes ago)
+* 0f4f3c3 un (Test, 67 minutes ago)
 
 == Travail mis de côté (stash) ==
 (aucun)
@@ -151,6 +151,8 @@ Au chargement : garde « fichier sourcé » → définition des alias via `_gdep
 **`git rev-parse --git-path`** pour les marqueurs (`MERGE_HEAD`, `rebase-merge`…). Dans un worktree ou un submodule, `.git` est un fichier : un test direct sur `.git/MERGE_HEAD` échouerait.
 
 **Tête détachée et opération en cours.** `HEAD` est détachée par construction pendant un rebase ou un bisect. Dans ce cas la piste « `git switch -` » serait fausse : elle n'est donnée que si aucune opération n'est en cours.
+
+**Date relative `%ar` (auteur) et non `%cr` (commiteur).** Pour savoir *quand l'étudiant a fait son travail*, la date de l'auteur est la bonne : elle ne change pas lors d'un `rebase`, d'un `cherry-pick` ou d'un `commit --amend`, qui réécrivent seulement la date du commiteur. La langue de l'affichage (« 2 weeks ago » ou « il y a 2 semaines ») dépend des traductions de Git installées sur le poste.
 
 **`git --no-pager`** pour l'historique de `gdiag` : le diagnostic doit s'afficher d'un bloc, sans que `less` n'interrompe la lecture. Les alias `gl`, `gll`, `gls` gardent le pager par défaut (historique potentiellement long).
 
